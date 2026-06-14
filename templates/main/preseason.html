@@ -1,0 +1,30 @@
+{% extends 'base.html' %}
+{% block title %}Preseason Picks — PutnamBowl{% endblock %}
+{% block content %}
+<div class="max-w-lg mx-auto">
+  <div class="mb-6">
+    <h1 class="text-xl font-bold text-slate-900">Preseason Picks</h1>
+    <p class="text-slate-500 text-sm mt-1">Your Super Bowl pick must be one of your conference champions.</p>
+  </div>
+  <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+    <form method="post" class="space-y-5">
+      {% csrf_token %}
+      {% for field in form %}
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">{{ field.label }}</label>
+        <select name="{{ field.html_name }}" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 ring-theme bg-white">
+          {% for val, label in field.field.choices %}
+          <option value="{{ val }}" {% if val == field.value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+        {% for e in field.errors %}<p class="text-xs text-red-500 mt-1">{{ e }}</p>{% endfor %}
+      </div>
+      {% endfor %}
+      {% if form.non_field_errors %}
+      <div class="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">{{ form.non_field_errors }}</div>
+      {% endif %}
+      <button type="submit" class="w-full py-2.5 text-sm font-semibold btn-theme rounded-xl">Save Preseason Picks</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

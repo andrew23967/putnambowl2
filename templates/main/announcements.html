@@ -1,0 +1,42 @@
+{% extends 'base.html' %}
+{% block title %}Announcements — PutnamBowl{% endblock %}
+{% block content %}
+<div class="mb-6">
+  <h1 class="text-xl font-bold text-slate-900">Announcements</h1>
+  <p class="text-slate-500 text-sm">Post updates to all players on the home page.</p>
+</div>
+<div class="grid grid-cols-1 lg:grid-cols-5 gap-6">
+  <div class="lg:col-span-2 space-y-4">
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+      <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">New Announcement</p>
+      <form method="post" class="space-y-3">
+        {% csrf_token %}
+        <textarea name="message" rows="4" placeholder="Write your announcement..." class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 ring-theme resize-none"></textarea>
+        <button name="add" type="submit" class="w-full py-2 text-sm font-semibold btn-theme rounded-lg">Post Announcement</button>
+      </form>
+    </div>
+    <form method="post" onsubmit="return confirm('Delete all announcements?')">
+      {% csrf_token %}
+      <button name="delete_all" type="submit" class="w-full py-2 text-sm font-semibold border border-red-200 text-red-600 hover:bg-red-50 rounded-lg">Delete All</button>
+    </form>
+  </div>
+  <div class="lg:col-span-3">
+    <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Active Announcements</p>
+    <div class="space-y-2">
+      {% for ann in announcements %}
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4 flex items-start justify-between gap-3">
+        <p class="text-sm text-slate-700 leading-relaxed">{{ ann.message }}</p>
+        <form method="post" class="flex-shrink-0">
+          {% csrf_token %}
+          <input type="hidden" name="delete" value="1">
+          <input type="hidden" name="announcement_id" value="{{ ann.id }}">
+          <button type="submit" class="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all">✕</button>
+        </form>
+      </div>
+      {% empty %}
+      <div class="bg-white rounded-xl border border-slate-200 p-8 text-center text-slate-400 text-sm">No announcements.</div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endblock %}

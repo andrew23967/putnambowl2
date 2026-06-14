@@ -1,0 +1,74 @@
+{% extends 'base.html' %}
+{% block title %}All Picks — PutnamBowl{% endblock %}
+{% block content %}
+<div class="mb-6 flex items-center justify-between">
+  <div>
+    <h1 class="text-xl font-bold text-slate-900">All Picks</h1>
+    <p class="text-slate-500 text-sm">Week {{ week }}</p>
+  </div>
+</div>
+
+<!-- Mini leaderboard -->
+<div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 mb-6">
+  <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Current Standings</p>
+  <div class="flex flex-wrap gap-2">
+    {% for pt in player_totals %}
+    <div class="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 rounded-lg border border-slate-100">
+      <span class="text-xs font-semibold text-slate-600">{{ pt.username }}</span>
+      <span class="text-xs font-bold text-slate-900">{{ pt.score }}</span>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<!-- Games -->
+<div class="space-y-3">
+{% for gd in games_data %}
+<div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+  <div class="px-5 py-3 border-b border-slate-100 flex items-center justify-between flex-wrap gap-2">
+    <div class="flex items-center gap-2">
+      <span class="font-semibold text-sm text-slate-900">{{ gd.game.team1 }}</span>
+      <span class="text-xs text-slate-400">({{ gd.game.points1 }})</span>
+      <span class="text-slate-300 text-xs">vs</span>
+      <span class="font-semibold text-sm text-slate-900">{{ gd.game.team2 }}</span>
+      <span class="text-xs text-slate-400">({{ gd.game.points2 }})</span>
+    </div>
+    <div class="flex items-center gap-3">
+      {% if gd.game.date %}<span class="text-xs text-slate-400">{{ gd.game.date }}</span>{% endif %}
+      {% if gd.game.graded %}
+        <span class="text-xs font-semibold px-2 py-0.5 rounded-full
+          {% if gd.game.winner == 'tie' %}bg-slate-100 text-slate-600
+          {% elif gd.game.winner == 'team1' %}bg-emerald-100 text-emerald-700
+          {% else %}bg-emerald-100 text-emerald-700{% endif %}">
+          {% if gd.game.winner == 'team1' %}{{ gd.team1_abbrev }} wins
+          {% elif gd.game.winner == 'team2' %}{{ gd.team2_abbrev }} wins
+          {% else %}TIE{% endif %}
+        </span>
+      {% endif %}
+    </div>
+  </div>
+  <div class="px-5 py-3 flex flex-wrap gap-2">
+    {% for pp in gd.player_picks %}
+    <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium
+      {% if pp.correct == True %}bg-emerald-50 border border-emerald-200 text-emerald-800
+      {% elif pp.correct == False and pp.choice %}bg-red-50 border border-red-200 text-red-800
+      {% else %}bg-slate-50 border border-slate-200 text-slate-600{% endif %}">
+      <span>{{ pp.player }}</span>
+      <span class="font-bold">{{ pp.abbrev }}</span>
+      {% if pp.correct == True %}<span class="text-emerald-600">✓</span>
+      {% elif pp.correct == False and pp.choice %}<span>✗</span>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  <div class="px-5 py-2 border-t border-slate-100 bg-slate-50 flex gap-4 text-xs text-slate-500">
+    <span>{{ gd.team1_abbrev }}: {{ gd.team1_count }}</span>
+    <span>{{ gd.team2_abbrev }}: {{ gd.team2_count }}</span>
+  </div>
+</div>
+{% empty %}
+<div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-10 text-center text-slate-400 text-sm">
+  No games this week yet.
+</div>
+{% endfor %}
+</div>
+{% endblock %}

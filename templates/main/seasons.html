@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+{% block title %}Past Seasons — PutnamBowl{% endblock %}
+{% block content %}
+<div class="mb-6">
+  <h1 class="text-xl font-bold text-slate-900">🏆 Past Seasons</h1>
+  <p class="text-slate-500 text-sm">All-time season history and champions.</p>
+</div>
+
+<div class="space-y-6">
+{% for record in season_records %}
+<div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+  <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+    <h2 class="font-bold text-slate-900 text-lg">{{ record.year }} Season</h2>
+    <div class="flex items-center gap-2 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-lg">
+      <span class="text-sm">🏆</span>
+      <span class="text-sm font-semibold text-amber-800">{{ record.winner_username }}</span>
+    </div>
+  </div>
+  {% if record.notes %}
+  <div class="px-6 py-3 bg-slate-50 border-b border-slate-100">
+    <p class="text-sm text-slate-500 italic">{{ record.notes }}</p>
+  </div>
+  {% endif %}
+  <div class="divide-y divide-slate-100">
+    {% for entry in record.standings %}
+    <div class="flex items-center gap-4 px-6 py-3 {% if entry.username == record.winner_username %}bg-amber-50{% endif %}">
+      <span class="w-8 text-center text-base">
+        {% if entry.rank == 1 %}🥇{% elif entry.rank == 2 %}🥈{% elif entry.rank == 3 %}🥉{% else %}<span class="text-sm text-slate-400">{{ entry.rank }}</span>{% endif %}
+      </span>
+      <a href="{% url 'accounts:public_profile' username=entry.username %}"
+         class="flex-1 text-sm font-semibold text-slate-800 hover:text-slate-900">{{ entry.username }}</a>
+      {% if entry.username == record.winner_username %}<span class="text-sm">🏆</span>{% endif %}
+      <span class="text-sm font-bold text-slate-700">{{ entry.score }} pts</span>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% empty %}
+<div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-12 text-center">
+  <div class="text-4xl mb-3">🏆</div>
+  <p class="text-slate-400 text-sm">No completed seasons yet.</p>
+</div>
+{% endfor %}
+</div>
+{% endblock %}

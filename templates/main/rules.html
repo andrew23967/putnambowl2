@@ -1,0 +1,18 @@
+{% extends 'base.html' %}
+{% block title %}Rules — PutnamBowl{% endblock %}
+{% block content %}
+<div class="max-w-2xl mx-auto">
+  <div class="mb-6">
+    <h1 class="text-xl font-bold text-slate-900">How It Works</h1>
+    <p class="text-slate-500 text-sm">Everything you need to know about PutnamBowl.</p>
+  </div>
+  <div class="space-y-3">
+    {% for title, body in rules %}
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+      <h3 class="font-semibold text-slate-900 mb-1">{{ title }}</h3>
+      <p class="text-sm text-slate-600 leading-relaxed">{{ body }}</p>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

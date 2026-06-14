@@ -1,0 +1,43 @@
+{% extends 'base.html' %}
+{% block title %}Submit Picks — PutnamBowl{% endblock %}
+{% block content %}
+<div class="max-w-2xl mx-auto">
+  <div class="mb-6">
+    <h1 class="text-xl font-bold text-slate-900">Week {{ week }} Picks</h1>
+    <p class="text-slate-500 text-sm mt-1">Select your winner for each matchup.</p>
+  </div>
+  <form method="post" class="space-y-3">
+    {% csrf_token %}
+    {% for gp in games_with_picks %}
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+      {% if gp.game.date %}
+      <p class="text-xs text-slate-400 mb-3">{{ gp.game.date }}</p>
+      {% endif %}
+      <div class="grid grid-cols-2 gap-3">
+        <label class="relative cursor-pointer">
+          <input type="radio" name="game_{{ gp.game.id }}" value="team1"
+                 {% if gp.current_pick == 'team1' %}checked{% endif %}
+                 class="peer sr-only">
+          <div class="peer-checked:border-theme peer-checked:bg-slate-50 border-2 border-slate-200 rounded-xl p-4 text-center transition-all hover:border-slate-300">
+            <p class="font-semibold text-slate-900 text-sm">{{ gp.game.team1 }}</p>
+            <p class="text-xs text-slate-500 mt-1">+{{ gp.game.points1 }} pts</p>
+            {% if not gp.game.home_team %}<p class="text-xs text-slate-400">Home</p>{% endif %}
+          </div>
+        </label>
+        <label class="relative cursor-pointer">
+          <input type="radio" name="game_{{ gp.game.id }}" value="team2"
+                 {% if gp.current_pick == 'team2' %}checked{% endif %}
+                 class="peer sr-only">
+          <div class="peer-checked:border-theme peer-checked:bg-slate-50 border-2 border-slate-200 rounded-xl p-4 text-center transition-all hover:border-slate-300">
+            <p class="font-semibold text-slate-900 text-sm">{{ gp.game.team2 }}</p>
+            <p class="text-xs text-slate-500 mt-1">+{{ gp.game.points2 }} pts</p>
+            {% if gp.game.home_team %}<p class="text-xs text-slate-400">Home</p>{% endif %}
+          </div>
+        </label>
+      </div>
+    </div>
+    {% endfor %}
+    <button type="submit" class="w-full py-3 text-sm font-bold btn-theme rounded-xl mt-2">Save All Picks</button>
+  </form>
+</div>
+{% endblock %}

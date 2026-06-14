@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+{% block title %}NFL Standings — PutnamBowl{% endblock %}
+{% block extra_head %}
+<style>
+  .standings-table table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .standings-table td, .standings-table th { padding: 4px 8px; border-bottom: 1px solid #f1f5f9; }
+  .standings-table .tc { font-weight: 600; color: #475569; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="mb-6">
+  <h1 class="text-xl font-bold text-slate-900">NFL Standings</h1>
+  <p class="text-slate-500 text-sm">Live standings from CBS Sports.</p>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+  {% for table in standings %}
+  <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 overflow-x-auto">
+    <div class="standings-table">{{ table|safe }}</div>
+  </div>
+  {% empty %}
+  <div class="bg-white rounded-2xl border border-slate-200 p-10 text-center text-slate-400 text-sm">
+    Could not load standings.
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

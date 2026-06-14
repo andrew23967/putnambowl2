@@ -1,0 +1,32 @@
+{% extends 'base.html' %}
+{% block title %}Login — PutnamBowl{% endblock %}
+{% block content %}
+<div style="min-height:70vh;display:flex;align-items:center;justify-content:center;">
+  <div style="width:100%;max-width:380px;">
+    <div style="text-align:center;margin-bottom:32px;">
+      <div style="width:52px;height:52px;border-radius:14px;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:24px;margin:0 auto 16px;" class="glow">🏈</div>
+      <h1 style="font-size:1.5rem;font-weight:800;color:var(--text);margin:0 0 4px;letter-spacing:-.02em;">PutnamBowl</h1>
+      <p style="color:var(--muted);font-size:.875rem;margin:0;">NFL Pick'em League</p>
+    </div>
+    <div class="card" style="padding:28px;">
+      <h2 style="font-size:1rem;font-weight:700;color:var(--text);margin:0 0 20px;">Sign in</h2>
+      <form method="post" style="display:flex;flex-direction:column;gap:14px;">
+        {% csrf_token %}
+        {% for field in form %}
+        <div>
+          <label style="display:block;font-size:.75rem;font-weight:600;color:var(--muted2);margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em;">{{ field.label }}</label>
+          <input name="{{ field.html_name }}" type="{{ field.field.widget.input_type }}" value="{{ field.value|default:'' }}"
+            style="width:100%;background:var(--surface2);border:1px solid {% if field.errors %}rgba(239,68,68,.5){% else %}var(--border2){% endif %};border-radius:8px;padding:10px 12px;color:var(--text);font-size:.875rem;outline:none;transition:border-color .15s;font-family:inherit;"
+            onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='{% if field.errors %}rgba(239,68,68,.5){% else %}var(--border2){% endif %}'">
+          {% for e in field.errors %}<p style="color:#f87171;font-size:.75rem;margin:4px 0 0;">{{ e }}</p>{% endfor %}
+        </div>
+        {% endfor %}
+        <button type="submit" class="btn-accent" style="padding:11px;font-size:.875rem;border:none;cursor:pointer;width:100%;margin-top:4px;">Sign in</button>
+      </form>
+      <p style="text-align:center;font-size:.8125rem;color:var(--muted);margin:18px 0 0;">
+        No account? <a href="{% url 'accounts:register' %}" style="color:var(--accent);font-weight:600;text-decoration:none;">Register</a>
+      </p>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,800 @@
+{% extends 'base.html' %}
+{% load main_tags %}
+{% block title %}Week {{ viewing_week }} — PutnamBowl{% endblock %}
+
+{% block extra_head %}
+<style>
+  /* ── Section headers ── */
+  .sec-head { display:flex;align-items:center;justify-content:space-between;padding-bottom:10px;border-bottom:1px solid var(--border);margin-bottom:0; }
+  .sec-title { font-size:.6875rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin:0; }
+  .stat-label { font-size:.6875rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:10px;display:flex;align-items:center;gap:6px; }
+
+  /* ── Podium ── */
+  .podium-wrap { display:flex;align-items:flex-end;justify-content:center;gap:8px;padding:24px 0 0; }
+  .pod { display:flex;flex-direction:column;align-items:center; }
+  .pod-block { border-radius:10px 10px 0 0;display:flex;align-items:center;justify-content:center;font-weight:900;color:rgba(255,255,255,.5); }
+  .pod-1 .pod-block { background:linear-gradient(160deg,rgba(245,158,11,.2),rgba(217,119,6,.1));border-top:1px solid rgba(245,158,11,.25);border-left:1px solid rgba(245,158,11,.15);border-right:1px solid rgba(245,158,11,.15);width:100px;height:80px;font-size:1.5rem; }
+  .pod-2 .pod-block { background:rgba(255,255,255,.04);border-top:1px solid rgba(255,255,255,.08);border-left:1px solid rgba(255,255,255,.06);border-right:1px solid rgba(255,255,255,.06);width:86px;height:56px;font-size:1.1rem; }
+  .pod-3 .pod-block { background:rgba(255,255,255,.025);border-top:1px solid rgba(255,255,255,.05);border-left:1px solid rgba(255,255,255,.04);border-right:1px solid rgba(255,255,255,.04);width:80px;height:40px;font-size:.9rem; }
+  .pod-4 .pod-block { background:rgba(255,255,255,.015);border-top:1px solid rgba(255,255,255,.04);border-left:1px solid rgba(255,255,255,.03);border-right:1px solid rgba(255,255,255,.03);width:72px;height:26px;font-size:.8rem; }
+  .pod-5 .pod-block { background:rgba(255,255,255,.01);border-top:1px solid rgba(255,255,255,.03);border-left:1px solid rgba(255,255,255,.02);border-right:1px solid rgba(255,255,255,.02);width:66px;height:16px;font-size:.75rem; }
+  .pod-avatar { width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:1rem;color:#fff;margin-bottom:6px; }
+  .pod-1 .pod-avatar { width:50px;height:50px;font-size:1.2rem; }
+  .pod-4 .pod-avatar,.pod-5 .pod-avatar { width:34px;height:34px;font-size:.8rem; }
+
+  @keyframes podRise { from{transform:translateY(20px);opacity:0} to{transform:translateY(0);opacity:1} }
+  .pod { animation:podRise .45s ease both; }
+  .pod:nth-child(1){animation-delay:.15s} .pod:nth-child(2){animation-delay:.05s} .pod:nth-child(3){animation-delay:0s} .pod:nth-child(4){animation-delay:.1s} .pod:nth-child(5){animation-delay:.2s}
+
+  /* ── Leaderboard rows ── */
+  .lb-row { display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid var(--border);transition:background .12s; }
+  .lb-row:last-child { border-bottom:none; }
+  .rank-badge { width:24px;height:24px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.75rem;flex-shrink:0; }
+  .rank-1 { background:rgba(245,158,11,.15);color:#fbbf24; }
+  .rank-2 { background:rgba(148,163,184,.12);color:#94a3b8; }
+  .rank-3 { background:rgba(180,83,9,.15);color:#fb923c; }
+  .rank-n { background:rgba(255,255,255,.04);color:var(--muted); }
+  .fire-indicator { color:#f97316;font-size:.85rem; }
+  .rank-up   { color:#34d399;font-size:.6875rem;font-weight:700; }
+  .rank-down { color:#f87171;font-size:.6875rem;font-weight:700; }
+  .rank-flat { color:var(--muted);font-size:.6875rem; }
+
+  /* ── Game rows ── */
+  .game-row { display:flex;align-items:center;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.05);gap:12px;transition:opacity .12s; }
+  .game-row:hover { opacity:.85; }
+  .game-row:last-child { border-bottom:none; }
+  .team-name { font-weight:700;font-size:.875rem;color:var(--text); }
+  .team-name.winner { color:#34d399; }
+  .pts-tag { font-size:.6875rem;font-weight:600;padding:2px 7px;border-radius:5px;background:rgba(255,255,255,.06);color:var(--muted2);white-space:nowrap; }
+  .pts-tag.won { background:rgba(16,185,129,.15);color:#34d399; }
+  .pts-tag.fav { background:rgba(99,102,241,.1);color:#a5b4fc; }
+  .vs-sep { color:var(--muted);font-size:.6875rem;font-weight:800;flex-shrink:0; }
+  .pick-chip { font-size:.6875rem;font-weight:700;padding:3px 9px;border-radius:99px;white-space:nowrap; }
+  .pick-correct { background:rgba(16,185,129,.2);color:#34d399; }
+  .pick-wrong   { background:rgba(239,68,68,.15);color:#f87171; }
+  .pick-pending { background:color-mix(in srgb,var(--accent) 20%,transparent);color:var(--accent); }
+
+  /* Dist bar */
+  .dist-bar { height:3px;background:rgba(255,255,255,.06);border-radius:99px;overflow:hidden;display:flex;margin-top:4px; }
+  .dist-t1 { height:100%;background:#6366f1;width:0;transition:width 1s cubic-bezier(.2,.8,.2,1); }
+  .dist-t2 { height:100%;background:#f59e0b;flex:1; }
+
+  /* Countdown */
+  .cd-digit { background:var(--surface2);border-radius:6px;padding:6px 10px;min-width:40px;text-align:center;font-weight:800;font-size:1.25rem;color:var(--text);font-variant-numeric:tabular-nums;line-height:1; }
+
+  /* Inline pick slider toggle */
+  .pick-toggle {
+    position:relative;display:flex;width:100%;
+    background:transparent;border:1px solid rgba(255,255,255,.07);
+    border-radius:100px;padding:2px;cursor:pointer;user-select:none;touch-action:none;
+  }
+  .pick-opt {
+    position:relative;z-index:2;flex:1;display:flex;align-items:center;justify-content:center;
+    gap:4px;padding:4px 6px;border-radius:100px;cursor:pointer;
+  }
+  .pick-team { font-size:.6875rem;font-weight:600;color:var(--muted);transition:color .18s;line-height:1; }
+  .pick-pts  { font-size:.5rem;color:rgba(255,255,255,.25);transition:color .18s;line-height:1; }
+  .pick-opt[data-selected="true"] .pick-team { color:var(--muted2); }
+  .pick-opt[data-selected="true"] .pick-pts  { color:rgba(255,255,255,.35); }
+  .pick-knob {
+    position:absolute;top:2px;left:2px;
+    height:calc(100% - 4px);width:calc(50% - 2px);
+    border-radius:100px;border:1px solid rgba(255,255,255,.2);
+    background:rgba(255,255,255,.04);
+    transition:left .2s cubic-bezier(.4,0,.2,1);pointer-events:none;
+  }
+
+  /* Chart expand */
+  .chart-wrap { position:relative;cursor:pointer; }
+  .chart-wrap .expand-hint {
+    position:absolute;top:6px;right:6px;z-index:2;
+    display:inline-flex;align-items:center;gap:4px;
+    font-size:.6875rem;font-weight:600;letter-spacing:.02em;
+    color:var(--muted2);
+    background:rgba(14,20,34,.75);
+    border:1px solid rgba(255,255,255,.12);
+    border-radius:6px;padding:3px 8px;
+    opacity:.55;transition:opacity .2s,background .2s;
+    pointer-events:none;user-select:none;backdrop-filter:blur(4px);
+  }
+  .chart-wrap:hover .expand-hint { opacity:1;background:rgba(255,255,255,.08); }
+  .chart-wrap:hover canvas { opacity:.9; }
+
+  /* Modal */
+  #chart-modal { display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);backdrop-filter:blur(4px);z-index:9999;align-items:center;justify-content:center; }
+  #chart-modal-box { background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:28px;width:92vw;max-width:960px;position:relative; }
+
+  /* Mobile / tablet responsive */
+  .col-tabs { display:none; }
+  @media (max-width:1024px) {
+    .main-grid { grid-template-columns:1fr !important; gap:28px !important; }
+    .col-tabs { display:flex;gap:3px;background:rgba(255,255,255,.04);border-radius:10px;padding:3px; }
+    .col-center:not(.mob-on) { display:none; }
+    .col-right:not(.mob-on) { display:none; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- ── EMAIL DISPLAY ── -->
+{% if announcements %}
+<div id="email-section" style="padding-bottom:32px;margin-bottom:36px;border-bottom:1px solid var(--border);" class="anim-up">
+  <div style="display:flex;align-items:center;gap:12px;">
+    <div style="width:36px;height:36px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.875rem;color:#fff;flex-shrink:0;">C</div>
+    <div style="flex:1;min-width:0;">
+      <p style="font-size:.8125rem;font-weight:700;color:var(--text);margin:0;">Commissioner</p>
+      <p id="email-date" style="font-size:.6875rem;color:var(--muted);margin:0;">{{ announcements.0.created_at|date:"F j, Y" }}</p>
+    </div>
+    {% if announcements|length > 1 %}
+    <div style="display:flex;align-items:center;gap:2px;">
+      <button id="email-prev" title="Older" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.1rem;padding:3px 7px;border-radius:5px;line-height:1;transition:color .15s;">‹</button>
+      <span id="email-counter" style="font-size:.6875rem;color:var(--muted);min-width:38px;text-align:center;">1 / {{ announcements|length }}</span>
+      <button id="email-next" title="Newer" disabled style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.1rem;padding:3px 7px;border-radius:5px;line-height:1;transition:color .15s;opacity:.3;">›</button>
+    </div>
+    {% endif %}
+    <button id="email-collapse" title="Collapse" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:.7rem;padding:4px 8px;border-radius:5px;line-height:1;transition:color .15s;letter-spacing:.05em;">▲ collapse</button>
+  </div>
+
+  <div id="email-body" style="overflow:hidden;transition:max-height .3s ease,opacity .25s ease;opacity:1;">
+    {% for ann in announcements %}
+    <div class="email-msg" style="padding-top:18px;{% if not forloop.first %}display:none;{% endif %}">
+      <div style="font-size:.9375rem;color:var(--muted2);line-height:1.8;max-width:740px;">{{ ann.message|linebreaks }}</div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+<!-- ── MAIN DASHBOARD: leaderboard | chart | games ── -->
+<div class="main-grid anim-up" style="display:grid;grid-template-columns:1fr 2fr 1fr;gap:40px;align-items:start;">
+
+  <!-- LEFT: Podium + Leaderboard -->
+  <div class="col-left">
+    {% if leaderboard|length >= 3 %}
+    <p style="font-size:.625rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin:0;">Top 5</p>
+    <div class="podium-wrap" style="margin-bottom:24px;">
+      {% if leaderboard|length >= 5 %}{% with p5=leaderboard.4 %}
+      <div class="pod pod-5">
+        <div class="pod-avatar" style="background:#1e293b;">{{ p5.username|first|upper }}</div>
+        <p style="font-size:.575rem;font-weight:600;color:var(--muted);margin:0 0 2px;max-width:56px;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ p5.username }}</p>
+        <p style="font-size:.7rem;font-weight:700;color:var(--muted);margin:0 0 2px;">{{ p5.score }}</p>
+        <div class="pod-block">5</div>
+      </div>
+      {% endwith %}{% endif %}
+      {% with p2=leaderboard.1 %}
+      <div class="pod pod-2">
+        <div class="pod-avatar" style="background:#334155;">{{ p2.username|first|upper }}</div>
+        <p style="font-size:.625rem;font-weight:600;color:var(--muted2);margin:0 0 3px;max-width:64px;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ p2.username }}</p>
+        <p style="font-size:.8rem;font-weight:800;color:#94a3b8;margin:0 0 4px;">{{ p2.score }}</p>
+        <div class="pod-block">2</div>
+      </div>
+      {% endwith %}
+      {% with p1=leaderboard.0 %}
+      <div class="pod pod-1">
+        <div style="font-size:.875rem;margin-bottom:3px;">👑</div>
+        <div class="pod-avatar" style="background:#b45309;">{{ p1.username|first|upper }}</div>
+        <p style="font-size:.625rem;font-weight:600;color:var(--muted2);margin:0 0 2px;max-width:72px;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ p1.username }}</p>
+        <p style="font-size:1rem;font-weight:900;color:#fbbf24;margin:0 0 5px;">{{ p1.score }}</p>
+        <div class="pod-block">1</div>
+      </div>
+      {% endwith %}
+      {% with p3=leaderboard.2 %}
+      <div class="pod pod-3">
+        <div class="pod-avatar" style="background:#431407;">{{ p3.username|first|upper }}</div>
+        <p style="font-size:.625rem;font-weight:600;color:var(--muted2);margin:0 0 3px;max-width:64px;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ p3.username }}</p>
+        <p style="font-size:.8rem;font-weight:800;color:#fb923c;margin:0 0 4px;">{{ p3.score }}</p>
+        <div class="pod-block">3</div>
+      </div>
+      {% endwith %}
+      {% if leaderboard|length >= 4 %}{% with p4=leaderboard.3 %}
+      <div class="pod pod-4">
+        <div class="pod-avatar" style="background:#1e293b;">{{ p4.username|first|upper }}</div>
+        <p style="font-size:.575rem;font-weight:600;color:var(--muted);margin:0 0 2px;max-width:56px;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ p4.username }}</p>
+        <p style="font-size:.7rem;font-weight:700;color:var(--muted);margin:0 0 2px;">{{ p4.score }}</p>
+        <div class="pod-block">4</div>
+      </div>
+      {% endwith %}{% endif %}
+    </div>
+    {% endif %}
+
+    <div class="sec-head">
+      <p class="sec-title">Standings</p>
+      {% if week_links %}
+      <div style="display:flex;align-items:center;gap:8px;min-width:160px;">
+        <span style="font-size:.6875rem;color:var(--muted);white-space:nowrap;">W{{ week_links.0 }}</span>
+        <input type="range" id="week-slider"
+          min="{{ week_links.0 }}" max="{{ week_links|last }}" value="{{ viewing_week }}"
+          style="flex:1;accent-color:var(--accent);cursor:pointer;">
+        <span id="wk-label" style="font-size:.6875rem;font-weight:700;color:var(--accent);white-space:nowrap;min-width:24px;text-align:right;">W{{ viewing_week }}</span>
+      </div>
+      {% endif %}
+    </div>
+    <div style="max-height:700px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--border) transparent;">
+    {% for entry in leaderboard %}
+    <div class="lb-row" style="{% if entry.on_fire %}padding-left:8px;border-left:2px solid #f97316;{% endif %}">
+      <div class="rank-badge {% if forloop.counter == 1 %}rank-1{% elif forloop.counter == 2 %}rank-2{% elif forloop.counter == 3 %}rank-3{% else %}rank-n{% endif %}">{{ forloop.counter }}</div>
+      <div style="flex:1;min-width:0;">
+        <div style="display:flex;align-items:center;gap:5px;margin-bottom:4px;">
+          <span style="font-size:.8125rem;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ entry.username }}</span>
+          {% if entry.on_fire %}<span class="fire-indicator">🔥</span>{% endif %}
+        </div>
+        <div class="score-bar"><div class="score-bar-fill" data-pct="{{ entry.score }}"></div></div>
+      </div>
+      <div style="text-align:right;flex-shrink:0;">
+        <div style="font-size:.875rem;font-weight:800;color:var(--text);">{{ entry.score }}</div>
+        {% if entry.rank_change > 0 %}<div class="rank-up">↑{{ entry.rank_change }}</div>
+        {% elif entry.rank_change < 0 %}<div class="rank-down">↓{{ entry.rank_change_abs }}</div>
+        {% else %}<div class="rank-flat">—</div>{% endif %}
+      </div>
+    </div>
+    {% endfor %}
+    </div>
+  </div><!-- end LEFT -->
+
+  <!-- Mobile tab switcher (hidden on desktop) -->
+  <div class="col-tabs">
+    <button id="mob-tab-chart" onclick="mobTab('chart')" style="flex:1;padding:9px;border:none;border-radius:7px;cursor:pointer;font-size:.875rem;font-weight:600;background:var(--accent);color:#fff;transition:all .15s;">Charts</button>
+    <button id="mob-tab-picks" onclick="mobTab('picks')" style="flex:1;padding:9px;border:none;border-radius:7px;cursor:pointer;font-size:.875rem;font-weight:600;background:transparent;color:var(--muted);transition:all .15s;">Picks</button>
+  </div>
+
+  <!-- CENTER: Chart -->
+  <div class="col-center mob-on">
+    {% if points_chart %}
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
+      <div id="chart-toggle" style="position:relative;display:flex;align-items:center;width:130px;height:24px;background:rgba(255,255,255,.04);border-radius:100px;padding:3px;cursor:grab;user-select:none;touch-action:none;">
+        <div id="toggle-pill" style="position:absolute;left:3px;width:calc(50% - 3px);height:calc(100% - 6px);background:rgba(255,255,255,.1);border-radius:100px;transition:left .22s cubic-bezier(.4,0,.2,1);pointer-events:none;"></div>
+        <span id="tog-score" style="position:relative;flex:1;text-align:center;font-size:.6875rem;font-weight:500;color:var(--text);z-index:1;pointer-events:none;">Score</span>
+        <span id="tog-rank"  style="position:relative;flex:1;text-align:center;font-size:.6875rem;font-weight:500;color:var(--muted);z-index:1;pointer-events:none;">Rank</span>
+      </div>
+      <p id="chart-label" style="font-size:.625rem;color:var(--muted);margin:0;text-transform:uppercase;letter-spacing:.08em;">Cumulative Score</p>
+    </div>
+    <div class="chart-wrap" onclick="openModal('mainChart')" title="Click to enlarge">
+      <span class="expand-hint">⛶ Expand</span>
+      <div style="position:relative;height:240px;"><canvas id="mainChart"></canvas></div>
+    </div>
+
+    <!-- Weekly breakdown bar chart -->
+    <div style="margin-top:36px;">
+      <p style="font-size:.625rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin:0 0 14px;">Points Per Week</p>
+      <div class="chart-wrap" onclick="openModal('weeklyChart')" title="Click to enlarge">
+        <span class="expand-hint">⛶ Expand</span>
+        <div style="position:relative;height:180px;"><canvas id="weeklyChart"></canvas></div>
+      </div>
+    </div>
+
+    <!-- Win Rate / Efficiency toggle -->
+    {% if win_rate_chart %}
+    <div style="margin-top:36px;padding-top:32px;border-top:1px solid var(--border);">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
+        <div id="analytics-toggle" style="position:relative;display:flex;align-items:center;width:150px;height:24px;background:rgba(255,255,255,.04);border-radius:100px;padding:3px;cursor:grab;user-select:none;touch-action:none;">
+          <div id="analytics-pill" style="position:absolute;left:3px;width:calc(50% - 3px);height:calc(100% - 6px);background:rgba(255,255,255,.1);border-radius:100px;transition:left .22s cubic-bezier(.4,0,.2,1);pointer-events:none;"></div>
+          <span id="tog-wr"  style="position:relative;flex:1;text-align:center;font-size:.6875rem;font-weight:500;color:var(--text);z-index:1;pointer-events:none;">Win Rate</span>
+          <span id="tog-eff" style="position:relative;flex:1;text-align:center;font-size:.6875rem;font-weight:500;color:var(--muted);z-index:1;pointer-events:none;">Efficiency</span>
+        </div>
+        <p id="analytics-label" style="font-size:.625rem;color:var(--muted);margin:0;text-transform:uppercase;letter-spacing:.08em;">% Correct Picks Per Week</p>
+      </div>
+      <div class="chart-wrap" onclick="openModal('analyticsChart')" title="Click to enlarge">
+        <span class="expand-hint">⛶ Expand</span>
+        <div style="position:relative;height:200px;"><canvas id="analyticsChart"></canvas></div>
+      </div>
+    </div>
+
+    <!-- Efficiency variance -->
+    <div style="margin-top:36px;">
+      <p style="font-size:.625rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin:0 0 4px;">Efficiency Std. Deviation</p>
+      <p style="font-size:.75rem;color:var(--muted);margin:0 0 18px;">How consistent each player's efficiency is week to week — lower is steadier</p>
+      <div class="chart-wrap" onclick="openModal('varianceChart')" title="Click to enlarge">
+        <span class="expand-hint">⛶ Expand</span>
+        <div style="position:relative;height:200px;"><canvas id="varianceChart"></canvas></div>
+      </div>
+    </div>
+    {% endif %}
+
+    {% endif %}
+  </div><!-- end CENTER -->
+
+  <!-- RIGHT: Status + Games -->
+  <div class="col-right">
+
+  {% if not settings.publish %}
+  <!-- ── STATE: Not published ── -->
+  <p style="font-size:.625rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin:0 0 16px;">Week {{ settings.week }}</p>
+  <p style="font-size:.9375rem;font-weight:700;color:var(--text);margin:0 0 6px;">Picks aren't open yet</p>
+  <p style="font-size:.8125rem;color:var(--muted);line-height:1.65;margin:0 0 28px;">The commissioner is still setting up this week's games. Sit tight.</p>
+  <p style="font-size:.625rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin:0 0 8px;display:flex;align-items:center;gap:6px;">
+    <span style="width:6px;height:6px;background:#fbbf24;border-radius:50%;display:inline-block;"></span>Estimated First Kickoff
+  </p>
+  <div style="display:flex;align-items:center;gap:6px;">
+    <div class="cd-digit" id="cd-h">--</div>
+    <span style="color:var(--muted);font-weight:700;font-size:1rem;">:</span>
+    <div class="cd-digit" id="cd-m">--</div>
+    <span style="color:var(--muted);font-weight:700;font-size:1rem;">:</span>
+    <div class="cd-digit" id="cd-s">--</div>
+  </div>
+
+  {% else %}
+  <!-- ── STATE: Published ── -->
+
+  {% if settings.lock_picks %}
+  <!-- Locked: compact indicator + up next -->
+  <div style="display:flex;align-items:center;gap:7px;margin-bottom:16px;">
+    <span style="font-size:.8rem;">🔒</span>
+    <span style="font-size:.7rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;">Picks Locked · Wk {{ settings.week }}</span>
+  </div>
+  {% if next_game %}
+  <p style="font-size:.625rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin:0 0 8px;display:flex;align-items:center;gap:6px;">
+    <span style="width:6px;height:6px;background:#fbbf24;border-radius:50%;display:inline-block;" class="pulse"></span>Up Next
+  </p>
+  <p style="font-size:1.05rem;font-weight:800;color:var(--text);margin:0 0 2px;letter-spacing:-.01em;">
+    {{ next_game.team1_abbrev }} <span style="color:var(--muted);font-weight:400;font-size:.75rem;">vs</span> {{ next_game.team2_abbrev }}
+  </p>
+  {% if next_game.date %}<p style="font-size:.75rem;color:var(--muted);margin:0 0 10px;">{{ next_game.date }}</p>{% endif %}
+  <div style="display:flex;align-items:center;gap:6px;margin-bottom:20px;">
+    <div class="cd-digit" id="cd-h">--</div>
+    <span style="color:var(--muted);font-weight:700;font-size:1rem;">:</span>
+    <div class="cd-digit" id="cd-m">--</div>
+    <span style="color:var(--muted);font-weight:700;font-size:1rem;">:</span>
+    <div class="cd-digit" id="cd-s">--</div>
+  </div>
+  {% else %}
+  <p style="font-size:.8125rem;color:var(--muted);margin:0 0 20px;padding-bottom:16px;border-bottom:1px solid var(--border);">All games complete. Good luck!</p>
+  {% endif %}
+  {% else %}
+  <!-- Open: pick status + countdown -->
+  {% if games %}
+  {% with made=picks_map|length total=games|length %}
+  <div id="pick-status" style="display:flex;align-items:center;gap:7px;margin-bottom:14px;">
+    {% if made == total and total > 0 %}
+      <span style="width:7px;height:7px;background:#34d399;border-radius:50%;flex-shrink:0;"></span>
+      <span style="font-size:.75rem;font-weight:600;color:#34d399;">All {{ total }} picks submitted</span>
+    {% elif made > 0 %}
+      <span style="width:7px;height:7px;background:#fbbf24;border-radius:50%;flex-shrink:0;" class="pulse"></span>
+      <span style="font-size:.75rem;font-weight:600;color:#fbbf24;">{{ made }} / {{ total }} picks made</span>
+    {% else %}
+      <span style="width:7px;height:7px;background:#f87171;border-radius:50%;flex-shrink:0;" class="pulse"></span>
+      <span style="font-size:.75rem;font-weight:600;color:#f87171;">No picks yet</span>
+    {% endif %}
+  </div>
+  {% endwith %}
+  {% endif %}
+  <p style="font-size:.625rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin:0 0 8px;display:flex;align-items:center;gap:6px;">
+    <span style="width:6px;height:6px;background:#34d399;border-radius:50%;display:inline-block;" class="pulse"></span>First Kickoff
+    {% if next_game and next_game.date %}<span style="font-weight:400;text-transform:none;letter-spacing:0;">· {{ next_game.date }}</span>{% endif %}
+  </p>
+  <div style="display:flex;align-items:center;gap:6px;margin-bottom:20px;">
+    <div class="cd-digit" id="cd-h">--</div>
+    <span style="color:var(--muted);font-weight:700;font-size:1rem;">:</span>
+    <div class="cd-digit" id="cd-m">--</div>
+    <span style="color:var(--muted);font-weight:700;font-size:1rem;">:</span>
+    <div class="cd-digit" id="cd-s">--</div>
+  </div>
+  {% endif %}
+
+  <!-- Games list -->
+  <div class="sec-head" style="margin-bottom:0;">
+    <p class="sec-title">Games</p>
+    {% if settings.lock_picks %}<span style="font-size:.625rem;font-weight:700;color:#f87171;">Locked</span>
+    {% else %}<span style="font-size:.625rem;font-weight:700;color:#34d399;">Open</span>{% endif %}
+  </div>
+  {% if not games %}
+  <p style="color:var(--muted);font-size:.8125rem;padding:16px 0;">No games this week.</p>
+  {% else %}
+  {% for game in games %}
+  {% with pick=picks_map|get_item:game.id game_id_str=game.id|stringformat:"s" %}
+  {% with dist=pick_dist|get_item:game_id_str %}
+  <div class="game-row">
+    <div style="flex-shrink:0;">
+      {% if game.graded %}<span style="width:6px;height:6px;background:#34d399;border-radius:50%;display:block;"></span>
+      {% else %}<span style="width:6px;height:6px;background:#fbbf24;border-radius:50%;display:block;" class="pulse"></span>{% endif %}
+    </div>
+    <div style="flex:1;min-width:0;">
+      {% if not settings.lock_picks and not game.graded %}
+      <!-- Inline pick slider -->
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+        <div class="pick-toggle" id="ptoggle-{{ game.id }}" data-game="{{ game.id }}">
+          <div class="pick-opt" data-choice="team1" data-game="{{ game.id }}"
+               onclick="selectPick({{ game.id }},'team1',this)"
+               {% if pick and pick.choice == 'team1' %}data-selected="true"{% endif %}>
+            <span class="pick-team">{{ game.team1_abbrev }}</span>
+            <span class="pick-pts">{{ game.points1 }}</span>
+          </div>
+          <div class="pick-opt" data-choice="team2" data-game="{{ game.id }}"
+               onclick="selectPick({{ game.id }},'team2',this)"
+               {% if pick and pick.choice == 'team2' %}data-selected="true"{% endif %}>
+            <span class="pick-team">{{ game.team2_abbrev }}</span>
+            <span class="pick-pts">{{ game.points2 }}</span>
+          </div>
+          <div class="pick-knob" id="pknob-{{ game.id }}"
+               style="{% if pick %}left:{% if pick.choice == 'team2' %}50%{% else %}2px{% endif %};{% else %}display:none;{% endif %}"></div>
+        </div>
+        <span id="pick-saved-{{ game.id }}" style="font-size:.7rem;font-weight:700;flex-shrink:0;transition:color .2s;"></span>
+        <span id="pick-had-{{ game.id }}" style="display:none;">{% if pick %}1{% else %}0{% endif %}</span>
+      </div>
+      {% else %}
+      <!-- Locked / graded display -->
+      <div style="display:flex;align-items:center;gap:5px;flex-wrap:nowrap;overflow:hidden;">
+        <span class="team-name {% if game.graded and game.winner == 'team1' %}winner{% endif %}">{{ game.team1_abbrev }}</span>
+        <span class="pts-tag {% if game.graded and game.winner == 'team1' %}won{% endif %}">{{ game.points1 }}</span>
+        <span class="vs-sep">{% if game.graded %}{% if game.winner == 'team1' %}◀{% elif game.winner == 'team2' %}▶{% else %}T{% endif %}{% else %}vs{% endif %}</span>
+        <span class="pts-tag fav {% if game.graded and game.winner == 'team2' %}won{% endif %}">{{ game.points2 }}</span>
+        <span class="team-name {% if game.graded and game.winner == 'team2' %}winner{% endif %}">{{ game.team2_abbrev }}</span>
+      </div>
+      {% endif %}
+      {% if dist and settings.lock_picks %}
+      <div style="display:flex;align-items:center;gap:5px;margin-top:4px;">
+        <span style="font-size:.575rem;color:#818cf8;font-weight:600;width:24px;text-align:right;flex-shrink:0;">{{ dist.team1_pct }}%</span>
+        <div class="dist-bar" style="flex:1;"><div class="dist-t1" data-w="{{ dist.team1_pct }}"></div><div class="dist-t2"></div></div>
+        <span style="font-size:.575rem;color:#fbbf24;font-weight:600;width:24px;flex-shrink:0;">{{ dist.team2_pct }}%</span>
+      </div>
+      {% endif %}
+    </div>
+    <div style="flex-shrink:0;text-align:right;">
+      {% if game.graded %}
+        {% if pick %}
+        <div class="pick-chip {% if pick.is_correct %}pick-correct{% else %}pick-wrong{% endif %}">
+          {% if pick.choice == 'team1' %}{{ game.team1_abbrev }}{% else %}{{ game.team2_abbrev }}{% endif %}
+        </div>
+        {% if pick.is_correct %}<div style="font-size:.575rem;color:#34d399;font-weight:700;margin-top:2px;">+{{ pick.points_earned }}</div>{% endif %}
+        {% else %}<span style="font-size:.6875rem;color:var(--muted);">—</span>{% endif %}
+      {% elif settings.lock_picks %}
+        {% if pick %}
+        <div class="pick-chip pick-pending">
+          {% if pick.choice == 'team1' %}{{ game.team1_abbrev }}{% else %}{{ game.team2_abbrev }}{% endif %}
+        </div>
+        {% else %}<span style="font-size:.6875rem;color:var(--muted);">—</span>{% endif %}
+      {% endif %}
+    </div>
+  </div>
+  {% endwith %}
+  {% endwith %}
+  {% endfor %}
+  {% endif %}
+
+  {% endif %}{# end published #}
+  </div><!-- end RIGHT -->
+
+</div>
+
+<!-- Chart expand modal -->
+<div id="chart-modal" onclick="if(event.target===this)closeModal()">
+  <div id="chart-modal-box">
+    <button onclick="closeModal()" style="position:absolute;top:14px;right:16px;background:rgba(255,255,255,.07);border:none;border-radius:6px;color:var(--muted2);font-size:.875rem;padding:4px 10px;cursor:pointer;line-height:1.5;">✕</button>
+    <p id="modal-title" style="font-size:.625rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin:0 0 20px;"></p>
+    <div style="position:relative;height:480px;"><canvas id="modal-canvas"></canvas></div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Score bars
+(function(){
+  const data = {{ leaderboard_json|safe }};
+  if (!data.length) return;
+  const max = Math.max(...data.map(d=>d.score));
+  if (max<=0) return;
+  document.querySelectorAll('.score-bar-fill').forEach((el,i)=>{
+    const pct = (parseFloat(el.dataset.pct)/max*100).toFixed(1)+'%';
+    setTimeout(()=>{ el.style.width=pct; }, 250+i*55);
+  });
+})();
+
+// Dist bars
+document.querySelectorAll('.dist-t1').forEach(el=>{
+  setTimeout(()=>{ el.style.width=el.dataset.w+'%'; }, 400);
+});
+
+const PALETTE = ['#6366f1','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#f97316','#ec4899'];
+const pointsData   = {{ points_chart|safe }};
+const positionData = {{ position_chart|safe }};
+const wrData       = {{ win_rate_chart|safe }};
+const effData      = {{ efficiency_chart|safe }};
+
+// ── shared helpers ─────────────────────────────────
+const TIP = {backgroundColor:'#0e1422',titleColor:'#f1f5f9',bodyColor:'#64748b',padding:10,cornerRadius:8,borderColor:'rgba(255,255,255,.1)',borderWidth:1};
+const SX  = {grid:{display:false},border:{display:false},ticks:{font:{size:10},color:'#475569'}};
+const SY  = (e={}) => ({grid:{color:'rgba(255,255,255,.04)',drawTicks:false},border:{display:false},ticks:{font:{size:10},color:'#475569',padding:6},...e});
+const LEG = {position:'bottom',labels:{boxWidth:8,padding:14,font:{size:10},color:'#64748b'}};
+
+function lineDS(data, fill, ctx, h) {
+  return data[0].slice(1).map((p,i)=>{
+    const c=PALETTE[i%PALETTE.length];
+    let bg='transparent';
+    if(fill&&ctx){const g=ctx.createLinearGradient(0,0,0,h);g.addColorStop(0,c+'28');g.addColorStop(1,c+'00');bg=g;}
+    return{label:p,data:data.slice(1).map(r=>r[i+1]),borderColor:c,backgroundColor:bg,
+      pointBackgroundColor:c,pointBorderColor:'rgba(7,11,20,.9)',pointBorderWidth:1.5,
+      pointRadius:3,pointHoverRadius:6,tension:0.4,fill,borderWidth:2};
+  });
+}
+
+// ── main score/rank ────────────────────────────────
+let mainChart=null, currentMode='score';
+
+function buildMainOn(cid,mode,showLegend=false){
+  const el=document.getElementById(cid);if(!el)return null;
+  const ctx=el.getContext('2d'),data=mode==='score'?pointsData:positionData,rev=mode==='rank';
+  if(!data||data.length<2)return null;
+  const h=el.parentElement.offsetHeight||240;
+  return new Chart(ctx,{type:'line',
+    data:{labels:data.slice(1).map(r=>'Wk '+r[0]),datasets:lineDS(data,false,ctx,h)},
+    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+      plugins:{legend:{...LEG,display:showLegend},tooltip:{...TIP,callbacks:{label:c=>` ${c.dataset.label}: ${c.parsed.y}${rev?'':' pts'}`}}},
+      scales:{y:SY({reverse:rev}),x:SX},animation:{duration:600,easing:'easeInOutQuart'}}});
+}
+// Generic draggable pill toggle
+// modes[0]=left, modes[1]=right; returns movePill(mode,animate)
+function setupPillDrag(trackId,pillId,labelIds,modes,switchFn,getMode){
+  function movePill(mode,animate){
+    const tr=document.getElementById(trackId),pl=document.getElementById(pillId);
+    if(!tr||!pl)return;
+    const half=(tr.offsetWidth-6)/2;
+    pl.style.transition=animate?'left .22s cubic-bezier(.4,0,.2,1)':'none';
+    pl.style.left=mode===modes[0]?'3px':(3+half)+'px';
+    document.getElementById(labelIds[0]).style.color=mode===modes[0]?'var(--text)':'var(--muted)';
+    document.getElementById(labelIds[1]).style.color=mode===modes[1]?'var(--text)':'var(--muted)';
+  }
+  const track=document.getElementById(trackId);
+  if(!track)return movePill;
+  let startX=null,moved=false;
+  function pt(e){return e.touches?e.touches[0]:e;}
+  function onStart(e){
+    startX=pt(e).clientX;moved=false;track.style.cursor='grabbing';
+    document.addEventListener('mousemove',onMove);document.addEventListener('mouseup',onEnd);
+    document.addEventListener('touchmove',onMove,{passive:false});document.addEventListener('touchend',onEnd);
+  }
+  function onMove(e){
+    if(e.cancelable)e.preventDefault();
+    if(Math.abs(pt(e).clientX-startX)>3)moved=true;
+    const rect=track.getBoundingClientRect(),half=(rect.width-6)/2;
+    const pl=document.getElementById(pillId);
+    pl.style.transition='none';
+    pl.style.left=Math.max(3,Math.min(pt(e).clientX-rect.left-half/2-3,3+half))+'px';
+    const right=pt(e).clientX>=rect.left+rect.width/2;
+    document.getElementById(labelIds[0]).style.color=right?'var(--muted)':'var(--text)';
+    document.getElementById(labelIds[1]).style.color=right?'var(--text)':'var(--muted)';
+  }
+  function onEnd(e){
+    track.style.cursor='grab';
+    document.removeEventListener('mousemove',onMove);document.removeEventListener('mouseup',onEnd);
+    document.removeEventListener('touchmove',onMove);document.removeEventListener('touchend',onEnd);
+    const rect=track.getBoundingClientRect();
+    const ex=(e.changedTouches?e.changedTouches[0]:e).clientX;
+    const picked=ex>=rect.left+rect.width/2?modes[1]:modes[0];
+    switchFn(moved?picked:(getMode()===modes[0]?modes[1]:modes[0]));
+  }
+  track.addEventListener('mousedown',onStart);
+  track.addEventListener('touchstart',onStart,{passive:true});
+  return movePill;
+}
+
+function initChart(mode){if(mainChart){mainChart.destroy();mainChart=null;}mainChart=buildMainOn('mainChart',mode);}
+let movePillMain;
+function switchChart(mode){
+  if(mode===currentMode)return;currentMode=mode;initChart(mode);if(movePillMain)movePillMain(mode,true);
+  document.getElementById('chart-label').textContent=mode==='score'?'Cumulative Score':'Rank Over Time';
+}
+movePillMain=setupPillDrag('chart-toggle','toggle-pill',['tog-score','tog-rank'],['score','rank'],switchChart,()=>currentMode);
+initChart('score');
+
+// ── weekly bars ────────────────────────────────────
+function buildWeeklyOn(cid,showLegend=false){
+  const el=document.getElementById(cid);if(!el||!pointsData||pointsData.length<2)return null;
+  const players=pointsData[0].slice(1),rows=pointsData.slice(1);
+  const weekly=players.map((_,pi)=>rows.map((r,wi)=>parseFloat((r[pi+1]-(wi>0?rows[wi-1][pi+1]:0)).toFixed(2))));
+  return new Chart(el.getContext('2d'),{type:'bar',
+    data:{labels:rows.map(r=>'Wk '+r[0]),
+      datasets:players.map((p,i)=>({label:p,data:weekly[i],backgroundColor:PALETTE[i%PALETTE.length]+'bb',borderColor:PALETTE[i%PALETTE.length],borderWidth:1,borderRadius:3}))},
+    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+      plugins:{legend:{...LEG,display:showLegend},tooltip:{...TIP,callbacks:{label:c=>` ${c.dataset.label}: ${c.parsed.y} pts`}}},
+      scales:{x:SX,y:SY()},animation:{duration:700,easing:'easeInOutQuart'}}});
+}
+buildWeeklyOn('weeklyChart');
+
+// ── win rate / efficiency ──────────────────────────
+let analyticsChart=null,analyticsMode='wr';
+
+function buildAnalyticsOn(cid,mode,showLegend=false){
+  const el=document.getElementById(cid);if(!el)return null;
+  const data=mode==='wr'?wrData:effData;if(!data||data.length<2)return null;
+  return new Chart(el.getContext('2d'),{type:'line',
+    data:{labels:data.slice(1).map(r=>'Wk '+r[0]),datasets:lineDS(data,false,null,0)},
+    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+      plugins:{legend:{...LEG,display:showLegend},tooltip:{...TIP,callbacks:{label:c=>` ${c.dataset.label}: ${c.parsed.y}%`}}},
+      scales:{y:SY({min:0,max:100,ticks:{font:{size:10},color:'#475569',padding:6,callback:v=>v+'%'}}),x:SX},
+      animation:{duration:600,easing:'easeInOutQuart'}}});
+}
+function initAnalytics(mode){if(analyticsChart){analyticsChart.destroy();analyticsChart=null;}analyticsChart=buildAnalyticsOn('analyticsChart',mode);}
+let movePillAnalytics;
+function switchAnalytics(mode){
+  if(mode===analyticsMode)return;analyticsMode=mode;initAnalytics(mode);if(movePillAnalytics)movePillAnalytics(mode,true);
+  document.getElementById('analytics-label').textContent=mode==='wr'?'% Correct Picks Per Week':'% of Max Available Points Captured';
+}
+movePillAnalytics=setupPillDrag('analytics-toggle','analytics-pill',['tog-wr','tog-eff'],['wr','eff'],switchAnalytics,()=>analyticsMode);
+initAnalytics('wr');
+
+// ── variance ───────────────────────────────────────
+function buildVarianceOn(cid,showLegend=false){
+  const el=document.getElementById(cid);if(!el||!effData||effData.length<2)return null;
+  const players=effData[0].slice(1),rows=effData.slice(1);
+  const v=players.map((_,pi)=>{const sc=rows.map(r=>r[pi+1]),m=sc.reduce((a,b)=>a+b,0)/sc.length;return parseFloat(Math.sqrt(sc.reduce((a,b)=>a+(b-m)**2,0)/sc.length).toFixed(2));});
+  return new Chart(el.getContext('2d'),{type:'bar',
+    data:{labels:players,datasets:[{label:'Std. Deviation',data:v,
+      backgroundColor:players.map((_,i)=>PALETTE[i%PALETTE.length]+'bb'),
+      borderColor:players.map((_,i)=>PALETTE[i%PALETTE.length]),borderWidth:1,borderRadius:4}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:showLegend},
+      tooltip:{...TIP,callbacks:{label:c=>` Std. Dev: ${c.parsed.y}`}}},
+      scales:{x:SX,y:SY()},animation:{duration:700,easing:'easeInOutQuart'}}});
+}
+buildVarianceOn('varianceChart');
+
+// ── modal expand ───────────────────────────────────
+let modalChart=null;
+const MODAL_LABELS={
+  mainChart:()=>currentMode==='score'?'Cumulative Score':'Rank Over Time',
+  weeklyChart:()=>'Points Per Week',
+  analyticsChart:()=>analyticsMode==='wr'?'Win Rate Per Week':'Efficiency Per Week',
+  varianceChart:()=>'Efficiency Std. Deviation',
+};
+function openModal(chartId){
+  document.getElementById('chart-modal').style.display='flex';
+  document.getElementById('modal-title').textContent=(MODAL_LABELS[chartId]||(() =>''))();
+  if(modalChart){modalChart.destroy();modalChart=null;}
+  if(chartId==='mainChart')      modalChart=buildMainOn('modal-canvas',currentMode,true);
+  else if(chartId==='weeklyChart')    modalChart=buildWeeklyOn('modal-canvas',true);
+  else if(chartId==='analyticsChart') modalChart=buildAnalyticsOn('modal-canvas',analyticsMode,true);
+  else if(chartId==='varianceChart')  modalChart=buildVarianceOn('modal-canvas',true);
+}
+function closeModal(){
+  document.getElementById('chart-modal').style.display='none';
+  if(modalChart){modalChart.destroy();modalChart=null;}
+}
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();});
+
+// Countdown
+(function(){
+  const h=document.getElementById('cd-h'),m=document.getElementById('cd-m'),s=document.getElementById('cd-s');
+  if(!h) return;
+  const nextGameTs = {{ next_game_ts|default:"null" }};
+  function getTarget(){
+    if(nextGameTs) return new Date(nextGameTs);
+    // fallback: next Sunday 1pm ET
+    const now=new Date();
+    const etOff=-5*60;
+    const etNow=new Date(now.getTime()+now.getTimezoneOffset()*60000+etOff*60000);
+    const d=etNow.getDay(),days=d===0?0:7-d;
+    const t=new Date(etNow); t.setDate(etNow.getDate()+days); t.setHours(13,0,0,0);
+    if(etNow>=t) t.setDate(t.getDate()+7);
+    return new Date(t.getTime()-etOff*60000);
+  }
+  function pad(n){return String(n).padStart(2,'0');}
+  function tick(){
+    const diff=getTarget()-new Date();
+    if(diff<=0){h.textContent=m.textContent=s.textContent='00';return;}
+    h.textContent=pad(Math.floor(diff/3600000));
+    m.textContent=pad(Math.floor(diff%3600000/60000));
+    s.textContent=pad(Math.floor(diff%60000/1000));
+  }
+  tick(); setInterval(tick,1000);
+})();
+
+// Inline pick autosave
+const SAVE_URL = '{% url "main:ajax_save_pick" %}';
+const CSRF = '{{ csrf_token }}';
+let picksMade = {{ picks_map|length }};
+const totalGames = {{ games|length }};
+
+function updatePickStatus() {
+  const el = document.getElementById('pick-status');
+  if (!el) return;
+  if (picksMade >= totalGames && totalGames > 0) {
+    el.innerHTML = '<span style="width:7px;height:7px;background:#34d399;border-radius:50%;flex-shrink:0;"></span><span style="font-size:.75rem;font-weight:600;color:#34d399;">All '+totalGames+' picks submitted</span>';
+  } else if (picksMade > 0) {
+    el.innerHTML = '<span style="width:7px;height:7px;background:#fbbf24;border-radius:50%;flex-shrink:0;" class="pulse"></span><span style="font-size:.75rem;font-weight:600;color:#fbbf24;">'+picksMade+' / '+totalGames+' picks made</span>';
+  } else {
+    el.innerHTML = '<span style="width:7px;height:7px;background:#f87171;border-radius:50%;flex-shrink:0;" class="pulse"></span><span style="font-size:.75rem;font-weight:600;color:#f87171;">No picks yet</span>';
+  }
+}
+
+function selectPick(gameId, choice, optEl) {
+  // Move knob
+  const knob = document.getElementById('pknob-'+gameId);
+  if (knob) { knob.style.display=''; knob.style.left = choice==='team1'?'2px':'50%'; }
+  // Update label colors
+  document.querySelectorAll('#ptoggle-'+gameId+' .pick-opt').forEach(el => el.removeAttribute('data-selected'));
+  if (optEl) optEl.setAttribute('data-selected','true');
+  // Autosave
+  const ind = document.getElementById('pick-saved-'+gameId);
+  const hadEl = document.getElementById('pick-had-'+gameId);
+  if (ind) { ind.textContent='…'; ind.style.color='var(--muted)'; }
+  const fd = new FormData();
+  fd.append('game_id', gameId); fd.append('choice', choice); fd.append('csrfmiddlewaretoken', CSRF);
+  fetch(SAVE_URL, {method:'POST', body:fd})
+    .then(r=>r.json())
+    .then(data=>{
+      if (ind) { ind.textContent=data.ok?'✓':'✕'; ind.style.color=data.ok?'#34d399':'#f87171';
+        setTimeout(()=>{ if(ind) ind.textContent=''; }, 2000); }
+      if (data.ok && hadEl && hadEl.textContent==='0') { hadEl.textContent='1'; picksMade++; updatePickStatus(); }
+    })
+    .catch(()=>{ if(ind){ ind.textContent='✕'; ind.style.color='#f87171'; } });
+}
+
+// Drag-to-slide on pick toggles
+document.querySelectorAll('.pick-toggle').forEach(toggle=>{
+  let sx=null, moved=false;
+  toggle.addEventListener('mousedown', e=>{ sx=e.clientX; moved=false; });
+  toggle.addEventListener('touchstart', e=>{ sx=e.touches[0].clientX; moved=false; },{passive:true});
+  function end(clientX){
+    if(sx===null)return;
+    const dx=clientX-sx;
+    if(Math.abs(dx)>12){
+      moved=true;
+      const gid=parseInt(toggle.dataset.game);
+      const choice=dx>0?'team2':'team1';
+      const opt=toggle.querySelector('[data-choice="'+choice+'"]');
+      selectPick(gid, choice, opt);
+    }
+    sx=null;
+  }
+  toggle.addEventListener('mouseup', e=>end(e.clientX));
+  toggle.addEventListener('touchend', e=>end(e.changedTouches[0].clientX));
+});
+
+// Mobile tab toggle
+function mobTab(tab){
+  const isChart=tab==='chart';
+  document.querySelector('.col-center').classList.toggle('mob-on',isChart);
+  document.querySelector('.col-right').classList.toggle('mob-on',!isChart);
+  const on='background:var(--accent);color:#fff;',off='background:transparent;color:var(--muted);';
+  document.getElementById('mob-tab-chart').style.cssText+=isChart?on:off;
+  document.getElementById('mob-tab-picks').style.cssText+=isChart?off:on;
+}
+
+// Email nav + collapse
+(function(){
+  const msgs=Array.from(document.querySelectorAll('.email-msg'));
+  if(!msgs.length)return;
+  const total=msgs.length;
+  const dateEl=document.getElementById('email-date');
+  const counter=document.getElementById('email-counter');
+  const prevBtn=document.getElementById('email-prev');
+  const nextBtn=document.getElementById('email-next');
+  const colBtn=document.getElementById('email-collapse');
+  const body=document.getElementById('email-body');
+  const dates=[];
+  {% for ann in announcements %}dates.push("{{ ann.created_at|date:'F j, Y' }}");{% endfor %}
+  let idx=0,collapsed=false;
+  if(body)body.style.maxHeight=body.scrollHeight+'px';
+  function showMsg(i){
+    msgs.forEach((m,j)=>m.style.display=j===i?'':'none');
+    if(dateEl)dateEl.textContent=dates[i]||'';
+    if(counter)counter.textContent=(i+1)+' / '+total;
+    if(prevBtn){prevBtn.disabled=i===total-1;prevBtn.style.opacity=i===total-1?'.3':'1';}
+    if(nextBtn){nextBtn.disabled=i===0;nextBtn.style.opacity=i===0?'.3':'1';}
+    if(body&&!collapsed)body.style.maxHeight=body.scrollHeight+'px';
+  }
+  if(prevBtn)prevBtn.addEventListener('click',()=>{if(idx<total-1){idx++;showMsg(idx);}});
+  if(nextBtn)nextBtn.addEventListener('click',()=>{if(idx>0){idx--;showMsg(idx);}});
+  if(colBtn&&body){
+    colBtn.addEventListener('click',()=>{
+      collapsed=!collapsed;
+      body.style.maxHeight=collapsed?'0':body.scrollHeight+'px';
+      body.style.opacity=collapsed?'0':'1';
+      colBtn.textContent=collapsed?'▼ expand':'▲ collapse';
+    });
+  }
+})();
+
+// Week slider
+(function(){
+  const slider=document.getElementById('week-slider');
+  if(!slider)return;
+  const urls={};
+  {% for w in week_links %}urls[{{ w }}]="{% url 'main:home' week=w %}";{% endfor %}
+  const label=document.getElementById('wk-label');
+  slider.addEventListener('input',()=>{ label.textContent='W'+slider.value; });
+  slider.addEventListener('change',()=>{ const u=urls[+slider.value];if(u)window.location.href=u; });
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,33 @@
+{% extends 'base.html' %}
+{% block title %}Register — PutnamBowl{% endblock %}
+{% block content %}
+<div class="min-h-[70vh] flex items-center justify-center">
+  <div class="w-full max-w-sm">
+    <div class="text-center mb-8">
+      <div class="text-4xl mb-2">🏈</div>
+      <h1 class="text-2xl font-bold text-slate-900">Join PutnamBowl</h1>
+      <p class="text-slate-500 text-sm mt-1">Create your account</p>
+    </div>
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-8">
+      <form method="post" class="space-y-4">
+        {% csrf_token %}
+        {% for field in form %}
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">{{ field.label }}</label>
+          <input name="{{ field.html_name }}"
+                 type="{{ field.field.widget.input_type }}"
+                 value="{{ field.value|default:'' }}"
+                 class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 ring-theme focus:border-transparent
+                   {% if field.errors %}border-red-400{% endif %}">
+          {% for e in field.errors %}<p class="text-xs text-red-500 mt-1">{{ e }}</p>{% endfor %}
+        </div>
+        {% endfor %}
+        <button type="submit" class="w-full py-2.5 text-sm font-semibold btn-theme rounded-lg mt-2">Create Account</button>
+      </form>
+      <p class="text-center text-sm text-slate-500 mt-6">
+        Already have an account? <a href="{% url 'accounts:login' %}" class="text-theme font-medium hover:underline">Sign in</a>
+      </p>
+    </div>
+  </div>
+</div>
+{% endblock %}

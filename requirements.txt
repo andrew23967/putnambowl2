@@ -1,0 +1,9 @@
+django>=6.0,<7.0
+gunicorn
+whitenoise
+dj-database-url
+psycopg2-binary
+django-environ
+requests
+beautifulsoup4
+nfl-data-py

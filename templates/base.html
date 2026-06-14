@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}PutnamBowl{% endblock %}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --accent: {% if request.user.is_authenticated %}{{ request.user.profile.theme }}{% else %}#00897b{% endif %};
+      --bg:       #070b14;
+      --surface:  #0e1422;
+      --surface2: #141c2e;
+      --border:   rgba(255,255,255,0.07);
+      --border2:  rgba(255,255,255,0.12);
+      --text:     #f1f5f9;
+      --muted:    #64748b;
+      --muted2:   #94a3b8;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', sans-serif;
+      -webkit-font-smoothing: antialiased;
+      min-height: 100vh;
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,.12); border-radius: 4px; }
+
+    /* Cards */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+    }
+    .card-inner {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+
+    /* Accent */
+    .accent       { color: var(--accent); }
+    .accent-bg    { background: var(--accent); }
+    .accent-border{ border-color: var(--accent); }
+    .btn-accent {
+      background: var(--accent);
+      color: #fff;
+      font-weight: 600;
+      border-radius: 8px;
+      transition: filter .15s;
+    }
+    .btn-accent:hover { filter: brightness(1.15); }
+    .btn-ghost {
+      background: rgba(255,255,255,.06);
+      color: var(--muted2);
+      border-radius: 8px;
+      transition: background .15s, color .15s;
+    }
+    .btn-ghost:hover { background: rgba(255,255,255,.1); color: var(--text); }
+    .btn-ghost.active { background: var(--accent); color: #fff; }
+
+    /* Nav */
+    nav.topnav {
+      background: rgba(7,11,20,.95);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-link {
+      color: var(--muted2);
+      font-size: .8125rem;
+      font-weight: 500;
+      padding: 6px 10px;
+      border-radius: 6px;
+      transition: background .12s, color .12s;
+      white-space: nowrap;
+    }
+    .nav-link:hover { background: rgba(255,255,255,.07); color: var(--text); }
+
+    /* Dropdown */
+    .nav-group .dropdown { display: none; }
+    .nav-group:hover .dropdown { display: block; }
+    .dropdown {
+      position: absolute;
+      top: 100%;
+      min-width: 200px;
+      background: #0e1422;
+      border: 1px solid var(--border2);
+      border-radius: 10px;
+      padding: 6px;
+      padding-top: 14px;
+      margin-top: 0;
+      box-shadow: 0 20px 60px rgba(0,0,0,.5);
+      z-index: 100;
+    }
+    .dropdown a {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      border-radius: 6px;
+      color: var(--muted2);
+      font-size: .8125rem;
+      font-weight: 500;
+      transition: background .1s, color .1s;
+    }
+    .dropdown a:hover { background: rgba(255,255,255,.07); color: var(--text); }
+
+    /* Mobile menu */
+    #mobile-menu { display: none; }
+    #mobile-menu.open { display: block; }
+
+    /* Tag / badge */
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 8px;
+      border-radius: 99px;
+      font-size: .6875rem;
+      font-weight: 600;
+      letter-spacing: .02em;
+    }
+    .tag-green  { background: rgba(16,185,129,.15); color: #34d399; }
+    .tag-red    { background: rgba(239,68,68,.15);  color: #f87171; }
+    .tag-amber  { background: rgba(245,158,11,.15); color: #fbbf24; }
+    .tag-accent { background: color-mix(in srgb, var(--accent) 20%, transparent); color: var(--accent); }
+    .tag-muted  { background: rgba(255,255,255,.07); color: var(--muted2); }
+
+    /* Glow */
+    .glow { box-shadow: 0 0 20px color-mix(in srgb, var(--accent) 35%, transparent); }
+
+    /* Score bar */
+    .score-bar { height: 3px; background: rgba(255,255,255,.08); border-radius: 99px; overflow: hidden; }
+    .score-bar-fill { height: 100%; background: var(--accent); border-radius: 99px; width: 0; transition: width 1.2s cubic-bezier(.2,.8,.2,1); }
+
+    /* Animations */
+    @keyframes fadeUp   { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:translateY(0); } }
+    @keyframes fadeIn   { from { opacity:0; } to { opacity:1; } }
+    @keyframes scaleIn  { from { opacity:0; transform:scale(.96); } to { opacity:1; transform:scale(1); } }
+    @keyframes pulse    { 0%,100% { opacity:1; } 50% { opacity:.4; } }
+
+    .anim-up   { animation: fadeUp  .4s ease both; }
+    .anim-in   { animation: fadeIn  .3s ease both; }
+    .anim-scale{ animation: scaleIn .35s ease both; }
+    .pulse     { animation: pulse 2s ease infinite; }
+
+    /* Stagger children */
+    .stagger > *:nth-child(1)  { animation-delay: .04s; }
+    .stagger > *:nth-child(2)  { animation-delay: .08s; }
+    .stagger > *:nth-child(3)  { animation-delay: .12s; }
+    .stagger > *:nth-child(4)  { animation-delay: .16s; }
+    .stagger > *:nth-child(5)  { animation-delay: .20s; }
+    .stagger > *:nth-child(6)  { animation-delay: .24s; }
+    .stagger > *:nth-child(7)  { animation-delay: .28s; }
+    .stagger > *:nth-child(8)  { animation-delay: .32s; }
+    .stagger > *:nth-child(9)  { animation-delay: .36s; }
+    .stagger > *:nth-child(10) { animation-delay: .40s; }
+
+    /* Divider */
+    hr.dim { border-color: var(--border); }
+
+    /* Flash messages */
+    .flash-success { background:rgba(16,185,129,.12); border:1px solid rgba(16,185,129,.25); color:#34d399; }
+    .flash-error   { background:rgba(239,68,68,.12);  border:1px solid rgba(239,68,68,.25);  color:#f87171; }
+    .flash-warning { background:rgba(245,158,11,.12); border:1px solid rgba(245,158,11,.25); color:#fbbf24; }
+    .flash-info    { background:rgba(99,102,241,.12); border:1px solid rgba(99,102,241,.25); color:#a5b4fc; }
+
+    /* Overrides for Tailwind-generated classes we still use */
+    .text-muted { color: var(--muted2); }
+    .text-dim   { color: var(--muted); }
+  </style>
+  {% block extra_head %}{% endblock %}
+</head>
+<body>
+
+<!-- ── NAV ── -->
+<nav class="topnav sticky top-0 z-50">
+  <div style="max-width:1280px;margin:0 auto;padding:0 24px;">
+    <div style="display:flex;align-items:center;height:52px;gap:8px;">
+
+      <!-- Logo -->
+      <a href="{% url 'main:home' week=1 %}" style="display:flex;align-items:center;gap:8px;margin-right:16px;text-decoration:none;">
+        <div style="width:28px;height:28px;border-radius:7px;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:14px;" class="glow">🏈</div>
+        <span style="color:var(--text);font-weight:800;font-size:.9375rem;letter-spacing:-.01em;">PutnamBowl</span>
+      </a>
+
+      {% if request.user.is_authenticated %}
+      <!-- Desktop links -->
+      <div class="hidden-mobile" style="display:flex;align-items:center;gap:2px;flex:1;">
+        <a href="{% url 'main:home' week=1 %}" class="nav-link">Home</a>
+        <a href="{% url 'main:pickform' %}" class="nav-link">My Picks</a>
+        <a href="{% url 'main:allpicks' %}" class="nav-link">All Picks</a>
+        <a href="{% url 'main:pickhistory' %}" class="nav-link">History</a>
+        <a href="{% url 'main:seasons' %}" class="nav-link">Seasons</a>
+        <a href="{% url 'main:preseason' %}" class="nav-link">Preseason</a>
+        <a href="{% url 'main:standings' %}" class="nav-link">Standings</a>
+        <a href="{% url 'main:rules' %}" class="nav-link">Rules</a>
+        {% if request.user.is_staff %}
+        <div class="nav-group" style="position:relative;">
+          <button class="nav-link" style="display:flex;align-items:center;gap:4px;background:none;border:none;cursor:pointer;">
+            Admin
+            <svg width="10" height="10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>
+          </button>
+          <div class="dropdown" style="left:0;">
+            <a href="{% url 'main:pickdash' %}"><span>🎮</span> Pick Dashboard</a>
+            <a href="{% url 'main:accountdash' %}"><span>👥</span> Accounts</a>
+            <a href="{% url 'main:announcements' %}"><span>📢</span> Announcements</a>
+            <a href="{% url 'main:buglog' %}"><span>🐛</span> Bug Log</a>
+          </div>
+        </div>
+        {% endif %}
+      </div>
+
+      <!-- Right: user -->
+      <div style="display:flex;align-items:center;gap:8px;margin-left:auto;">
+        <div class="nav-group" style="position:relative;">
+          <button class="nav-link" style="display:flex;align-items:center;gap:8px;background:none;border:none;cursor:pointer;">
+            <div style="width:24px;height:24px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:800;">{{ request.user.username|first|upper }}</div>
+            <span style="font-size:.8125rem;font-weight:500;color:var(--muted2);">{{ request.user.username }}</span>
+          </button>
+          <div class="dropdown" style="right:0;">
+            <a href="{% url 'accounts:user_profile' %}"><span>👤</span> My Profile</a>
+            <a href="{% url 'main:bugreport' %}"><span>🐞</span> Report Bug</a>
+            <div style="height:1px;background:var(--border);margin:4px 0;"></div>
+            <a href="{% url 'accounts:logout' %}" style="color:#f87171!important;"><span>↩</span> Logout</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Mobile hamburger -->
+      <button onclick="document.getElementById('mobile-menu').classList.toggle('open')"
+              style="display:none;background:none;border:none;cursor:pointer;padding:6px;color:var(--muted2);"
+              id="hamburger">
+        <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+        </svg>
+      </button>
+      {% else %}
+      <div style="margin-left:auto;display:flex;gap:8px;">
+        <a href="{% url 'accounts:login' %}" class="nav-link">Login</a>
+        <a href="{% url 'accounts:register' %}" class="btn-accent" style="padding:6px 14px;font-size:.8125rem;text-decoration:none;">Register</a>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Mobile menu -->
+  {% if request.user.is_authenticated %}
+  <div id="mobile-menu" style="border-top:1px solid var(--border);padding:8px 16px 12px;">
+    <div style="display:flex;flex-direction:column;gap:2px;">
+      <a href="{% url 'main:home' week=1 %}" class="nav-link">Home</a>
+      <a href="{% url 'main:pickform' %}" class="nav-link">My Picks</a>
+      <a href="{% url 'main:allpicks' %}" class="nav-link">All Picks</a>
+      <a href="{% url 'main:pickhistory' %}" class="nav-link">History</a>
+      <a href="{% url 'main:seasons' %}" class="nav-link">Seasons</a>
+      <a href="{% url 'main:preseason' %}" class="nav-link">Preseason</a>
+      <a href="{% url 'main:standings' %}" class="nav-link">Standings</a>
+      <a href="{% url 'main:rules' %}" class="nav-link">Rules</a>
+      {% if request.user.is_staff %}
+      <div style="height:1px;background:var(--border);margin:4px 0;"></div>
+      <a href="{% url 'main:pickdash' %}" class="nav-link">Pick Dashboard</a>
+      <a href="{% url 'main:accountdash' %}" class="nav-link">Accounts</a>
+      {% endif %}
+      <div style="height:1px;background:var(--border);margin:4px 0;"></div>
+      <a href="{% url 'accounts:user_profile' %}" class="nav-link">My Profile</a>
+      <a href="{% url 'accounts:logout' %}" class="nav-link" style="color:#f87171;">Logout</a>
+    </div>
+  </div>
+  {% endif %}
+</nav>
+
+<!-- Mobile CSS -->
+<style>
+  @media (max-width: 768px) {
+    .hidden-mobile { display: none !important; }
+    #hamburger { display: block !important; }
+  }
+</style>
+
+<!-- Flash messages -->
+{% if messages %}
+<div style="max-width:1280px;margin:0 auto;padding:12px 24px 0;">
+  {% for message in messages %}
+  <div class="anim-up {% if message.tags == 'success' %}flash-success{% elif message.tags == 'error' %}flash-error{% elif message.tags == 'warning' %}flash-warning{% else %}flash-info{% endif %}"
+       style="padding:10px 16px;border-radius:8px;font-size:.8125rem;font-weight:500;margin-bottom:8px;">
+    {{ message }}
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<!-- Page content -->
+<main style="max-width:1280px;margin:0 auto;padding:24px;">
+  {% block content %}{% endblock %}
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script>
+// Animated counter
+function animCount(el, target, dur=800) {
+  const start = performance.now();
+  const tick = now => {
+    const p = Math.min((now-start)/dur, 1);
+    const e = 1-Math.pow(1-p,3);
+    el.textContent = (target*e).toFixed(1);
+    if (p<1) requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+}
+window.addEventListener('load', () => {
+  document.querySelectorAll('[data-count]').forEach(el => animCount(el, parseFloat(el.dataset.count)));
+  document.querySelectorAll('.score-bar-fill[data-w]').forEach((el,i) => {
+    setTimeout(() => el.style.width = el.dataset.w+'%', 200+i*50);
+  });
+});
+if (window.Chart) {
+  Chart.defaults.font.family = 'Inter, sans-serif';
+  Chart.defaults.color = '#64748b';
+}
+</script>
+{% block extra_js %}{% endblock %}
+</body>
+</html>

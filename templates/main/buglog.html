@@ -1,0 +1,41 @@
+{% extends 'base.html' %}
+{% block title %}Bug Log — PutnamBowl{% endblock %}
+{% block content %}
+<div class="mb-6">
+  <h1 class="text-xl font-bold text-slate-900">Bug Log</h1>
+  <p class="text-slate-500 text-sm">User-reported bugs and issues.</p>
+</div>
+<div class="space-y-3">
+  {% for bug in bugs %}
+  <div class="bg-white rounded-2xl border shadow-sm overflow-hidden {% if bug.resolved %}border-emerald-200{% else %}border-red-200{% endif %}">
+    <div class="px-5 py-4">
+      <div class="flex items-start justify-between gap-4">
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2 mb-1">
+            <span class="text-xs font-semibold px-2 py-0.5 rounded-full {% if bug.resolved %}bg-emerald-100 text-emerald-700{% else %}bg-red-100 text-red-700{% endif %}">
+              {% if bug.resolved %}Resolved{% else %}Open{% endif %}
+            </span>
+            <span class="text-xs text-slate-400">{{ bug.created_at|date:"M d, Y g:i A" }}</span>
+            <span class="text-xs text-slate-500 font-medium">by {{ bug.finder }}</span>
+          </div>
+          <p class="text-sm text-slate-700 leading-relaxed">{{ bug.description }}</p>
+        </div>
+        {% if not bug.resolved %}
+        <form method="post" class="flex-shrink-0">
+          {% csrf_token %}
+          <input type="hidden" name="resolve" value="1">
+          <input type="hidden" name="bug_id" value="{{ bug.id }}">
+          <button type="submit" class="px-3 py-1.5 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg">Resolve</button>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% empty %}
+  <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-12 text-center">
+    <p class="text-2xl mb-2">✅</p>
+    <p class="text-slate-400 text-sm">No bugs reported!</p>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}
