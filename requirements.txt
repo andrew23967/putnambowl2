@@ -6,4 +6,6 @@ psycopg2-binary
 django-environ
 requests
 beautifulsoup4
-nfl-data-py
+nfl-data-py==0.3.2
+pandas>=3.0
+numpy>=2.0
