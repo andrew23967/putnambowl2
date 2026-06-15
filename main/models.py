@@ -11,6 +11,12 @@ class SiteSettings(models.Model):
     multiplier = models.IntegerField(default=1)
     scrape_week = models.IntegerField(default=1)
     grade_api = models.CharField(max_length=20, default='nfl_data_py')
+    weekly_recap = models.TextField(blank=True, default='')
+    auto_enabled = models.BooleanField(default=False)
+    auto_scrape_weekday = models.IntegerField(default=1)   # 0=Mon … 6=Sun
+    auto_scrape_hour = models.IntegerField(default=9)       # UTC 0-23
+    auto_lock_offset_minutes = models.IntegerField(default=10)
+    first_game_dt = models.DateTimeField(null=True, blank=True)  # UTC kickoff time
 
     class Meta:
         verbose_name = 'Site Settings'

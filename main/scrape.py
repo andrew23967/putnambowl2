@@ -5,23 +5,22 @@ from .teams import ABBREV_TO_TEAM
 
 try:
     import nfl_data_py as nfl
-    _schedule = None
+    _schedule_cache = {}
 
-    def _get_schedule():
-        global _schedule
-        if _schedule is None:
+    def _get_schedule(year=None):
+        global _schedule_cache
+        if year is None:
             today = date.today()
-            year = today.year
-            years = [year - 1, year] if today.month < 6 else [year, year + 1]
-            _schedule = nfl.import_schedules(years)
-        return _schedule
+            year = today.year if today.month >= 9 else today.year - 1
+        if year not in _schedule_cache:
+            _schedule_cache[year] = nfl.import_schedules([year])
+        return _schedule_cache[year]
 
     NFL_DATA_PY_AVAILABLE = True
 except ImportError:
     NFL_DATA_PY_AVAILABLE = False
-    _schedule = None
 
-    def _get_schedule():
+    def _get_schedule(year=None):
         return None
 
 
@@ -56,8 +55,8 @@ def _season_year():
     return today.year if today.month >= 9 else today.year - 1
 
 
-def scrape_nfl_data_py(week):
-    schedule = _get_schedule()
+def scrape_nfl_data_py(week, year=None):
+    schedule = _get_schedule(year)
     if schedule is None:
         return []
     games = []
@@ -78,10 +77,10 @@ def scrape_nfl_data_py(week):
     return games
 
 
-def scrape_espn(week):
+def scrape_espn(week, year=None):
     games = []
     try:
-        season = _season_year()
+        season = year or _season_year()
         url = (f"https://site.api.espn.com/apis/site/v2/sports/football/nfl/"
                f"scoreboard?dates={season}&seasontype=2&week={week}")
         data = requests.get(url, timeout=10).json()
@@ -116,15 +115,15 @@ def scrape_espn(week):
     return games
 
 
-def scrape(week, api_type='nfl_data_py'):
+def scrape(week, api_type='nfl_data_py', year=None):
     if api_type == 'espn':
-        return scrape_espn(week)
-    return scrape_nfl_data_py(week)
+        return scrape_espn(week, year)
+    return scrape_nfl_data_py(week, year)
 
 
-def grade_nfl_data_py(week):
+def grade_nfl_data_py(week, year=None):
     import math
-    schedule = _get_schedule()
+    schedule = _get_schedule(year)
     if schedule is None:
         return []
     games = []
@@ -146,10 +145,10 @@ def grade_nfl_data_py(week):
     return games
 
 
-def grade_espn(week):
+def grade_espn(week, year=None):
     games = []
     try:
-        season = _season_year()
+        season = year or _season_year()
         url = (f"https://site.api.espn.com/apis/site/v2/sports/football/nfl/"
                f"scoreboard?dates={season}&seasontype=2&week={week}")
         data = requests.get(url, timeout=10).json()
@@ -180,7 +179,30 @@ def grade_espn(week):
     return games
 
 
-def grade(week, api_type='nfl_data_py'):
+def grade(week, api_type='nfl_data_py', year=None):
     if api_type == 'espn':
-        return grade_espn(week)
-    return grade_nfl_data_py(week)
+        return grade_espn(week, year)
+    return grade_nfl_data_py(week, year)
+
+
+def get_first_game_dt(week, year=None):
+    """Return UTC-aware datetime of the earliest kickoff for the given week (via ESPN API)."""
+    from datetime import datetime, timezone as dt_tz
+    season = year or _season_year()
+    try:
+        url = (f"https://site.api.espn.com/apis/site/v2/sports/football/nfl/"
+               f"scoreboard?dates={season}&seasontype=2&week={week}")
+        data = requests.get(url, timeout=10).json()
+        earliest = None
+        for event in data.get('events', []):
+            comp = event.get('competitions', [{}])[0]
+            date_str = comp.get('date', '')
+            if not date_str:
+                continue
+            dt = datetime.fromisoformat(date_str.replace('Z', '+00:00')).astimezone(dt_tz.utc)
+            if earliest is None or dt < earliest:
+                earliest = dt
+        return earliest
+    except Exception as e:
+        print(f"get_first_game_dt error: {e}")
+        return None

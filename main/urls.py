@@ -19,4 +19,5 @@ urlpatterns = [
     path('dashboard/announcements/', views.announcements, name='announcements'),
     path('dashboard/bugs/', views.buglog, name='buglog'),
     path('dashboard/analytics/', views.secret_analytics, name='secret_analytics'),
+    path('dashboard/generate-recap/', views.generate_recap, name='generate_recap'),
 ]

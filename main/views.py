@@ -86,6 +86,7 @@ def home(request, week=1):
     # Games & pick distribution
     games = list(Game.objects.all())
     picks_map = {p.game_id: p for p in Pick.objects.filter(user=request.user)}
+    games.sort(key=lambda g: (g.id in picks_map, g.id))
 
     # Next ungraded game for countdown
     next_game = None
@@ -636,13 +637,31 @@ def pickdash(request):
         settings.multiplier = settings.multiplier * 2 if settings.multiplier < 4 else 1
         settings.save()
 
+    elif 'toggle_auto' in request.POST:
+        settings.auto_enabled = not settings.auto_enabled
+        settings.save()
+
+    elif 'save_auto' in request.POST:
+        try:
+            settings.auto_scrape_weekday = int(request.POST.get('auto_scrape_weekday', 1))
+            settings.auto_scrape_hour = int(request.POST.get('auto_scrape_hour', 9))
+            settings.auto_lock_offset_minutes = int(request.POST.get('auto_lock_offset_minutes', 10))
+            settings.save()
+            messages.success(request, 'Auto-pilot settings saved.')
+        except (ValueError, TypeError):
+            messages.error(request, 'Invalid auto-pilot settings.')
+
     elif 'scrape' in request.POST:
         week = int(request.POST.get('scrape_week', settings.scrape_week))
         api = request.POST.get('grade_api', settings.grade_api)
+        from datetime import date as _date
+        _today = _date.today()
+        _default_year = _today.year if _today.month >= 9 else _today.year - 1
+        year = int(request.POST.get('scrape_year', _default_year)) or None
         settings.scrape_week = week
         settings.grade_api = api
         settings.save()
-        games = scrape.scrape(week=week, api_type=api)
+        games = scrape.scrape(week=week, api_type=api, year=year)
         added = dupes = 0
         for g in games:
             team1 = ABBREV_TO_TEAM.get(g[0], g[0])
@@ -664,7 +683,11 @@ def pickdash(request):
     elif 'grade' in request.POST:
         week = settings.scrape_week
         api = settings.grade_api
-        results = scrape.grade(week=week, api_type=api)
+        from datetime import date as _date
+        _today = _date.today()
+        _default_year = _today.year if _today.month >= 9 else _today.year - 1
+        year = int(request.POST.get('scrape_year', _default_year)) or None
+        results = scrape.grade(week=week, api_type=api, year=year)
         graded_count = 0
         for game in Game.objects.all():
             for r in results:
@@ -775,6 +798,12 @@ def pickdash(request):
     games = Game.objects.all()
     all_graded = all(g.graded for g in games) if games else False
     save_season_form = forms.SaveSeasonForm()
+    from datetime import date as _date
+    _today = _date.today()
+    default_scrape_year = _today.year if _today.month >= 9 else _today.year - 1
+
+    from .auto import WEEKDAY_NAMES
+    weekday_options = list(WEEKDAY_NAMES.items())[:5]  # Mon–Fri only
 
     return render(request, 'main/pickdash.html', {
         'add_game_form': forms.GameForm(),
@@ -783,6 +812,9 @@ def pickdash(request):
         'settings': settings,
         'all_graded': all_graded,
         'api_options': [('nfl_data_py', 'NFL Data Py'), ('espn', 'ESPN API')],
+        'scrape_year': default_scrape_year,
+        'weekday_options': weekday_options,
+        'hour_options': list(range(24)),
     })
 
 
@@ -804,3 +836,17 @@ def secret_analytics(request):
                 'fav_ev': round(fav_pts * fav_prob, 2), 'dog_ev': round(dog_pts * dog_prob, 2),
             })
     return render(request, 'main/secretanalytics.html', {'rows': rows, 'multiplier': multiplier})
+
+
+@staff_member_required
+@require_POST
+def generate_recap(request):
+    from .auto import build_recap
+    settings = SiteSettings.get()
+    last_week = settings.week - 1
+    recap = build_recap(last_week)
+    if recap is None:
+        return JsonResponse({'error': f'No history saved for week {last_week}.'}, status=404)
+    settings.weekly_recap = recap
+    settings.save()
+    return JsonResponse({'recap': recap})

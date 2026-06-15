@@ -27,29 +27,32 @@
   .pod:nth-child(1){animation-delay:.15s} .pod:nth-child(2){animation-delay:.05s} .pod:nth-child(3){animation-delay:0s} .pod:nth-child(4){animation-delay:.1s} .pod:nth-child(5){animation-delay:.2s}
 
   /* ── Leaderboard rows ── */
-  .lb-row { display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid var(--border);transition:background .12s; }
+  .lb-row { display:flex;align-items:center;gap:10px;padding:6px 8px 6px 0;border-bottom:1px solid var(--border);transition:background .12s; }
   .lb-row:last-child { border-bottom:none; }
-  .rank-badge { width:24px;height:24px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.75rem;flex-shrink:0; }
-  .rank-1 { background:rgba(245,158,11,.15);color:#fbbf24; }
-  .rank-2 { background:rgba(148,163,184,.12);color:#94a3b8; }
-  .rank-3 { background:rgba(180,83,9,.15);color:#fb923c; }
-  .rank-n { background:rgba(255,255,255,.04);color:var(--muted); }
+  .lb-row-me { background:color-mix(in srgb,var(--accent) 8%,transparent);padding-right:8px; }
+  .rank-badge { width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:600;font-size:.7rem;flex-shrink:0; }
+  .rank-1 { background:rgba(245,158,11,.07);color:rgba(251,191,36,.6); }
+  .rank-2 { background:rgba(148,163,184,.06);color:rgba(148,163,184,.55); }
+  .rank-3 { background:rgba(180,83,9,.07);color:rgba(251,146,60,.6); }
+  .rank-n { background:rgba(255,255,255,.03);color:rgba(100,116,139,.7); }
   .fire-indicator { color:#f97316;font-size:.85rem; }
   .rank-up   { color:#34d399;font-size:.6875rem;font-weight:700; }
   .rank-down { color:#f87171;font-size:.6875rem;font-weight:700; }
   .rank-flat { color:var(--muted);font-size:.6875rem; }
 
   /* ── Game rows ── */
-  .game-row { display:flex;align-items:center;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.05);gap:12px;transition:opacity .12s; }
+  .game-row { display:flex;align-items:center;padding:5px 0 1px;gap:12px;transition:opacity .12s; }
   .game-row:hover { opacity:.85; }
-  .game-row:last-child { border-bottom:none; }
-  .team-name { font-weight:700;font-size:.875rem;color:var(--text); }
+  .game-sep { display:flex;align-items:center;gap:8px;margin-bottom:1px; }
+  .game-sep-text { font-size:.5rem;color:var(--muted);white-space:nowrap;opacity:.6; }
+  .game-sep-line { flex:1;height:1px;background:rgba(255,255,255,.05); }
+  .team-name { font-weight:700;font-size:.75rem;color:var(--text); }
   .team-name.winner { color:#34d399; }
-  .pts-tag { font-size:.6875rem;font-weight:600;padding:2px 7px;border-radius:5px;background:rgba(255,255,255,.06);color:var(--muted2);white-space:nowrap; }
+  .pts-tag { font-size:.625rem;font-weight:600;padding:1px 5px;border-radius:5px;background:rgba(255,255,255,.06);color:var(--muted2);white-space:nowrap; }
   .pts-tag.won { background:rgba(16,185,129,.15);color:#34d399; }
   .pts-tag.fav { background:rgba(99,102,241,.1);color:#a5b4fc; }
-  .vs-sep { color:var(--muted);font-size:.6875rem;font-weight:800;flex-shrink:0; }
-  .pick-chip { font-size:.6875rem;font-weight:700;padding:3px 9px;border-radius:99px;white-space:nowrap; }
+  .vs-sep { color:var(--muted);font-size:.6rem;font-weight:800;flex-shrink:0; }
+  .pick-chip { font-size:.6rem;font-weight:700;padding:2px 7px;border-radius:99px;white-space:nowrap; }
   .pick-correct { background:rgba(16,185,129,.2);color:#34d399; }
   .pick-wrong   { background:rgba(239,68,68,.15);color:#f87171; }
   .pick-pending { background:color-mix(in srgb,var(--accent) 20%,transparent);color:var(--accent); }
@@ -59,30 +62,71 @@
   .dist-t1 { height:100%;background:#6366f1;width:0;transition:width 1s cubic-bezier(.2,.8,.2,1); }
   .dist-t2 { height:100%;background:#f59e0b;flex:1; }
 
+  /* Week slider */
+  #week-slider { -webkit-appearance:none;appearance:none;width:100%;height:3px;border-radius:2px;outline:none;cursor:pointer;background:rgba(255,255,255,0.07); }
+  #week-slider::-webkit-slider-thumb { -webkit-appearance:none;width:12px;height:12px;border-radius:50%;background:rgba(255,255,255,0.45);border:1px solid rgba(255,255,255,0.2);cursor:pointer; }
+  #week-slider::-moz-range-thumb { width:12px;height:12px;border-radius:50%;background:rgba(255,255,255,0.45);border:1px solid rgba(255,255,255,0.2);cursor:pointer;box-sizing:border-box; }
+  #week-slider::-moz-range-track { background:rgba(255,255,255,0.07);height:3px;border-radius:2px; }
+  #week-slider::-moz-range-progress { background:rgba(255,255,255,0.18);height:3px;border-radius:2px; }
+
   /* Countdown */
-  .cd-digit { background:var(--surface2);border-radius:6px;padding:6px 10px;min-width:40px;text-align:center;font-weight:800;font-size:1.25rem;color:var(--text);font-variant-numeric:tabular-nums;line-height:1; }
+  @keyframes cdPulse { 0%,100%{opacity:1} 50%{opacity:.45} }
+  .cd-digit { background:var(--surface2);border-radius:6px;padding:6px 10px;min-width:40px;text-align:center;font-weight:800;font-size:1.25rem;color:var(--text);font-variant-numeric:tabular-nums;line-height:1;animation:cdPulse 2s ease-in-out infinite; }
 
   /* Inline pick slider toggle */
   .pick-toggle {
-    position:relative;display:flex;width:100%;
+    position:relative;display:flex;flex:1;min-width:0;
     background:transparent;border:1px solid rgba(255,255,255,.07);
     border-radius:100px;padding:2px;cursor:pointer;user-select:none;touch-action:none;
   }
   .pick-opt {
     position:relative;z-index:2;flex:1;display:flex;align-items:center;justify-content:center;
-    gap:4px;padding:4px 6px;border-radius:100px;cursor:pointer;
+    gap:4px;padding:5px 8px;border-radius:100px;cursor:pointer;
   }
-  .pick-team { font-size:.6875rem;font-weight:600;color:var(--muted);transition:color .18s;line-height:1; }
+  .pick-team { font-size:.75rem;font-weight:600;color:var(--muted);transition:color .18s;line-height:1; }
   .pick-pts  { font-size:.5rem;color:rgba(255,255,255,.25);transition:color .18s;line-height:1; }
   .pick-opt[data-selected="true"] .pick-team { color:var(--muted2); }
   .pick-opt[data-selected="true"] .pick-pts  { color:rgba(255,255,255,.35); }
   .pick-knob {
-    position:absolute;top:2px;left:2px;
-    height:calc(100% - 4px);width:calc(50% - 2px);
-    border-radius:100px;border:1px solid rgba(255,255,255,.2);
-    background:rgba(255,255,255,.04);
-    transition:left .2s cubic-bezier(.4,0,.2,1);pointer-events:none;
+    position:absolute;top:3px;left:3px;
+    height:calc(100% - 6px);width:calc(50% - 3px);
+    border-radius:100px;border:1px solid rgba(255,255,255,.15);
+    background:rgba(255,255,255,.06);
+    transition:left .32s cubic-bezier(.25,0,.2,1),background-color .22s ease,border-color .22s ease;pointer-events:none;
   }
+
+  /* Games expand modal */
+  #games-expand-modal { display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);backdrop-filter:blur(6px);z-index:100;align-items:flex-start;justify-content:center;overflow-y:auto;padding:24px 16px; }
+  #games-expand-box { width:100%;max-width:1400px;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:24px 28px;position:relative; }
+  #games-expand-grid { display:grid;gap:20px;margin-top:16px; }
+  .exp-date-col { display:flex;flex-direction:column;gap:6px; }
+  .exp-date-label { font-size:.5625rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin:0 0 8px;padding-bottom:8px;border-bottom:1px solid var(--border); }
+  .exp-game-card { padding:6px 0; }
+  #games-expand-grid .pick-opt { padding:11px 14px; }
+  #games-expand-grid .pick-team { font-size:.9375rem; }
+  #games-expand-grid .pick-pts { font-size:.625rem; }
+
+  /* Podium expand modal */
+  #podium-expand-modal { display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);backdrop-filter:blur(10px);z-index:100;flex-direction:column;overflow:hidden; }
+  #podium-expand-box { display:flex;flex-direction:column;width:100%;height:100%;padding:20px 20px 0;box-sizing:border-box;position:relative; }
+  #podium-expand-box::before { content:'';position:absolute;top:8%;left:50%;transform:translateX(-50%);width:min(520px,55vw);height:60%;background:radial-gradient(ellipse at 50% 22%,rgba(245,158,11,.13) 0%,rgba(245,158,11,.05) 42%,transparent 68%);pointer-events:none;z-index:0;animation:glow-breathe 4s ease-in-out 2.3s infinite; }
+  @keyframes glow-breathe { 0%,100%{opacity:.7;} 50%{opacity:1;} }
+  #pod-expand-header { display:flex;align-items:center;justify-content:space-between;flex-shrink:0;margin-bottom:8px;position:relative;z-index:2; }
+  #pod-expand-stage { display:flex;align-items:flex-end;justify-content:center;gap:4px;flex:1;overflow-x:auto;overflow-y:hidden;padding:0 4px;position:relative;z-index:2; }
+  /* Bar & person */
+  .pod-person { display:flex;flex-direction:column;align-items:center;gap:2px;min-width:48px; }
+  .pod-exp-bar { width:100%;border-radius:8px 8px 0 0;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:1rem;color:rgba(255,255,255,.22);letter-spacing:-.01em;transform-origin:bottom center;will-change:transform;animation:pod-rise 1.8s ease-out backwards; }
+  .pod-gold-bar { overflow:hidden;position:relative;animation:pod-rise 1.8s cubic-bezier(.22,1,.36,1) .5s backwards,pod-glow 4s ease-in-out 2.3s infinite; }
+  .pod-gold-avatar { animation:pod-float 3.2s ease-in-out 2.3s infinite; }
+  .pod-exp-avatar { border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;color:#fff;flex-shrink:0; }
+  .pod-exp-name { font-size:.6rem;font-weight:600;color:var(--muted2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:100%;text-align:center;padding:0 2px;box-sizing:border-box; }
+  .pod-person-me .pod-exp-name { color:var(--accent) !important; }
+  .pod-exp-score { font-weight:900;color:var(--muted2);line-height:1; }
+  .podium-wrap { cursor:pointer; }
+  @keyframes pod-rise { from{transform:scaleY(0);} to{transform:scaleY(1);} }
+  @keyframes pod-person-rise { 0%{transform:translateY(100vh) translateX(0);} 25%{transform:translateY(30vh) translateX(-3px);} 45%{transform:translateY(8vh) translateX(3px);} 60%{transform:translateY(2vh) translateX(-2px);} 73%{transform:translateY(0) translateX(2px);} 83%{transform:translateY(0) translateX(-1px);} 92%{transform:translateY(0) translateX(0.5px);} 100%{transform:translateY(0) translateX(0);} }
+  @keyframes pod-glow { 0%,100%{box-shadow:0 -6px 28px rgba(245,158,11,.4),0 0 60px rgba(245,158,11,.1);} 50%{box-shadow:0 -8px 48px rgba(245,158,11,.75),0 0 120px rgba(245,158,11,.25);} }
+  @keyframes pod-float { 0%,100%{transform:translateY(0);} 50%{transform:translateY(-9px);} }
 
   /* Chart expand */
   .chart-wrap { position:relative;cursor:pointer; }
@@ -104,13 +148,96 @@
   #chart-modal { display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);backdrop-filter:blur(4px);z-index:9999;align-items:center;justify-content:center; }
   #chart-modal-box { background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:28px;width:92vw;max-width:960px;position:relative; }
 
+  .col-left, .col-center, .col-right { display:flex;flex-direction:column;height:1200px; }
+  .col-center { justify-content:space-between; }
+
+  /* ── Light mode overrides ── */
+  [data-theme="light"] .pick-toggle { border-color: rgba(0,0,0,.1); }
+  [data-theme="light"] .pick-knob { border-color: rgba(0,0,0,.12); background: rgba(0,0,0,.05); }
+  [data-theme="light"] .pick-pts { color: rgba(0,0,0,.3); }
+  [data-theme="light"] .pick-opt[data-selected="true"] .pick-pts { color: rgba(0,0,0,.5); }
+  [data-theme="light"] .pts-tag { background: rgba(0,0,0,.06); }
+  [data-theme="light"] .vs-sep { color: var(--muted); }
+  [data-theme="light"] .game-sep-line { background: rgba(0,0,0,.07); }
+  [data-theme="light"] .dist-bar { background: rgba(0,0,0,.07); }
+  [data-theme="light"] #games-track, [data-theme="light"] #lb-track { background: rgba(0,0,0,.07); }
+  [data-theme="light"] .pod-block { color: rgba(0,0,0,.45); }
+  [data-theme="light"] .pod-2 .pod-block { background: rgba(0,0,0,.04); border-color: rgba(0,0,0,.08); }
+  [data-theme="light"] .pod-3 .pod-block { background: rgba(0,0,0,.025); border-color: rgba(0,0,0,.05); }
+  [data-theme="light"] .pod-4 .pod-block { background: rgba(0,0,0,.015); border-color: rgba(0,0,0,.04); }
+  [data-theme="light"] .pod-5 .pod-block { background: rgba(0,0,0,.01); border-color: rgba(0,0,0,.03); }
+  [data-theme="light"] .rank-n { background: rgba(0,0,0,.04); }
+  [data-theme="light"] .exp-date-label { border-bottom-color: var(--border); }
+  [data-theme="light"] #games-expand-modal { background: rgba(0,0,0,.45); }
+  [data-theme="light"] .pod-exp-bar { color: rgba(0,0,0,.2); }
+
+  .no-scrollbar::-webkit-scrollbar { display:none; }
+
+  /* Leaderboard custom scrollbar */
+  .lb-scroll { scrollbar-width:none; }
+  .lb-scroll::-webkit-scrollbar { display:none; }
+  #lb-track { position:absolute;left:0;top:0;bottom:0;width:4px;background:rgba(255,255,255,.06);border-radius:2px;z-index:2; }
+  #lb-thumb { position:absolute;left:0;width:100%;height:36px;border-radius:2px;background:var(--accent);opacity:.55;transition:opacity .15s;cursor:pointer; }
+  #lb-thumb:hover { opacity:.85; }
+  /* Games custom scrollbar */
+  .games-scroll { scrollbar-width:none; }
+  .games-scroll::-webkit-scrollbar { display:none; }
+  #games-track { position:absolute;right:0;top:0;bottom:0;width:4px;background:rgba(255,255,255,.06);border-radius:2px;z-index:2; }
+  #games-thumb { position:absolute;left:0;width:100%;height:36px;border-radius:2px;background:var(--accent);opacity:.55;transition:opacity .15s;cursor:pointer; }
+  #games-thumb:hover { opacity:.85; }
+
   /* Mobile / tablet responsive */
   .col-tabs { display:none; }
-  @media (max-width:1024px) {
-    .main-grid { grid-template-columns:1fr !important; gap:28px !important; }
-    .col-tabs { display:flex;gap:3px;background:rgba(255,255,255,.04);border-radius:10px;padding:3px; }
-    .col-center:not(.mob-on) { display:none; }
-    .col-right:not(.mob-on) { display:none; }
+  @media (max-width:1024px) and (min-width:641px) {
+    /* main fills exactly viewport height minus navbar; grid stretches to fill the rest */
+    main { height:calc(100svh - 52px) !important;box-sizing:border-box !important;display:flex !important;flex-direction:column !important;overflow:hidden !important;padding:clamp(12px,2.4vw,24px) !important; }
+    #email-section { flex-shrink:0 !important;margin-bottom:clamp(12px,2vw,20px) !important;padding-bottom:clamp(10px,1.5vw,16px) !important; }
+    .main-grid { flex:1 !important;min-height:0 !important;gap:clamp(8px,1.4vw,14px) !important;align-items:stretch !important; }
+    .col-left, .col-center, .col-right { height:100% !important;min-width:0;overflow:hidden; }
+    /* Charts */
+    .chart-canvas-wrap { height:clamp(110px,14vw,140px) !important; }
+    /* Game rows */
+    .game-row { padding:clamp(4px,.7vw,7px) 0 clamp(2px,.3vw,3px); }
+    .game-sep { margin-bottom:clamp(2px,.3vw,3px); }
+    /* Leaderboard rows */
+    .lb-row { padding:clamp(2px,.4vw,3px) 8px clamp(2px,.4vw,3px) 0; }
+    /* Podium — hide 4&5, scale 1–3 with viewport */
+    .pod-4, .pod-5 { display:none; }
+    .podium-wrap { padding:8px 0 0;gap:clamp(4px,.6vw,6px); }
+    .pod-1 .pod-block { width:clamp(54px,7.5vw,70px);height:clamp(44px,6vw,60px);font-size:clamp(.85rem,1.2vw,1.1rem); }
+    .pod-2 .pod-block { width:clamp(44px,6vw,58px);height:clamp(28px,4.5vw,42px);font-size:clamp(.72rem,1vw,.9rem); }
+    .pod-3 .pod-block { width:clamp(38px,5.5vw,52px);height:clamp(18px,3vw,28px);font-size:clamp(.62rem,.9vw,.8rem); }
+    .pod-avatar { width:clamp(26px,3.5vw,32px);height:clamp(26px,3.5vw,32px);font-size:clamp(.68rem,.85vw,.8rem); }
+    .pod-1 .pod-avatar { width:clamp(32px,4.5vw,40px);height:clamp(32px,4.5vw,40px);font-size:clamp(.82rem,1.1vw,1rem); }
+    /* Timer — scale digits to fit the 1.2fr games column */
+    #cd-hms-wrap .cd-digit { font-size:clamp(1.25rem,3.2vw,2rem) !important;min-width:clamp(38px,5.5vw,56px) !important;padding:clamp(6px,1vw,10px) clamp(8px,1.4vw,14px) !important; }
+    #cd-hms-wrap > span { font-size:clamp(.9rem,1.5vw,1.5rem) !important; }
+    /* Chart toggles — shrink to fit narrow analytics column */
+    #chart-toggle { width:clamp(90px,12vw,130px) !important;height:20px !important; }
+    #analytics-toggle { width:clamp(100px,13vw,140px) !important;height:20px !important; }
+    #chart-toggle span, #analytics-toggle span { font-size:clamp(.45rem,.65vw,.6875rem) !important; }
+    #chart-label, #analytics-label { font-size:clamp(.4rem,.6vw,.625rem) !important; }
+  }
+  @media (max-width:640px) {
+    /* Full-page scroll, single column */
+    main { height:auto !important;display:block !important;overflow:visible !important;padding:16px !important; }
+    .main-grid { display:flex !important;flex-direction:column !important;gap:28px !important; }
+    .col-left, .col-right { height:auto !important;overflow:visible !important; }
+    .col-center, .col-tabs { display:none !important; }
+    /* Leaderboard — simple table, no podium or score bars */
+    .podium-label, .podium-wrap { display:none !important; }
+    #lb-track, #lb-thumb { display:none !important; }
+    #lb-scroll { position:static !important;overflow:visible !important; }
+    .score-bar { display:none !important; }
+    .lb-row { padding:9px 0 !important; }
+    /* Games — simple list, no scrollbar or pick-distribution bars */
+    #games-track, #games-thumb { display:none !important; }
+    #games-scroll { position:static !important;overflow:visible !important; }
+    .game-row { padding:10px 0 !important; }
+    .pick-opt { padding:9px 10px !important; }
+    .pick-team { font-size:.8125rem !important; }
+    .pick-pts { font-size:.5625rem !important; }
+    .pick-dist { display:none !important; }
   }
 </style>
 {% endblock %}
@@ -119,41 +246,44 @@
 
 <!-- ── EMAIL DISPLAY ── -->
 {% if announcements %}
-<div id="email-section" style="padding-bottom:32px;margin-bottom:36px;border-bottom:1px solid var(--border);" class="anim-up">
-  <div style="display:flex;align-items:center;gap:12px;">
-    <div style="width:36px;height:36px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.875rem;color:#fff;flex-shrink:0;">C</div>
-    <div style="flex:1;min-width:0;">
-      <p style="font-size:.8125rem;font-weight:700;color:var(--text);margin:0;">Commissioner</p>
-      <p id="email-date" style="font-size:.6875rem;color:var(--muted);margin:0;">{{ announcements.0.created_at|date:"F j, Y" }}</p>
-    </div>
+<div id="email-section" style="margin-bottom:32px;border-bottom:1px solid var(--border);padding-bottom:20px;" class="anim-up">
+  <!-- Header row -->
+  <div style="display:flex;align-items:center;gap:10px;">
+    <div style="width:26px;height:26px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.7rem;color:#fff;flex-shrink:0;">C</div>
+    <span style="font-size:.75rem;font-weight:700;color:var(--text);">Commissioner</span>
+    <span style="font-size:.6875rem;color:var(--muted);opacity:.6;">·</span>
+    <span id="email-date" style="font-size:.6875rem;color:var(--muted);">{{ announcements.0.created_at|date:"F j, Y" }}</span>
+    <div style="flex:1;"></div>
     {% if announcements|length > 1 %}
-    <div style="display:flex;align-items:center;gap:2px;">
-      <button id="email-prev" title="Older" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.1rem;padding:3px 7px;border-radius:5px;line-height:1;transition:color .15s;">‹</button>
-      <span id="email-counter" style="font-size:.6875rem;color:var(--muted);min-width:38px;text-align:center;">1 / {{ announcements|length }}</span>
-      <button id="email-next" title="Newer" disabled style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.1rem;padding:3px 7px;border-radius:5px;line-height:1;transition:color .15s;opacity:.3;">›</button>
-    </div>
+    <button id="email-prev" title="Older" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1rem;padding:2px 5px;line-height:1;transition:color .15s;">‹</button>
+    <span id="email-counter" style="font-size:.6rem;color:var(--muted);min-width:32px;text-align:center;">1 / {{ announcements|length }}</span>
+    <button id="email-next" title="Newer" disabled style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1rem;padding:2px 5px;line-height:1;transition:color .15s;opacity:.3;">›</button>
     {% endif %}
-    <button id="email-collapse" title="Collapse" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:.7rem;padding:4px 8px;border-radius:5px;line-height:1;transition:color .15s;letter-spacing:.05em;">▲ collapse</button>
+    <button id="email-collapse" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:.6rem;padding:3px 8px;border-radius:4px;letter-spacing:.06em;text-transform:uppercase;font-weight:600;transition:color .15s;">expand</button>
   </div>
 
-  <div id="email-body" style="overflow:hidden;transition:max-height .3s ease,opacity .25s ease;opacity:1;">
-    {% for ann in announcements %}
-    <div class="email-msg" style="padding-top:18px;{% if not forloop.first %}display:none;{% endif %}">
-      <div style="font-size:.9375rem;color:var(--muted2);line-height:1.8;max-width:740px;">{{ ann.message|linebreaks }}</div>
+  <!-- Body: collapsed by default -->
+  <div style="position:relative;margin-top:10px;">
+    <div id="email-body" style="overflow:hidden;max-height:5.6em;transition:max-height .35s ease;">
+      {% for ann in announcements %}
+      <div class="email-msg" style="{% if not forloop.first %}display:none;{% endif %}">
+        <div style="font-size:.8125rem;color:var(--muted2);line-height:1.7;">{{ ann.message|linebreaks }}</div>
+      </div>
+      {% endfor %}
     </div>
-    {% endfor %}
+    <div id="email-fade" style="position:absolute;bottom:0;left:0;right:0;height:2em;background:linear-gradient(transparent,var(--bg));pointer-events:none;transition:opacity .25s;"></div>
   </div>
 </div>
 {% endif %}
 
 <!-- ── MAIN DASHBOARD: leaderboard | chart | games ── -->
-<div class="main-grid anim-up" style="display:grid;grid-template-columns:1fr 2fr 1fr;gap:40px;align-items:start;">
+<div class="main-grid anim-up" style="display:grid;grid-template-columns:1.2fr 1.2fr 1.6fr;gap:40px;align-items:stretch;">
 
   <!-- LEFT: Podium + Leaderboard -->
   <div class="col-left">
+    <p style="font-size:.5625rem;font-weight:700;color:rgba(100,116,139,.5);text-transform:uppercase;letter-spacing:.14em;margin:0 0 14px;">Leaderboard</p>
     {% if leaderboard|length >= 3 %}
-    <p style="font-size:.625rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin:0;">Top 5</p>
-    <div class="podium-wrap" style="margin-bottom:24px;">
+    <div class="podium-wrap" onclick="openPodiumExpand()" style="margin-bottom:24px;">
       {% if leaderboard|length >= 5 %}{% with p5=leaderboard.4 %}
       <div class="pod pod-5">
         <div class="pod-avatar" style="background:#1e293b;">{{ p5.username|first|upper }}</div>
@@ -200,36 +330,44 @@
 
     <div class="sec-head">
       <p class="sec-title">Standings</p>
-      {% if week_links %}
-      <div style="display:flex;align-items:center;gap:8px;min-width:160px;">
-        <span style="font-size:.6875rem;color:var(--muted);white-space:nowrap;">W{{ week_links.0 }}</span>
-        <input type="range" id="week-slider"
-          min="{{ week_links.0 }}" max="{{ week_links|last }}" value="{{ viewing_week }}"
-          style="flex:1;accent-color:var(--accent);cursor:pointer;">
-        <span id="wk-label" style="font-size:.6875rem;font-weight:700;color:var(--accent);white-space:nowrap;min-width:24px;text-align:right;">W{{ viewing_week }}</span>
-      </div>
-      {% endif %}
+      {% if week_links %}<span id="wk-label" style="font-size:.6875rem;font-weight:700;color:var(--accent);">W{{ viewing_week }}</span>{% endif %}
     </div>
-    <div style="max-height:700px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--border) transparent;">
-    {% for entry in leaderboard %}
-    <div class="lb-row" style="{% if entry.on_fire %}padding-left:8px;border-left:2px solid #f97316;{% endif %}">
-      <div class="rank-badge {% if forloop.counter == 1 %}rank-1{% elif forloop.counter == 2 %}rank-2{% elif forloop.counter == 3 %}rank-3{% else %}rank-n{% endif %}">{{ forloop.counter }}</div>
-      <div style="flex:1;min-width:0;">
-        <div style="display:flex;align-items:center;gap:5px;margin-bottom:4px;">
-          <span style="font-size:.8125rem;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ entry.username }}</span>
-          {% if entry.on_fire %}<span class="fire-indicator">🔥</span>{% endif %}
+    {% if week_links %}
+    <div style="padding:6px 0 4px;">
+      <input type="range" id="week-slider" list="week-ticks"
+        min="{{ week_links.0 }}" max="{{ week_links|last }}" value="{{ viewing_week }}"
+        style="display:block;">
+      <datalist id="week-ticks">{% for w in week_links %}<option value="{{ w }}"></option>{% endfor %}</datalist>
+      <div style="display:flex;justify-content:space-between;margin-top:7px;padding:0 6px;">
+        {% for w in week_links %}<span style="font-size:.5rem;color:var(--muted);">{{ w }}</span>{% endfor %}
+      </div>
+    </div>
+    {% endif %}
+    <div style="flex:1;min-height:0;position:relative;">
+      <div id="lb-track"><div id="lb-thumb"></div></div>
+      <div id="lb-scroll" class="lb-scroll" style="position:absolute;left:8px;right:0;top:0;bottom:0;overflow-y:scroll;">
+      <div style="min-height:100%;display:flex;flex-direction:column;justify-content:space-between;">
+      {% for entry in leaderboard %}
+      <div class="lb-row{% if entry.username == request.user.username %} lb-row-me{% endif %}">
+        <div class="rank-badge {% if forloop.counter == 1 %}rank-1{% elif forloop.counter == 2 %}rank-2{% elif forloop.counter == 3 %}rank-3{% else %}rank-n{% endif %}">{{ forloop.counter }}</div>
+        <div style="flex:1;min-width:0;">
+          <div style="display:flex;align-items:center;gap:5px;margin-bottom:4px;">
+            <span style="font-size:.8125rem;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ entry.username }}</span>
+            {% if entry.on_fire %}<span class="fire-indicator">🔥</span>{% endif %}
+          </div>
+          <div class="score-bar"><div class="score-bar-fill" data-pct="{{ entry.score }}"></div></div>
         </div>
-        <div class="score-bar"><div class="score-bar-fill" data-pct="{{ entry.score }}"></div></div>
+        <div style="text-align:right;flex-shrink:0;">
+          <div style="font-size:.875rem;font-weight:800;color:var(--text);">{{ entry.score }}</div>
+          {% if entry.rank_change > 0 %}<div class="rank-up">↑{{ entry.rank_change }}</div>
+          {% elif entry.rank_change < 0 %}<div class="rank-down">↓{{ entry.rank_change_abs }}</div>
+          {% else %}<div class="rank-flat">—</div>{% endif %}
+        </div>
       </div>
-      <div style="text-align:right;flex-shrink:0;">
-        <div style="font-size:.875rem;font-weight:800;color:var(--text);">{{ entry.score }}</div>
-        {% if entry.rank_change > 0 %}<div class="rank-up">↑{{ entry.rank_change }}</div>
-        {% elif entry.rank_change < 0 %}<div class="rank-down">↓{{ entry.rank_change_abs }}</div>
-        {% else %}<div class="rank-flat">—</div>{% endif %}
-      </div>
-    </div>
-    {% endfor %}
-    </div>
+      {% endfor %}
+      </div>{# end space-between wrapper #}
+      </div>{# end scroll wrapper #}
+    </div>{# end relative wrapper #}
   </div><!-- end LEFT -->
 
   <!-- Mobile tab switcher (hidden on desktop) -->
@@ -238,12 +376,155 @@
     <button id="mob-tab-picks" onclick="mobTab('picks')" style="flex:1;padding:9px;border:none;border-radius:7px;cursor:pointer;font-size:.875rem;font-weight:600;background:transparent;color:var(--muted);transition:all .15s;">Picks</button>
   </div>
 
-  <!-- CENTER: Chart -->
+  <!-- CENTER: Picks + Games -->
+  <div class="col-right">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+    <p style="font-size:.5625rem;font-weight:700;color:rgba(100,116,139,.5);text-transform:uppercase;letter-spacing:.14em;margin:0;">Games</p>
+    {% if settings.publish and not settings.lock_picks %}<button onclick="openGamesExpand()" style="background:rgba(255,255,255,.07);border:1px solid var(--border);color:var(--muted2);cursor:pointer;font-size:.55rem;padding:4px 10px;border-radius:6px;letter-spacing:.06em;text-transform:uppercase;font-weight:700;transition:background .15s,color .15s;" onmouseover="this.style.background='rgba(255,255,255,.13)';this.style.color='var(--text)'" onmouseout="this.style.background='rgba(255,255,255,.07)';this.style.color='var(--muted2)'">⛶ Expand</button>{% endif %}
+  </div>
+  {% if not settings.publish %}
+  <!-- ── STATE: Not published ── -->
+  <p style="font-size:.625rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin:0 0 16px;">Week {{ settings.week }}</p>
+  <p style="font-size:.9375rem;font-weight:700;color:var(--text);margin:0 0 6px;">Picks aren't open yet</p>
+  <p style="font-size:.8125rem;color:var(--muted);line-height:1.65;margin:0 0 28px;">The commissioner is still setting up this week's games. Sit tight.</p>
+  {% if settings.weekly_recap %}
+  <div style="flex:1;margin-top:24px;padding-top:20px;border-top:1px solid var(--border);overflow-y:auto;">
+    <p style="font-size:.5625rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.14em;margin:0 0 12px;">Week {{ settings.week|add:"-1" }} Recap</p>
+    <div style="font-size:.9375rem;color:var(--muted2);line-height:1.9;">{{ settings.weekly_recap|linebreaks }}</div>
+  </div>
+  {% endif %}
+
+  {% else %}
+  <!-- ── STATE: Published ── -->
+
+  {% if settings.lock_picks %}
+  {% if next_game %}
+  <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:10px;">
+    <span style="font-size:.9375rem;font-weight:800;color:var(--text);letter-spacing:-.01em;">{{ next_game.team1_abbrev }} <span style="color:var(--muted);font-weight:400;font-size:.75rem;">vs</span> {{ next_game.team2_abbrev }}</span>
+    <span style="font-size:.5625rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.12em;">Kickoff in:</span>
+  </div>
+  <div style="margin-bottom:16px;">
+    <div id="cd-hms-wrap" style="display:flex;align-items:center;gap:6px;">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
+        <div class="cd-digit" id="cd-h" style="font-size:2rem;padding:10px 14px;min-width:56px;">--</div>
+        <span style="font-size:.5rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;">hrs</span>
+      </div>
+      <span style="color:var(--muted);font-weight:700;font-size:1.5rem;margin-bottom:16px;">:</span>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
+        <div class="cd-digit" id="cd-m" style="font-size:2rem;padding:10px 14px;min-width:56px;">--</div>
+        <span style="font-size:.5rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;">min</span>
+      </div>
+      <span style="color:var(--muted);font-weight:700;font-size:1.5rem;margin-bottom:16px;">:</span>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
+        <div class="cd-digit" id="cd-s" style="font-size:2rem;padding:10px 14px;min-width:56px;">--</div>
+        <span style="font-size:.5rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;">sec</span>
+      </div>
+    </div>
+  </div>
+  {% else %}
+  <p style="font-size:.8125rem;color:var(--muted);margin:0 0 20px;padding-bottom:16px;border-bottom:1px solid var(--border);">All games complete. Good luck!</p>
+  {% endif %}
+  {% else %}
+  <!-- Open: big countdown -->
+  <div style="margin-bottom:16px;">
+    <p style="font-size:.5625rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.12em;margin:0 0 10px;">Picks lock in:</p>
+    <div id="cd-hms-wrap" style="display:flex;align-items:center;gap:6px;">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
+        <div class="cd-digit" id="cd-h" style="font-size:2rem;padding:10px 14px;min-width:56px;">--</div>
+        <span style="font-size:.5rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;">hrs</span>
+      </div>
+      <span style="color:var(--muted);font-weight:700;font-size:1.5rem;margin-bottom:16px;">:</span>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
+        <div class="cd-digit" id="cd-m" style="font-size:2rem;padding:10px 14px;min-width:56px;">--</div>
+        <span style="font-size:.5rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;">min</span>
+      </div>
+      <span style="color:var(--muted);font-weight:700;font-size:1.5rem;margin-bottom:16px;">:</span>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
+        <div class="cd-digit" id="cd-s" style="font-size:2rem;padding:10px 14px;min-width:56px;">--</div>
+        <span style="font-size:.5rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;">sec</span>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Games list -->
+  <div style="flex:1;min-height:0;position:relative;">
+  <div id="games-track"><div id="games-thumb"></div></div>
+  <div id="games-scroll" class="games-scroll" style="position:absolute;left:0;right:8px;top:0;bottom:0;overflow-y:scroll;">
+  {% if not games %}
+  <p style="color:var(--muted);font-size:.8125rem;padding:16px 0;">No games this week.</p>
+  {% else %}
+  <div style="min-height:100%;display:flex;flex-direction:column;justify-content:space-between;">
+  {% for game in games %}
+  {% with pick=picks_map|get_item:game.id game_id_str=game.id|stringformat:"s" %}
+  {% with dist=pick_dist|get_item:game_id_str %}
+  <div class="game-row">
+    <div style="flex:1;min-width:0;">
+      {% if not settings.lock_picks %}
+      <!-- Inline pick slider -->
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+        <div class="pick-toggle" id="ptoggle-{{ game.id }}" data-game="{{ game.id }}" data-team1="{{ game.team1_abbrev }}" data-team2="{{ game.team2_abbrev }}" data-fav="{% if game.points1 <= game.points2 %}team1{% else %}team2{% endif %}">
+          <div class="pick-opt" data-choice="team1" data-game="{{ game.id }}"
+               {% if pick and pick.choice == 'team1' %}data-selected="true"{% endif %}>
+            <span class="pick-team">{{ game.team1_abbrev }}</span>
+            <span class="pick-pts">{{ game.points1 }}</span>
+          </div>
+          <div class="pick-opt" data-choice="team2" data-game="{{ game.id }}"
+               {% if pick and pick.choice == 'team2' %}data-selected="true"{% endif %}>
+            <span class="pick-team">{{ game.team2_abbrev }}</span>
+            <span class="pick-pts">{{ game.points2 }}</span>
+          </div>
+          <div class="pick-knob" id="pknob-{{ game.id }}"
+               style="{% if pick %}left:{% if pick.choice == 'team2' %}50%{% else %}3px{% endif %};{% else %}display:none;{% endif %}"></div>
+        </div>
+        <span id="pick-had-{{ game.id }}" style="display:none;">{% if pick %}1{% else %}0{% endif %}</span>
+      </div>
+      {% else %}
+      <!-- Locked / graded display -->
+      <div style="display:flex;align-items:center;gap:5px;flex-wrap:nowrap;overflow:hidden;">
+        <span class="team-name {% if game.graded and game.winner == 'team1' %}winner{% endif %}" {% if pick and pick.choice == 'team1' %}style="text-decoration:underline;text-underline-offset:3px;text-decoration-thickness:1.5px;"{% endif %}>{{ game.team1_abbrev }}</span>
+        <span style="font-size:.6rem;color:var(--muted);">{{ game.points1 }}</span>
+        <span class="vs-sep">{% if game.graded %}{% if game.winner == 'team1' %}◀{% elif game.winner == 'team2' %}▶{% else %}T{% endif %}{% else %}vs{% endif %}</span>
+        <span style="font-size:.6rem;color:var(--muted);">{{ game.points2 }}</span>
+        <span class="team-name {% if game.graded and game.winner == 'team2' %}winner{% endif %}" {% if pick and pick.choice == 'team2' %}style="text-decoration:underline;text-underline-offset:3px;text-decoration-thickness:1.5px;"{% endif %}>{{ game.team2_abbrev }}</span>
+      </div>
+      {% endif %}
+      {% if not forloop.last %}
+      <div class="game-sep">
+        <div class="game-sep-line"></div>
+        <span class="game-sep-text">{% if game.date %}{{ game.date }} · {% endif %}@ {% if game.home_team %}{{ game.team2_abbrev }}{% else %}{{ game.team1_abbrev }}{% endif %}</span>
+      </div>
+      {% endif %}
+      {% if dist and settings.lock_picks %}
+      <div class="pick-dist" style="display:flex;align-items:center;justify-content:flex-end;gap:6px;margin-top:5px;">
+        <span style="font-size:.55rem;font-weight:700;color:#3b82f6;white-space:nowrap;">{{ game.team1_abbrev }} {{ dist.team1_pct }}%</span>
+        <div style="width:20px;height:20px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:conic-gradient(rgba(59,130,246,.8) 0% {{ dist.team1_pct }}%,rgba(239,68,68,.7) {{ dist.team1_pct }}% 100%);">
+          <div style="width:11px;height:11px;border-radius:50%;background:var(--surface2);"></div>
+        </div>
+        <span style="font-size:.55rem;font-weight:700;color:#ef4444;white-space:nowrap;">{{ dist.team2_pct }}% {{ game.team2_abbrev }}</span>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+  {% endwith %}
+  {% endwith %}
+  {% endfor %}
+  </div>{# end games space-between wrapper #}
+  {% endif %}
+  </div>{# end games-scroll #}
+  </div>{# end games relative wrapper #}
+
+  {% endif %}{# end published #}
+  </div><!-- end CENTER/GAMES -->
+
+  <!-- RIGHT: Charts -->
   <div class="col-center mob-on">
+    <p style="font-size:.5625rem;font-weight:700;color:rgba(100,116,139,.5);text-transform:uppercase;letter-spacing:.14em;margin:0 0 14px;">Analytics</p>
     {% if points_chart %}
+    <div>
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
-      <div id="chart-toggle" style="position:relative;display:flex;align-items:center;width:130px;height:24px;background:rgba(255,255,255,.04);border-radius:100px;padding:3px;cursor:grab;user-select:none;touch-action:none;">
-        <div id="toggle-pill" style="position:absolute;left:3px;width:calc(50% - 3px);height:calc(100% - 6px);background:rgba(255,255,255,.1);border-radius:100px;transition:left .22s cubic-bezier(.4,0,.2,1);pointer-events:none;"></div>
+      <div id="chart-toggle" style="position:relative;display:flex;align-items:center;width:130px;height:24px;background:transparent;border:1px solid rgba(255,255,255,.07);border-radius:100px;padding:3px;cursor:grab;user-select:none;touch-action:none;">
+        <div id="toggle-pill" style="position:absolute;left:3px;width:calc(50% - 3px);height:calc(100% - 6px);background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.09);border-radius:100px;transition:left .22s cubic-bezier(.4,0,.2,1);pointer-events:none;"></div>
         <span id="tog-score" style="position:relative;flex:1;text-align:center;font-size:.6875rem;font-weight:500;color:var(--text);z-index:1;pointer-events:none;">Score</span>
         <span id="tog-rank"  style="position:relative;flex:1;text-align:center;font-size:.6875rem;font-weight:500;color:var(--muted);z-index:1;pointer-events:none;">Rank</span>
       </div>
@@ -251,24 +532,25 @@
     </div>
     <div class="chart-wrap" onclick="openModal('mainChart')" title="Click to enlarge">
       <span class="expand-hint">⛶ Expand</span>
-      <div style="position:relative;height:240px;"><canvas id="mainChart"></canvas></div>
+      <div class="chart-canvas-wrap" style="position:relative;height:300px;"><canvas id="mainChart"></canvas></div>
     </div>
+    </div><!-- end main chart section -->
 
     <!-- Weekly breakdown bar chart -->
-    <div style="margin-top:36px;">
-      <p style="font-size:.625rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin:0 0 14px;">Points Per Week</p>
+    <div>
+      <p style="font-size:.625rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin:0 0 10px;">Points Per Week</p>
       <div class="chart-wrap" onclick="openModal('weeklyChart')" title="Click to enlarge">
         <span class="expand-hint">⛶ Expand</span>
-        <div style="position:relative;height:180px;"><canvas id="weeklyChart"></canvas></div>
+        <div class="chart-canvas-wrap" style="position:relative;height:210px;"><canvas id="weeklyChart"></canvas></div>
       </div>
     </div>
 
     <!-- Win Rate / Efficiency toggle -->
     {% if win_rate_chart %}
-    <div style="margin-top:36px;padding-top:32px;border-top:1px solid var(--border);">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
-        <div id="analytics-toggle" style="position:relative;display:flex;align-items:center;width:150px;height:24px;background:rgba(255,255,255,.04);border-radius:100px;padding:3px;cursor:grab;user-select:none;touch-action:none;">
-          <div id="analytics-pill" style="position:absolute;left:3px;width:calc(50% - 3px);height:calc(100% - 6px);background:rgba(255,255,255,.1);border-radius:100px;transition:left .22s cubic-bezier(.4,0,.2,1);pointer-events:none;"></div>
+    <div style="border-top:1px solid var(--border);padding-top:8px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+        <div id="analytics-toggle" style="position:relative;display:flex;align-items:center;width:150px;height:24px;background:transparent;border:1px solid rgba(255,255,255,.07);border-radius:100px;padding:3px;cursor:grab;user-select:none;touch-action:none;">
+          <div id="analytics-pill" style="position:absolute;left:3px;width:calc(50% - 3px);height:calc(100% - 6px);background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.09);border-radius:100px;transition:left .22s cubic-bezier(.4,0,.2,1);pointer-events:none;"></div>
           <span id="tog-wr"  style="position:relative;flex:1;text-align:center;font-size:.6875rem;font-weight:500;color:var(--text);z-index:1;pointer-events:none;">Win Rate</span>
           <span id="tog-eff" style="position:relative;flex:1;text-align:center;font-size:.6875rem;font-weight:500;color:var(--muted);z-index:1;pointer-events:none;">Efficiency</span>
         </div>
@@ -276,185 +558,80 @@
       </div>
       <div class="chart-wrap" onclick="openModal('analyticsChart')" title="Click to enlarge">
         <span class="expand-hint">⛶ Expand</span>
-        <div style="position:relative;height:200px;"><canvas id="analyticsChart"></canvas></div>
+        <div class="chart-canvas-wrap" style="position:relative;height:225px;"><canvas id="analyticsChart"></canvas></div>
       </div>
     </div>
 
     <!-- Efficiency variance -->
-    <div style="margin-top:36px;">
+    <div>
       <p style="font-size:.625rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin:0 0 4px;">Efficiency Std. Deviation</p>
-      <p style="font-size:.75rem;color:var(--muted);margin:0 0 18px;">How consistent each player's efficiency is week to week — lower is steadier</p>
+      <p style="font-size:.75rem;color:var(--muted);margin:0 0 14px;">How consistent each player's efficiency is week to week — lower is steadier</p>
       <div class="chart-wrap" onclick="openModal('varianceChart')" title="Click to enlarge">
         <span class="expand-hint">⛶ Expand</span>
-        <div style="position:relative;height:200px;"><canvas id="varianceChart"></canvas></div>
+        <div class="chart-canvas-wrap" style="position:relative;height:225px;"><canvas id="varianceChart"></canvas></div>
       </div>
     </div>
     {% endif %}
 
     {% endif %}
-  </div><!-- end CENTER -->
+  </div><!-- end RIGHT/CHARTS -->
 
-  <!-- RIGHT: Status + Games -->
-  <div class="col-right">
+</div>
 
-  {% if not settings.publish %}
-  <!-- ── STATE: Not published ── -->
-  <p style="font-size:.625rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin:0 0 16px;">Week {{ settings.week }}</p>
-  <p style="font-size:.9375rem;font-weight:700;color:var(--text);margin:0 0 6px;">Picks aren't open yet</p>
-  <p style="font-size:.8125rem;color:var(--muted);line-height:1.65;margin:0 0 28px;">The commissioner is still setting up this week's games. Sit tight.</p>
-  <p style="font-size:.625rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin:0 0 8px;display:flex;align-items:center;gap:6px;">
-    <span style="width:6px;height:6px;background:#fbbf24;border-radius:50%;display:inline-block;"></span>Estimated First Kickoff
-  </p>
-  <div style="display:flex;align-items:center;gap:6px;">
-    <div class="cd-digit" id="cd-h">--</div>
-    <span style="color:var(--muted);font-weight:700;font-size:1rem;">:</span>
-    <div class="cd-digit" id="cd-m">--</div>
-    <span style="color:var(--muted);font-weight:700;font-size:1rem;">:</span>
-    <div class="cd-digit" id="cd-s">--</div>
-  </div>
-
-  {% else %}
-  <!-- ── STATE: Published ── -->
-
-  {% if settings.lock_picks %}
-  <!-- Locked: compact indicator + up next -->
-  <div style="display:flex;align-items:center;gap:7px;margin-bottom:16px;">
-    <span style="font-size:.8rem;">🔒</span>
-    <span style="font-size:.7rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;">Picks Locked · Wk {{ settings.week }}</span>
-  </div>
-  {% if next_game %}
-  <p style="font-size:.625rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin:0 0 8px;display:flex;align-items:center;gap:6px;">
-    <span style="width:6px;height:6px;background:#fbbf24;border-radius:50%;display:inline-block;" class="pulse"></span>Up Next
-  </p>
-  <p style="font-size:1.05rem;font-weight:800;color:var(--text);margin:0 0 2px;letter-spacing:-.01em;">
-    {{ next_game.team1_abbrev }} <span style="color:var(--muted);font-weight:400;font-size:.75rem;">vs</span> {{ next_game.team2_abbrev }}
-  </p>
-  {% if next_game.date %}<p style="font-size:.75rem;color:var(--muted);margin:0 0 10px;">{{ next_game.date }}</p>{% endif %}
-  <div style="display:flex;align-items:center;gap:6px;margin-bottom:20px;">
-    <div class="cd-digit" id="cd-h">--</div>
-    <span style="color:var(--muted);font-weight:700;font-size:1rem;">:</span>
-    <div class="cd-digit" id="cd-m">--</div>
-    <span style="color:var(--muted);font-weight:700;font-size:1rem;">:</span>
-    <div class="cd-digit" id="cd-s">--</div>
-  </div>
-  {% else %}
-  <p style="font-size:.8125rem;color:var(--muted);margin:0 0 20px;padding-bottom:16px;border-bottom:1px solid var(--border);">All games complete. Good luck!</p>
-  {% endif %}
-  {% else %}
-  <!-- Open: pick status + countdown -->
-  {% if games %}
-  {% with made=picks_map|length total=games|length %}
-  <div id="pick-status" style="display:flex;align-items:center;gap:7px;margin-bottom:14px;">
-    {% if made == total and total > 0 %}
-      <span style="width:7px;height:7px;background:#34d399;border-radius:50%;flex-shrink:0;"></span>
-      <span style="font-size:.75rem;font-weight:600;color:#34d399;">All {{ total }} picks submitted</span>
-    {% elif made > 0 %}
-      <span style="width:7px;height:7px;background:#fbbf24;border-radius:50%;flex-shrink:0;" class="pulse"></span>
-      <span style="font-size:.75rem;font-weight:600;color:#fbbf24;">{{ made }} / {{ total }} picks made</span>
-    {% else %}
-      <span style="width:7px;height:7px;background:#f87171;border-radius:50%;flex-shrink:0;" class="pulse"></span>
-      <span style="font-size:.75rem;font-weight:600;color:#f87171;">No picks yet</span>
-    {% endif %}
-  </div>
-  {% endwith %}
-  {% endif %}
-  <p style="font-size:.625rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin:0 0 8px;display:flex;align-items:center;gap:6px;">
-    <span style="width:6px;height:6px;background:#34d399;border-radius:50%;display:inline-block;" class="pulse"></span>First Kickoff
-    {% if next_game and next_game.date %}<span style="font-weight:400;text-transform:none;letter-spacing:0;">· {{ next_game.date }}</span>{% endif %}
-  </p>
-  <div style="display:flex;align-items:center;gap:6px;margin-bottom:20px;">
-    <div class="cd-digit" id="cd-h">--</div>
-    <span style="color:var(--muted);font-weight:700;font-size:1rem;">:</span>
-    <div class="cd-digit" id="cd-m">--</div>
-    <span style="color:var(--muted);font-weight:700;font-size:1rem;">:</span>
-    <div class="cd-digit" id="cd-s">--</div>
-  </div>
-  {% endif %}
-
-  <!-- Games list -->
-  <div class="sec-head" style="margin-bottom:0;">
-    <p class="sec-title">Games</p>
-    {% if settings.lock_picks %}<span style="font-size:.625rem;font-weight:700;color:#f87171;">Locked</span>
-    {% else %}<span style="font-size:.625rem;font-weight:700;color:#34d399;">Open</span>{% endif %}
-  </div>
-  {% if not games %}
-  <p style="color:var(--muted);font-size:.8125rem;padding:16px 0;">No games this week.</p>
-  {% else %}
-  {% for game in games %}
-  {% with pick=picks_map|get_item:game.id game_id_str=game.id|stringformat:"s" %}
-  {% with dist=pick_dist|get_item:game_id_str %}
-  <div class="game-row">
-    <div style="flex-shrink:0;">
-      {% if game.graded %}<span style="width:6px;height:6px;background:#34d399;border-radius:50%;display:block;"></span>
-      {% else %}<span style="width:6px;height:6px;background:#fbbf24;border-radius:50%;display:block;" class="pulse"></span>{% endif %}
+<!-- Games expand modal -->
+{% if settings.publish and not settings.lock_picks and games %}
+<div id="games-expand-modal" onclick="if(event.target===this)closeGamesExpand()">
+  <div id="games-expand-box">
+    <button onclick="closeGamesExpand()" style="position:absolute;top:14px;right:16px;background:rgba(255,255,255,.07);border:none;border-radius:6px;color:var(--muted2);font-size:.875rem;padding:4px 10px;cursor:pointer;line-height:1.5;">✕</button>
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:4px;">
+      <p style="font-size:.5625rem;font-weight:700;color:rgba(100,116,139,.5);text-transform:uppercase;letter-spacing:.14em;margin:0;">Games — Week {{ settings.week }}</p>
     </div>
-    <div style="flex:1;min-width:0;">
-      {% if not settings.lock_picks and not game.graded %}
-      <!-- Inline pick slider -->
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
-        <div class="pick-toggle" id="ptoggle-{{ game.id }}" data-game="{{ game.id }}">
-          <div class="pick-opt" data-choice="team1" data-game="{{ game.id }}"
-               onclick="selectPick({{ game.id }},'team1',this)"
-               {% if pick and pick.choice == 'team1' %}data-selected="true"{% endif %}>
+    <p style="font-size:.5625rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.12em;margin:0 0 4px;">Picks lock in:</p>
+    <div style="display:flex;align-items:center;gap:5px;margin-bottom:16px;">
+      <div class="cd-digit" id="exp-cd-h">--</div>
+      <span style="color:var(--muted);font-weight:700;font-size:.9rem;">:</span>
+      <div class="cd-digit" id="exp-cd-m">--</div>
+      <span style="color:var(--muted);font-weight:700;font-size:.9rem;">:</span>
+      <div class="cd-digit" id="exp-cd-s">--</div>
+    </div>
+    <!-- Pre-rendered game cards; JS groups them by date on open -->
+    <div id="games-expand-grid">
+      {% for game in games %}{% with pick=picks_map|get_item:game.id %}
+      <div class="exp-game-card" data-home="{% if game.home_team %}{{ game.team2_abbrev }}{% else %}{{ game.team1_abbrev }}{% endif %}">
+        <div class="pick-toggle" data-game="{{ game.id }}" data-team1="{{ game.team1_abbrev }}" data-team2="{{ game.team2_abbrev }}" data-fav="{% if game.points1 <= game.points2 %}team1{% else %}team2{% endif %}">
+          <div class="pick-opt" data-choice="team1" data-game="{{ game.id }}"{% if pick and pick.choice == 'team1' %} data-selected="true"{% endif %}>
             <span class="pick-team">{{ game.team1_abbrev }}</span>
             <span class="pick-pts">{{ game.points1 }}</span>
           </div>
-          <div class="pick-opt" data-choice="team2" data-game="{{ game.id }}"
-               onclick="selectPick({{ game.id }},'team2',this)"
-               {% if pick and pick.choice == 'team2' %}data-selected="true"{% endif %}>
+          <div class="pick-opt" data-choice="team2" data-game="{{ game.id }}"{% if pick and pick.choice == 'team2' %} data-selected="true"{% endif %}>
             <span class="pick-team">{{ game.team2_abbrev }}</span>
             <span class="pick-pts">{{ game.points2 }}</span>
           </div>
-          <div class="pick-knob" id="pknob-{{ game.id }}"
-               style="{% if pick %}left:{% if pick.choice == 'team2' %}50%{% else %}2px{% endif %};{% else %}display:none;{% endif %}"></div>
+          <div class="pick-knob" style="{% if pick %}left:{% if pick.choice == 'team2' %}50%{% else %}3px{% endif %};{% else %}display:none;{% endif %}"></div>
         </div>
-        <span id="pick-saved-{{ game.id }}" style="font-size:.7rem;font-weight:700;flex-shrink:0;transition:color .2s;"></span>
-        <span id="pick-had-{{ game.id }}" style="display:none;">{% if pick %}1{% else %}0{% endif %}</span>
+        <p style="font-size:.45rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin:4px 0 0;text-align:{% if game.home_team %}right{% else %}left{% endif %};">@ {% if game.home_team %}{{ game.team2_abbrev }}{% else %}{{ game.team1_abbrev }}{% endif %}</p>
       </div>
-      {% else %}
-      <!-- Locked / graded display -->
-      <div style="display:flex;align-items:center;gap:5px;flex-wrap:nowrap;overflow:hidden;">
-        <span class="team-name {% if game.graded and game.winner == 'team1' %}winner{% endif %}">{{ game.team1_abbrev }}</span>
-        <span class="pts-tag {% if game.graded and game.winner == 'team1' %}won{% endif %}">{{ game.points1 }}</span>
-        <span class="vs-sep">{% if game.graded %}{% if game.winner == 'team1' %}◀{% elif game.winner == 'team2' %}▶{% else %}T{% endif %}{% else %}vs{% endif %}</span>
-        <span class="pts-tag fav {% if game.graded and game.winner == 'team2' %}won{% endif %}">{{ game.points2 }}</span>
-        <span class="team-name {% if game.graded and game.winner == 'team2' %}winner{% endif %}">{{ game.team2_abbrev }}</span>
-      </div>
-      {% endif %}
-      {% if dist and settings.lock_picks %}
-      <div style="display:flex;align-items:center;gap:5px;margin-top:4px;">
-        <span style="font-size:.575rem;color:#818cf8;font-weight:600;width:24px;text-align:right;flex-shrink:0;">{{ dist.team1_pct }}%</span>
-        <div class="dist-bar" style="flex:1;"><div class="dist-t1" data-w="{{ dist.team1_pct }}"></div><div class="dist-t2"></div></div>
-        <span style="font-size:.575rem;color:#fbbf24;font-weight:600;width:24px;flex-shrink:0;">{{ dist.team2_pct }}%</span>
-      </div>
-      {% endif %}
-    </div>
-    <div style="flex-shrink:0;text-align:right;">
-      {% if game.graded %}
-        {% if pick %}
-        <div class="pick-chip {% if pick.is_correct %}pick-correct{% else %}pick-wrong{% endif %}">
-          {% if pick.choice == 'team1' %}{{ game.team1_abbrev }}{% else %}{{ game.team2_abbrev }}{% endif %}
-        </div>
-        {% if pick.is_correct %}<div style="font-size:.575rem;color:#34d399;font-weight:700;margin-top:2px;">+{{ pick.points_earned }}</div>{% endif %}
-        {% else %}<span style="font-size:.6875rem;color:var(--muted);">—</span>{% endif %}
-      {% elif settings.lock_picks %}
-        {% if pick %}
-        <div class="pick-chip pick-pending">
-          {% if pick.choice == 'team1' %}{{ game.team1_abbrev }}{% else %}{{ game.team2_abbrev }}{% endif %}
-        </div>
-        {% else %}<span style="font-size:.6875rem;color:var(--muted);">—</span>{% endif %}
-      {% endif %}
+      {% endwith %}{% endfor %}
     </div>
   </div>
-  {% endwith %}
-  {% endwith %}
-  {% endfor %}
-  {% endif %}
-
-  {% endif %}{# end published #}
-  </div><!-- end RIGHT -->
-
 </div>
+{% endif %}
+
+<!-- Podium expand modal -->
+{% if leaderboard %}
+<script>
+const LEADERBOARD_DATA=[{% for entry in leaderboard %}{"rank":{{forloop.counter}},"u":"{{entry.username|escapejs}}","s":{{entry.score}},"fire":{{entry.on_fire|yesno:"true,false"}},"me":{% if entry.username == request.user.username %}true{% else %}false{% endif %},"rc":{{entry.rank_change}},"rca":{{entry.rank_change_abs}}},{% endfor %}];
+</script>
+<div id="podium-expand-modal" onclick="if(event.target===this)closePodiumExpand()">
+  <div id="podium-expand-box">
+    <div id="pod-expand-header">
+      <p style="font-size:.5625rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin:0;">Standings — Week {{ settings.week }}</p>
+      <button onclick="closePodiumExpand()" style="background:rgba(255,255,255,.07);border:none;border-radius:6px;color:var(--muted2);font-size:.875rem;padding:4px 10px;cursor:pointer;line-height:1.5;">✕</button>
+    </div>
+    <div id="pod-expand-stage"></div>
+  </div>
+</div>
+{% endif %}
 
 <!-- Chart expand modal -->
 <div id="chart-modal" onclick="if(event.target===this)closeModal()">
@@ -469,6 +646,90 @@
 
 {% block extra_js %}
 <script>
+// Custom leaderboard scrollbar
+(function(){
+  const scroll = document.getElementById('lb-scroll');
+  const thumb  = document.getElementById('lb-thumb');
+  const track  = document.getElementById('lb-track');
+  if (!scroll || !thumb || !track) return;
+  const THUMB_H = 36;
+  function updateThumb() {
+    const trackH   = track.clientHeight;
+    const scrollable = scroll.scrollHeight - scroll.clientHeight;
+    const pct      = scrollable > 0 ? scroll.scrollTop / scrollable : 0;
+    thumb.style.top = Math.min(pct * (trackH - THUMB_H), trackH - THUMB_H) + 'px';
+  }
+  scroll.addEventListener('scroll', updateThumb);
+  window.addEventListener('resize', updateThumb);
+  updateThumb();
+  // Drag thumb to scroll
+  thumb.addEventListener('mousedown', e => {
+    e.preventDefault();
+    const startY   = e.clientY;
+    const startTop = scroll.scrollTop;
+    const trackH   = track.clientHeight;
+    function onMove(e) {
+      const dy = e.clientY - startY;
+      const scrollable = scroll.scrollHeight - scroll.clientHeight;
+      scroll.scrollTop = startTop + (dy / (trackH - THUMB_H)) * scrollable;
+    }
+    function onUp() {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    }
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+  // Click track to jump
+  track.addEventListener('click', e => {
+    if (e.target === thumb) return;
+    const rect = track.getBoundingClientRect();
+    const pct  = (e.clientY - rect.top) / rect.height;
+    scroll.scrollTop = pct * scroll.scrollHeight;
+  });
+})();
+
+// Custom games scrollbar
+(function(){
+  const scroll = document.getElementById('games-scroll');
+  const thumb  = document.getElementById('games-thumb');
+  const track  = document.getElementById('games-track');
+  if (!scroll || !thumb || !track) return;
+  const THUMB_H = 36;
+  function updateThumb() {
+    const trackH    = track.clientHeight;
+    const scrollable = scroll.scrollHeight - scroll.clientHeight;
+    const pct       = scrollable > 0 ? scroll.scrollTop / scrollable : 0;
+    thumb.style.top = Math.min(pct * (trackH - THUMB_H), trackH - THUMB_H) + 'px';
+  }
+  scroll.addEventListener('scroll', updateThumb);
+  window.addEventListener('resize', updateThumb);
+  updateThumb();
+  thumb.addEventListener('mousedown', e => {
+    e.preventDefault();
+    const startY   = e.clientY;
+    const startTop = scroll.scrollTop;
+    const trackH   = track.clientHeight;
+    function onMove(e) {
+      const dy = e.clientY - startY;
+      const scrollable = scroll.scrollHeight - scroll.clientHeight;
+      scroll.scrollTop = startTop + (dy / (trackH - THUMB_H)) * scrollable;
+    }
+    function onUp() {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    }
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+  track.addEventListener('click', e => {
+    if (e.target === thumb) return;
+    const rect = track.getBoundingClientRect();
+    const pct  = (e.clientY - rect.top) / rect.height;
+    scroll.scrollTop = pct * scroll.scrollHeight;
+  });
+})();
+
 // Score bars
 (function(){
   const data = {{ leaderboard_json|safe }};
@@ -476,8 +737,10 @@
   const max = Math.max(...data.map(d=>d.score));
   if (max<=0) return;
   document.querySelectorAll('.score-bar-fill').forEach((el,i)=>{
-    const pct = (parseFloat(el.dataset.pct)/max*100).toFixed(1)+'%';
-    setTimeout(()=>{ el.style.width=pct; }, 250+i*55);
+    const rawPct = parseFloat(el.dataset.pct)/max*100;
+    const hue = (rawPct/100*120).toFixed(0);
+    el.style.background = `hsl(${hue},58%,48%)`;
+    setTimeout(()=>{ el.style.width=rawPct.toFixed(1)+'%'; }, 250+i*55);
   });
 })();
 
@@ -562,7 +825,7 @@ function setupPillDrag(trackId,pillId,labelIds,modes,switchFn,getMode){
     const rect=track.getBoundingClientRect();
     const ex=(e.changedTouches?e.changedTouches[0]:e).clientX;
     const picked=ex>=rect.left+rect.width/2?modes[1]:modes[0];
-    switchFn(moved?picked:(getMode()===modes[0]?modes[1]:modes[0]));
+    switchFn(picked);
   }
   track.addEventListener('mousedown',onStart);
   track.addEventListener('touchstart',onStart,{passive:true});
@@ -615,17 +878,18 @@ movePillAnalytics=setupPillDrag('analytics-toggle','analytics-pill',['tog-wr','t
 initAnalytics('wr');
 
 // ── variance ───────────────────────────────────────
-function buildVarianceOn(cid,showLegend=false){
+function buildVarianceOn(cid,showLegend=false,showNames=false){
   const el=document.getElementById(cid);if(!el||!effData||effData.length<2)return null;
   const players=effData[0].slice(1),rows=effData.slice(1);
   const v=players.map((_,pi)=>{const sc=rows.map(r=>r[pi+1]),m=sc.reduce((a,b)=>a+b,0)/sc.length;return parseFloat(Math.sqrt(sc.reduce((a,b)=>a+(b-m)**2,0)/sc.length).toFixed(2));});
+  const xAxis={...SX,ticks:{...SX.ticks,display:showNames}};
   return new Chart(el.getContext('2d'),{type:'bar',
     data:{labels:players,datasets:[{label:'Std. Deviation',data:v,
       backgroundColor:players.map((_,i)=>PALETTE[i%PALETTE.length]+'bb'),
       borderColor:players.map((_,i)=>PALETTE[i%PALETTE.length]),borderWidth:1,borderRadius:4}]},
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:showLegend},
-      tooltip:{...TIP,callbacks:{label:c=>` Std. Dev: ${c.parsed.y}`}}},
-      scales:{x:SX,y:SY()},animation:{duration:700,easing:'easeInOutQuart'}}});
+      tooltip:{...TIP,callbacks:{label:c=>` ${c.label}: ${c.parsed.y}`}}},
+      scales:{x:xAxis,y:SY()},animation:{duration:700,easing:'easeInOutQuart'}}});
 }
 buildVarianceOn('varianceChart');
 
@@ -644,7 +908,7 @@ function openModal(chartId){
   if(chartId==='mainChart')      modalChart=buildMainOn('modal-canvas',currentMode,true);
   else if(chartId==='weeklyChart')    modalChart=buildWeeklyOn('modal-canvas',true);
   else if(chartId==='analyticsChart') modalChart=buildAnalyticsOn('modal-canvas',analyticsMode,true);
-  else if(chartId==='varianceChart')  modalChart=buildVarianceOn('modal-canvas',true);
+  else if(chartId==='varianceChart')  modalChart=buildVarianceOn('modal-canvas',true,true);
 }
 function closeModal(){
   document.getElementById('chart-modal').style.display='none';
@@ -656,10 +920,12 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();});
 (function(){
   const h=document.getElementById('cd-h'),m=document.getElementById('cd-m'),s=document.getElementById('cd-s');
   if(!h) return;
+  const daysWrap=document.getElementById('cd-days-wrap');
+  const hmsWrap=document.getElementById('cd-hms-wrap');
+  const daysText=document.getElementById('cd-days-text');
   const nextGameTs = {{ next_game_ts|default:"null" }};
   function getTarget(){
     if(nextGameTs) return new Date(nextGameTs);
-    // fallback: next Sunday 1pm ET
     const now=new Date();
     const etOff=-5*60;
     const etNow=new Date(now.getTime()+now.getTimezoneOffset()*60000+etOff*60000);
@@ -669,12 +935,16 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();});
     return new Date(t.getTime()-etOff*60000);
   }
   function pad(n){return String(n).padStart(2,'0');}
+  const eh=document.getElementById('exp-cd-h'),em=document.getElementById('exp-cd-m'),es=document.getElementById('exp-cd-s');
   function tick(){
     const diff=getTarget()-new Date();
-    if(diff<=0){h.textContent=m.textContent=s.textContent='00';return;}
-    h.textContent=pad(Math.floor(diff/3600000));
-    m.textContent=pad(Math.floor(diff%3600000/60000));
-    s.textContent=pad(Math.floor(diff%60000/1000));
+    const hv=diff<=0?'00':pad(Math.floor(diff/3600000));
+    const mv=diff<=0?'00':pad(Math.floor(diff%3600000/60000));
+    const sv=diff<=0?'00':pad(Math.floor(diff%60000/1000));
+    h.textContent=hv; m.textContent=mv; s.textContent=sv;
+    if(eh) eh.textContent=hv;
+    if(em) em.textContent=mv;
+    if(es) es.textContent=sv;
   }
   tick(); setInterval(tick,1000);
 })();
@@ -697,48 +967,247 @@ function updatePickStatus() {
   }
 }
 
-function selectPick(gameId, choice, optEl) {
-  // Move knob
-  const knob = document.getElementById('pknob-'+gameId);
-  if (knob) { knob.style.display=''; knob.style.left = choice==='team1'?'2px':'50%'; }
-  // Update label colors
-  document.querySelectorAll('#ptoggle-'+gameId+' .pick-opt').forEach(el => el.removeAttribute('data-selected'));
-  if (optEl) optEl.setAttribute('data-selected','true');
-  // Autosave
-  const ind = document.getElementById('pick-saved-'+gameId);
+function pickColor(toggle, choice) {
+  return choice === toggle.dataset.fav
+    ? 'rgba(59,130,246,0.28)'
+    : 'rgba(239,68,68,0.22)';
+}
+function pickBorder(toggle, choice) {
+  return choice === toggle.dataset.fav
+    ? 'rgba(59,130,246,0.5)'
+    : 'rgba(239,68,68,0.42)';
+}
+
+function selectPick(gameId, choice) {
   const hadEl = document.getElementById('pick-had-'+gameId);
-  if (ind) { ind.textContent='…'; ind.style.color='var(--muted)'; }
+  const noPickYet = hadEl && hadEl.textContent === '0';
+  const isLeft = choice === 'team1';
+  // Update every toggle for this game (compact + expanded modal)
+  document.querySelectorAll('.pick-toggle[data-game="'+gameId+'"]').forEach(toggle => {
+    const knob = toggle.querySelector('.pick-knob');
+    if (knob) {
+      knob.style.transition = (noPickYet && isLeft) ? 'none' : 'left .32s cubic-bezier(.25,0,.2,1),background-color .22s ease';
+      knob.style.display = '';
+      knob.style.left = isLeft ? '3px' : '50%';
+      const choice = isLeft ? 'team1' : 'team2';
+      knob.style.backgroundColor = pickColor(toggle, choice);
+      knob.style.borderColor = pickBorder(toggle, choice);
+    }
+    toggle.querySelectorAll('.pick-opt').forEach(el => el.removeAttribute('data-selected'));
+    const selEl = toggle.querySelector('[data-choice="'+choice+'"]');
+    if (selEl) selEl.setAttribute('data-selected','true');
+  });
+  // Autosave
   const fd = new FormData();
   fd.append('game_id', gameId); fd.append('choice', choice); fd.append('csrfmiddlewaretoken', CSRF);
   fetch(SAVE_URL, {method:'POST', body:fd})
     .then(r=>r.json())
     .then(data=>{
-      if (ind) { ind.textContent=data.ok?'✓':'✕'; ind.style.color=data.ok?'#34d399':'#f87171';
-        setTimeout(()=>{ if(ind) ind.textContent=''; }, 2000); }
-      if (data.ok && hadEl && hadEl.textContent==='0') { hadEl.textContent='1'; picksMade++; updatePickStatus(); }
+      if (data.ok && hadEl && hadEl.textContent==='0') { hadEl.textContent='1'; picksMade++; updatePickStatus(); movePickedToBottom(gameId); }
     })
-    .catch(()=>{ if(ind){ ind.textContent='✕'; ind.style.color='#f87171'; } });
+    .catch(()=>{ });
 }
 
-// Drag-to-slide on pick toggles
-document.querySelectorAll('.pick-toggle').forEach(toggle=>{
-  let sx=null, moved=false;
-  toggle.addEventListener('mousedown', e=>{ sx=e.clientX; moved=false; });
-  toggle.addEventListener('touchstart', e=>{ sx=e.touches[0].clientX; moved=false; },{passive:true});
-  function end(clientX){
-    if(sx===null)return;
-    const dx=clientX-sx;
-    if(Math.abs(dx)>12){
-      moved=true;
-      const gid=parseInt(toggle.dataset.game);
-      const choice=dx>0?'team2':'team1';
-      const opt=toggle.querySelector('[data-choice="'+choice+'"]');
-      selectPick(gid, choice, opt);
+// Attach drag-to-slide handlers to every .pick-toggle inside container
+function initPickDrag(container) {
+  container.querySelectorAll('.pick-toggle').forEach(toggle => {
+    if (toggle.dataset.dragInit) return; // skip if already wired
+    toggle.dataset.dragInit = '1';
+    let active = false;
+    function pt(e) { return e.touches ? e.touches[0] : e; }
+    function onStart(e) {
+      active = true;
+      const knob = toggle.querySelector('.pick-knob');
+      if (knob) {
+        knob.style.transition = 'none';
+        const rect = toggle.getBoundingClientRect();
+        const halfW = (rect.width - 6) / 2;
+        const raw = pt(e).clientX - rect.left - halfW / 2;
+        knob.style.left = Math.max(3, Math.min(raw, rect.width / 2)) + 'px';
+        knob.style.display = '';
+      }
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onEnd);
+      document.addEventListener('touchmove', onMove, { passive: false });
+      document.addEventListener('touchend', onEnd);
     }
-    sx=null;
+    function onMove(e) {
+      if (!active) return;
+      if (e.cancelable) e.preventDefault();
+      const knob = toggle.querySelector('.pick-knob');
+      if (!knob) return;
+      const rect = toggle.getBoundingClientRect();
+      const halfW = (rect.width - 6) / 2;
+      const raw = pt(e).clientX - rect.left - halfW / 2;
+      knob.style.left = Math.max(3, Math.min(raw, rect.width / 2)) + 'px';
+    }
+    function onEnd(e) {
+      if (!active) return;
+      active = false;
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onEnd);
+      document.removeEventListener('touchmove', onMove);
+      document.removeEventListener('touchend', onEnd);
+      const rect = toggle.getBoundingClientRect();
+      const ex = (e.changedTouches ? e.changedTouches[0] : e).clientX;
+      const choice = ex >= rect.left + rect.width / 2 ? 'team2' : 'team1';
+      selectPick(parseInt(toggle.dataset.game), choice);
+    }
+    toggle.addEventListener('mousedown', onStart);
+    toggle.addEventListener('touchstart', onStart, { passive: true });
+  });
+}
+initPickDrag(document);
+
+// Games expand modal
+const NFL_DIV = {
+  BUF:'AFC East',MIA:'AFC East',NE:'AFC East',NYJ:'AFC East',
+  BAL:'AFC North',CIN:'AFC North',CLE:'AFC North',PIT:'AFC North',
+  HOU:'AFC South',IND:'AFC South',JAX:'AFC South',TEN:'AFC South',
+  DEN:'AFC West',KC:'AFC West',LV:'AFC West',LAC:'AFC West',
+  DAL:'NFC East',NYG:'NFC East',PHI:'NFC East',WAS:'NFC East',
+  CHI:'NFC North',DET:'NFC North',GB:'NFC North',MIN:'NFC North',
+  ATL:'NFC South',CAR:'NFC South',NO:'NFC South',TB:'NFC South',
+  ARI:'NFC West',LAR:'NFC West',SF:'NFC West',SEA:'NFC West'
+};
+const DIV_ORDER = ['AFC East','AFC North','AFC South','AFC West','NFC East','NFC North','NFC South','NFC West'];
+function openGamesExpand() {
+  const modal = document.getElementById('games-expand-modal');
+  const grid  = document.getElementById('games-expand-grid');
+  if (!modal || !grid) return;
+  if (!grid.dataset.grouped) {
+    const cards = [...grid.querySelectorAll('.exp-game-card')];
+    const groups = new Map();
+    DIV_ORDER.forEach(d => groups.set(d, []));
+    cards.forEach(c => {
+      const div = NFL_DIV[c.dataset.home] || 'Other';
+      if (!groups.has(div)) groups.set(div, []);
+      groups.get(div).push(c);
+    });
+    grid.innerHTML = '';
+    DIV_ORDER.forEach(div => {
+      const col = document.createElement('div');
+      col.className = 'exp-date-col';
+      const lbl = document.createElement('p');
+      lbl.className = 'exp-date-label';
+      lbl.textContent = div;
+      col.appendChild(lbl);
+      (groups.get(div) || []).forEach(c => col.appendChild(c));
+      grid.appendChild(col);
+    });
+    grid.style.gridTemplateColumns = 'repeat(4, 1fr)';
+    grid.dataset.grouped = '1';
+    initPickDrag(grid);
   }
-  toggle.addEventListener('mouseup', e=>end(e.clientX));
-  toggle.addEventListener('touchend', e=>end(e.changedTouches[0].clientX));
+  modal.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
+function closeGamesExpand() {
+  const modal = document.getElementById('games-expand-modal');
+  if (modal) modal.style.display = 'none';
+  document.body.style.overflow = '';
+}
+function openPodiumExpand() {
+  const modal = document.getElementById('podium-expand-modal');
+  const stage = document.getElementById('pod-expand-stage');
+  if (!modal || !stage) return;
+  if (!stage.dataset.built) {
+    const data = (typeof LEADERBOARD_DATA !== 'undefined' ? LEADERBOARD_DATA : []);
+    const N = data.length;
+    // Pyramid order: center = 1st, then 2nd left, 3rd right, 4th further left, etc.
+    const left = [], right = [];
+    for (let i = 1; i < N; i++) {
+      if (i % 2 === 1) left.unshift(data[i]); else right.push(data[i]);
+    }
+    const ordered = [...left, data[0], ...right];
+    const avH = window.innerHeight - 80;
+    const maxH = Math.round(avH * 0.74);
+    const minH = Math.round(avH * 0.10);
+    ordered.forEach(p => {
+      const t = Math.pow((p.rank - 1) / Math.max(N - 1, 1), 0.45);
+      const barH = N > 1 ? Math.round(maxH - (maxH - minH) * t) : maxH;
+      const flexW = N > 1 ? (2.5 - 1.5 * t).toFixed(2) : '2.5';
+      const gold = p.rank === 1, silv = p.rank === 2, brnz = p.rank === 3;
+      const barBg = gold
+        ? 'linear-gradient(180deg,rgba(245,158,11,.45) 0%,rgba(217,119,6,.22) 100%)'
+        : silv ? 'rgba(148,163,184,.14)' : brnz ? 'rgba(251,146,60,.12)'
+        : `rgba(255,255,255,${Math.max(0.02, 0.055 - (p.rank - 4) * 0.004)})`;
+      const topC = gold ? 'rgba(245,158,11,.6)' : silv ? 'rgba(148,163,184,.32)' : brnz ? 'rgba(251,146,60,.32)' : 'rgba(255,255,255,.09)';
+      const avBg = gold ? '#b45309' : silv ? '#334155' : brnz ? '#431407' : '#1e293b';
+      const scoreC = gold ? '#fbbf24' : silv ? '#94a3b8' : brnz ? '#fb923c' : 'var(--muted)';
+      const avSz = gold ? 52 : (silv || brnz) ? 44 : 36;
+      const scoreSz = gold ? '1.25rem' : (silv || brnz) ? '1rem' : '.78rem';
+      const rc = p.rc > 0 ? `<span class="rank-up" style="font-size:.5rem;">↑${p.rc}</span>`
+               : p.rc < 0 ? `<span class="rank-down" style="font-size:.5rem;">↓${p.rca}</span>`
+               : `<span class="rank-flat" style="font-size:.5rem;">—</span>`;
+      const el = document.createElement('div');
+      el.className = 'pod-person' + (p.me ? ' pod-person-me' : '');
+      el.style.flex = flexW;
+      const riseDelay = gold ? '.32s' : `${((p.rank - 2) * 0.04).toFixed(2)}s`;
+      el.style.animation = `pod-person-rise 2s cubic-bezier(.2,0,.3,1) ${riseDelay} backwards`;
+      el.innerHTML =
+        `<div class="pod-exp-score" style="color:${scoreC};font-size:${scoreSz};">${p.s}</div>`+
+        (p.fire ? '<span style="font-size:.7rem;line-height:1;">🔥</span>' : '')+
+        rc+
+        `<div class="pod-exp-name">${p.u}</div>`+
+        (gold
+          ? `<div class="pod-gold-avatar" style="display:inline-flex;flex-direction:column;align-items:center;gap:3px;margin-top:22px;margin-bottom:4px;flex-shrink:0;">
+               <div style="font-size:1.2rem;line-height:1;">👑</div>
+               <div class="pod-exp-avatar" style="width:${avSz}px;height:${avSz}px;font-size:${Math.round(avSz*.4)}px;background:${avBg};">${p.u[0].toUpperCase()}</div>
+             </div>`
+          : `<div class="pod-exp-avatar" style="width:${avSz}px;height:${avSz}px;font-size:${Math.round(avSz*.4)}px;background:${avBg};margin-bottom:4px;">${p.u[0].toUpperCase()}</div>`)+
+        `<div class="pod-exp-bar${gold ? ' pod-gold-bar' : ''}" style="height:${barH}px;background:${barBg};border-top:2px solid ${topC};border-left:1px solid ${topC};border-right:1px solid ${topC};animation-delay:${riseDelay};">${p.rank}</div>`;
+      stage.appendChild(el);
+    });
+    stage.dataset.built = '1';
+  }
+  modal.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
+function closePodiumExpand() {
+  const modal = document.getElementById('podium-expand-modal');
+  if (modal) modal.style.display = 'none';
+  document.body.style.overflow = '';
+}
+
+function flipToBottom(el, container) {
+  if (!el || !container) return;
+  const children = Array.from(container.children);
+  const before = children.map(c => c.getBoundingClientRect().top);
+  container.appendChild(el);
+  Array.from(container.children).forEach(child => {
+    const oldIdx = children.indexOf(child);
+    const dy = (oldIdx === -1 ? before[before.length - 1] : before[oldIdx]) - child.getBoundingClientRect().top;
+    if (Math.abs(dy) < 1) return;
+    child.style.transition = 'none';
+    child.style.transform = `translateY(${dy}px)`;
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      child.style.transition = 'transform .4s cubic-bezier(.25,0,.2,1)';
+      child.style.transform = '';
+    }));
+  });
+}
+
+function movePickedToBottom(gameId) {
+  // Compact view
+  const toggle = document.getElementById('ptoggle-' + gameId);
+  if (toggle) flipToBottom(toggle.closest('.game-row'), toggle.closest('.game-row')?.parentElement);
+  // Expanded modal
+  const expGrid = document.getElementById('games-expand-grid');
+  if (expGrid) {
+    const expToggle = expGrid.querySelector('.pick-toggle[data-game="'+gameId+'"]');
+    if (expToggle) flipToBottom(expToggle.closest('.exp-game-card'), expToggle.closest('.exp-game-card')?.parentElement);
+  }
+}
+
+// Restore pick knob colors on page load
+document.querySelectorAll('.pick-toggle').forEach(toggle => {
+  const knob = toggle.querySelector('.pick-knob');
+  if (!knob || knob.style.display === 'none') return;
+  const choice = knob.style.left === '50%' ? 'team2' : 'team1';
+  knob.style.transition = 'none';
+  knob.style.backgroundColor = pickColor(toggle, choice);
+  knob.style.borderColor = pickBorder(toggle, choice);
 });
 
 // Mobile tab toggle
@@ -762,28 +1231,32 @@ function mobTab(tab){
   const nextBtn=document.getElementById('email-next');
   const colBtn=document.getElementById('email-collapse');
   const body=document.getElementById('email-body');
+  const fade=document.getElementById('email-fade');
   const dates=[];
   {% for ann in announcements %}dates.push("{{ ann.created_at|date:'F j, Y' }}");{% endfor %}
-  let idx=0,collapsed=false;
-  if(body)body.style.maxHeight=body.scrollHeight+'px';
+  let idx=0,expanded=false;
   function showMsg(i){
     msgs.forEach((m,j)=>m.style.display=j===i?'':'none');
     if(dateEl)dateEl.textContent=dates[i]||'';
     if(counter)counter.textContent=(i+1)+' / '+total;
     if(prevBtn){prevBtn.disabled=i===total-1;prevBtn.style.opacity=i===total-1?'.3':'1';}
     if(nextBtn){nextBtn.disabled=i===0;nextBtn.style.opacity=i===0?'.3':'1';}
-    if(body&&!collapsed)body.style.maxHeight=body.scrollHeight+'px';
+    if(body&&expanded)body.style.maxHeight=body.scrollHeight+'px';
   }
   if(prevBtn)prevBtn.addEventListener('click',()=>{if(idx<total-1){idx++;showMsg(idx);}});
   if(nextBtn)nextBtn.addEventListener('click',()=>{if(idx>0){idx--;showMsg(idx);}});
-  if(colBtn&&body){
-    colBtn.addEventListener('click',()=>{
-      collapsed=!collapsed;
-      body.style.maxHeight=collapsed?'0':body.scrollHeight+'px';
-      body.style.opacity=collapsed?'0':'1';
-      colBtn.textContent=collapsed?'▼ expand':'▲ collapse';
-    });
+  function toggle(){
+    expanded=!expanded;
+    body.style.maxHeight=expanded?body.scrollHeight+'px':'5.6em';
+    if(fade)fade.style.opacity=expanded?'0':'1';
+    if(colBtn)colBtn.textContent=expanded?'collapse':'expand';
+    body.style.cursor='pointer';
   }
+  if(body){
+    body.style.cursor='pointer';
+    body.addEventListener('click',()=>{ toggle(); });
+  }
+  if(colBtn)colBtn.addEventListener('click',(e)=>{ e.stopPropagation(); toggle(); });
 })();
 
 // Week slider
@@ -793,7 +1266,15 @@ function mobTab(tab){
   const urls={};
   {% for w in week_links %}urls[{{ w }}]="{% url 'main:home' week=w %}";{% endfor %}
   const label=document.getElementById('wk-label');
-  slider.addEventListener('input',()=>{ label.textContent='W'+slider.value; });
+  const accentColor=getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()||'#00897b';
+  function updateFill(){
+    const min=+slider.min,max=+slider.max,val=+slider.value;
+    const pct=max>min?((val-min)/(max-min))*100:0;
+    const fill=`color-mix(in srgb,${accentColor} 55%,transparent)`;
+    slider.style.background=`linear-gradient(to right,${fill} 0%,${fill} ${pct}%,rgba(255,255,255,.07) ${pct}%,rgba(255,255,255,.07) 100%)`;
+  }
+  updateFill();
+  slider.addEventListener('input',()=>{ label.textContent='W'+slider.value; updateFill(); });
   slider.addEventListener('change',()=>{ const u=urls[+slider.value];if(u)window.location.href=u; });
 })();
 </script>

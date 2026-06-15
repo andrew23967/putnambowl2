@@ -31,6 +31,12 @@
         {{ settings.multiplier }}× Multiplier
       </button>
     </form>
+    <form method="post">{% csrf_token %}
+      <button name="toggle_auto" class="px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all
+        {% if settings.auto_enabled %}bg-violet-100 border-violet-300 text-violet-800 hover:bg-violet-200{% else %}bg-slate-100 border-slate-200 text-slate-600 hover:bg-slate-200{% endif %}">
+        Auto-Pilot {% if settings.auto_enabled %}ON{% else %}OFF{% endif %}
+      </button>
+    </form>
   </div>
 </div>
 
@@ -84,9 +90,15 @@
     <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-4">Scrape & Grade</p>
     <form method="post" class="space-y-3">
       {% csrf_token %}
-      <div>
-        <label class="block text-xs font-medium text-slate-600 mb-1">Week</label>
-        <input name="scrape_week" type="number" value="{{ settings.scrape_week }}" class="w-full px-2.5 py-1.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 ring-theme">
+      <div class="grid grid-cols-2 gap-2">
+        <div>
+          <label class="block text-xs font-medium text-slate-600 mb-1">Year</label>
+          <input name="scrape_year" type="number" value="{{ scrape_year }}" class="w-full px-2.5 py-1.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 ring-theme">
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-600 mb-1">Week</label>
+          <input name="scrape_week" type="number" value="{{ settings.scrape_week }}" class="w-full px-2.5 py-1.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 ring-theme">
+        </div>
       </div>
       <div>
         <label class="block text-xs font-medium text-slate-600 mb-1">API</label>
@@ -113,6 +125,10 @@
       {% else %}
       <p class="text-xs text-slate-400">Grade all games before advancing.</p>
       {% endif %}
+      <button id="recap-btn" type="button" onclick="generateRecap()" class="w-full mt-2 py-2 text-xs font-semibold bg-violet-600 hover:bg-violet-700 text-white rounded-lg transition-colors">
+        Generate Recap
+      </button>
+      <p id="recap-status" class="text-xs text-slate-400 mt-1 hidden"></p>
     </div>
     <hr class="border-slate-100">
     <div>
@@ -129,6 +145,56 @@
       <button name="delete_all_games" class="w-full py-2 text-xs font-semibold border border-red-300 text-red-600 hover:bg-red-50 rounded-lg">Delete All Games</button>
     </form>
   </div>
+</div>
+
+<!-- Automation settings -->
+<div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 mb-6">
+  <div class="flex items-center justify-between mb-4">
+    <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide">Auto-Pilot Settings</p>
+    <span class="text-xs font-semibold px-2 py-0.5 rounded-full {% if settings.auto_enabled %}bg-violet-100 text-violet-700{% else %}bg-slate-100 text-slate-500{% endif %}">
+      {% if settings.auto_enabled %}Active{% else %}Off{% endif %}
+    </span>
+  </div>
+  <form method="post">
+    {% csrf_token %}
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+      <div>
+        <label class="block text-xs font-medium text-slate-600 mb-1">Scrape day (UTC)</label>
+        <select name="auto_scrape_weekday" class="w-full px-2.5 py-1.5 text-sm border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 ring-theme">
+          {% for val, name in weekday_options %}
+          <option value="{{ val }}" {% if settings.auto_scrape_weekday == val %}selected{% endif %}>{{ name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-slate-600 mb-1">Scrape hour (UTC)</label>
+        <select name="auto_scrape_hour" class="w-full px-2.5 py-1.5 text-sm border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 ring-theme">
+          {% for h in hour_options %}
+          <option value="{{ h }}" {% if settings.auto_scrape_hour == h %}selected{% endif %}>{{ h }}:00</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-slate-600 mb-1">Lock offset (min before kickoff)</label>
+        <input name="auto_lock_offset_minutes" type="number" min="0" max="120" value="{{ settings.auto_lock_offset_minutes }}"
+          class="w-full px-2.5 py-1.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 ring-theme">
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-slate-600 mb-1">First kickoff (UTC)</label>
+        <p class="text-sm text-slate-700 pt-1.5">
+          {% if settings.first_game_dt %}{{ settings.first_game_dt|date:"D M j, g:i A" }} UTC{% else %}<span class="text-slate-400">—</span>{% endif %}
+        </p>
+      </div>
+    </div>
+    <div class="flex items-center gap-3">
+      <button name="save_auto" class="px-4 py-1.5 text-xs font-semibold bg-violet-600 hover:bg-violet-700 text-white rounded-lg transition-colors">Save Settings</button>
+      <p class="text-xs text-slate-400">
+        Schedule: scrape Wk {{ settings.week }} on
+        {% for val, name in weekday_options %}{% if settings.auto_scrape_weekday == val %}{{ name }}{% endif %}{% endfor %}
+        at {{ settings.auto_scrape_hour }}:00 UTC · lock {{ settings.auto_lock_offset_minutes }} min before kickoff · grade every 5 min · advance Mon–Wed after 6 AM UTC
+      </p>
+    </div>
+  </form>
 </div>
 
 <!-- Games table -->
@@ -173,4 +239,42 @@
   <div class="p-10 text-center text-slate-400 text-sm">No games added yet.</div>
   {% endif %}
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function generateRecap() {
+  const btn = document.getElementById('recap-btn');
+  const status = document.getElementById('recap-status');
+  btn.disabled = true;
+  btn.textContent = 'Generating…';
+  status.classList.add('hidden');
+
+  fetch("{% url 'main:generate_recap' %}", {
+    method: 'POST',
+    headers: {'X-CSRFToken': '{{ csrf_token }}'}
+  })
+  .then(r => r.json())
+  .then(d => {
+    if (d.recap) {
+      btn.textContent = 'Recap Generated ✓';
+      btn.classList.replace('bg-violet-600', 'bg-emerald-600');
+      btn.classList.replace('hover:bg-violet-700', 'hover:bg-emerald-700');
+      status.textContent = 'Saved — visible on home page until next publish.';
+      status.classList.remove('hidden');
+    } else {
+      btn.textContent = 'Generate Recap';
+      btn.disabled = false;
+      status.textContent = 'Error: ' + (d.error || 'unknown');
+      status.classList.remove('hidden');
+    }
+  })
+  .catch(() => {
+    btn.textContent = 'Generate Recap';
+    btn.disabled = false;
+    status.textContent = 'Network error.';
+    status.classList.remove('hidden');
+  });
+}
+</script>
 {% endblock %}
