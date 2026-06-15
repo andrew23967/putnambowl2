@@ -3,4 +3,4 @@ builder = "NIXPACKS"
 
 [deploy]
 preDeployCommand = "python manage.py collectstatic --no-input && python manage.py migrate"
-startCommand = "gunicorn config.wsgi --bind 0.0.0.0:$PORT --log-file -"
+startCommand = "bash -c 'if [ \"$SERVICE_TYPE\" = \"worker\" ]; then python manage.py run_auto; else gunicorn config.wsgi --bind 0.0.0.0:$PORT --log-file -; fi'"
