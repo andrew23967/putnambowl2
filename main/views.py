@@ -883,7 +883,8 @@ def pickdash(request):
         )
 
         for p in players:
-            if p.profile.score - {e['score'] for e in lb_entries if e['username'] == p.username} == {max_score}:
+            prev_score = next((e['score'] for e in lb_entries if e['username'] == p.username), 0)
+            if round(p.profile.score - prev_score, 1) == round(max_score, 1):
                 p.profile.score += 10
             p.save()
 
