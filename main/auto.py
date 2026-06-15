@@ -78,7 +78,7 @@ def build_recap(week):
         p1, p2 = g.get('points1', 0), g.get('points2', 0)
         winner = t1 if winner_key == 'team1' else (t2 if winner_key == 'team2' else 'Tie')
         picks = ', '.join(
-            f"{u}→{'team1' if pd.get('pick')=='team1' else 'team2'}"
+            f"{u}→{pd.get('pick') or 'no pick'}"
             for u, pd in g.get('player_picks', {}).items()
         )
         game_lines.append(f'{t1} ({p1}pts) vs {t2} ({p2}pts) — winner: {winner} | picks: {picks}')
