@@ -130,6 +130,31 @@ Write the recap now. Plain text only, no markdown, no headers."""
     return f"{p1}\n\n{p2}"
 
 
+def build_intro():
+    """Generate a PutnamBot season intro. Falls back to a static message if Gemini unavailable."""
+    prompt = """You are PutnamBot, the AI commissioner of a private NFL pick'em fantasy league called PutnamBowl.
+Write a short introduction (2-3 sentences) to kick off the new season. Introduce yourself by name, explain that you will be managing the league, sending weekly emails when picks are published, and writing weekly recaps after each week's games. Keep it straightforward and professional."""
+
+    try:
+        from django.conf import settings as django_settings
+        api_key = getattr(django_settings, 'GEMINI_API_KEY', '')
+        if api_key:
+            from google import genai
+            client = genai.Client(api_key=api_key)
+            response = client.models.generate_content(
+                model='gemini-3.5-flash',
+                contents=prompt,
+            )
+            return response.text.strip()
+    except Exception as e:
+        log.error('PutnamBot intro failed: %s', e)
+        print(f'[recap] PutnamBot intro failed: {e}', flush=True)
+
+    return ("Welcome to PutnamBowl. I'm PutnamBot, your AI league commissioner. "
+            "Going forward I'll manage the league, send emails when weekly picks are published, "
+            "and post a recap here after each week's games are complete.")
+
+
 def _game_day_in_filter(game_dt, from_day, to_day, tz_str='UTC'):
     if from_day is None or to_day is None:
         return True

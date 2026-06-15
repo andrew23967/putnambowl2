@@ -938,9 +938,10 @@ def pickdash(request):
         settings.publish = False
         settings.edit = True
         settings.lock_picks = False
-        settings.weekly_recap = ''
         settings.first_game_dt = None
         settings.auto_lock_dt = None
+        from .auto import build_intro
+        settings.weekly_recap = build_intro()
         settings.save()
         for p in User.objects.select_related('profile').all():
             p.profile.preseason_submitted = False
