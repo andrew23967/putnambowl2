@@ -269,10 +269,9 @@ def auto_tick():
         return
 
     now = datetime.now(timezone.utc)
-    log.info('[auto_tick] tick at %s UTC | week=%s publish=%s lock=%s scrape_dt=%s lock_dt=%s',
-             now.strftime('%H:%M'), settings.week, settings.publish, settings.lock_picks,
-             settings.auto_scrape_dt.strftime('%m/%d %H:%M') if settings.auto_scrape_dt else '—',
-             settings.auto_lock_dt.strftime('%m/%d %H:%M') if settings.auto_lock_dt else '—')
+    scrape_dt_str = settings.auto_scrape_dt.strftime('%m/%d %H:%M') if settings.auto_scrape_dt else '—'
+    lock_dt_str = settings.auto_lock_dt.strftime('%m/%d %H:%M') if settings.auto_lock_dt else '—'
+    print(f'[auto_tick] {now.strftime("%H:%M")} UTC | week={settings.week} publish={settings.publish} lock={settings.lock_picks} scrape_dt={scrape_dt_str} lock_dt={lock_dt_str}', flush=True)
 
     # 1. Scrape + publish when auto_scrape_dt has passed
     if not settings.publish and settings.auto_scrape_dt and now >= settings.auto_scrape_dt:
