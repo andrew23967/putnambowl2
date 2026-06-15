@@ -16,7 +16,10 @@ class SiteSettings(models.Model):
     auto_scrape_weekday = models.IntegerField(default=1)   # 0=Mon … 6=Sun
     auto_scrape_hour = models.IntegerField(default=9)       # UTC 0-23
     auto_lock_offset_minutes = models.IntegerField(default=10)
-    first_game_dt = models.DateTimeField(null=True, blank=True)  # UTC kickoff time
+    first_game_dt = models.DateTimeField(null=True, blank=True)
+    tick_interval = models.IntegerField(default=300)        # seconds between ticks
+    auto_scrape_dt = models.DateTimeField(null=True, blank=True)  # exact UTC time to scrape+publish
+    auto_lock_dt = models.DateTimeField(null=True, blank=True)    # exact UTC time to lock picks
 
     class Meta:
         verbose_name = 'Site Settings'

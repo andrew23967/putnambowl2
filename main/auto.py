@@ -31,6 +31,15 @@ def _current_season_year():
     return today.year if today.month >= 9 else today.year - 1
 
 
+def _next_weekday_hour(weekday, hour):
+    """Return the next UTC datetime for the given weekday (0=Mon) and hour."""
+    now = datetime.now(timezone.utc)
+    days_ahead = weekday - now.weekday()
+    if days_ahead < 0 or (days_ahead == 0 and now.hour >= hour):
+        days_ahead += 7
+    return (now + timedelta(days=days_ahead)).replace(hour=hour, minute=0, second=0, microsecond=0)
+
+
 def build_recap(week):
     """Generate recap text for the given week. Returns string or None if no history."""
     try:
@@ -138,7 +147,9 @@ def do_scrape_and_publish(settings, year=None):
         added += 1
 
     first_dt = scrape_module.get_first_game_dt(week=settings.week, year=year)
-    settings.first_game_dt = first_dt  # None is fine — auto_tick handles the fallback
+    settings.first_game_dt = first_dt
+    if first_dt and settings.auto_lock_offset_minutes:
+        settings.auto_lock_dt = first_dt - timedelta(minutes=settings.auto_lock_offset_minutes)
     settings.publish = True
     settings.edit = False
     settings.save()
@@ -239,6 +250,8 @@ def do_advance_week(settings):
     settings.edit = True
     settings.lock_picks = False
     settings.first_game_dt = None
+    settings.auto_lock_dt = None
+    settings.auto_scrape_dt = _next_weekday_hour(settings.auto_scrape_weekday, settings.auto_scrape_hour)
     settings.save()
 
     recap = build_recap(completed_week)
@@ -256,28 +269,25 @@ def auto_tick():
         return
 
     now = datetime.now(timezone.utc)
-    log.info('[auto_tick] tick at %s UTC | week=%s publish=%s lock=%s', now.strftime('%H:%M'), settings.week, settings.publish, settings.lock_picks)
+    log.info('[auto_tick] tick at %s UTC | week=%s publish=%s lock=%s scrape_dt=%s lock_dt=%s',
+             now.strftime('%H:%M'), settings.week, settings.publish, settings.lock_picks,
+             settings.auto_scrape_dt.strftime('%m/%d %H:%M') if settings.auto_scrape_dt else '—',
+             settings.auto_lock_dt.strftime('%m/%d %H:%M') if settings.auto_lock_dt else '—')
 
-    # 1. Scrape + Publish on configured weekday + hour
-    if (not settings.publish
-            and now.weekday() == settings.auto_scrape_weekday
-            and now.hour == settings.auto_scrape_hour):
+    # 1. Scrape + publish when auto_scrape_dt has passed
+    if not settings.publish and settings.auto_scrape_dt and now >= settings.auto_scrape_dt:
         do_scrape_and_publish(settings)
         settings.refresh_from_db()
 
-    # 2. Lock picks when first kickoff - offset has passed
-    if settings.publish and not settings.lock_picks and settings.first_game_dt:
-        lock_at = settings.first_game_dt - timedelta(minutes=settings.auto_lock_offset_minutes)
-        if now >= lock_at:
-            do_lock_picks(settings)
-            settings.refresh_from_db()
+    # 2. Lock picks when auto_lock_dt has passed
+    if settings.publish and not settings.lock_picks and settings.auto_lock_dt and now >= settings.auto_lock_dt:
+        do_lock_picks(settings)
+        settings.refresh_from_db()
 
-    # 3. Grade while picks are locked and ungraded games exist
+    # 3. Grade while locked; advance when all done
     if settings.lock_picks:
         games = list(Game.objects.all())
         if games and not all(g.graded for g in games):
             do_grade(settings)
         elif games and all(g.graded for g in games):
-            # Advance on Mon/Tue/Wed after 6 AM UTC — avoids premature advance mid-Sunday
-            if now.weekday() in (0, 1, 2) and now.hour >= 6:
-                do_advance_week(settings)
+            do_advance_week(settings)

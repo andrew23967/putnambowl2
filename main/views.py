@@ -646,10 +646,19 @@ def pickdash(request):
             settings.auto_scrape_weekday = int(request.POST.get('auto_scrape_weekday', 1))
             settings.auto_scrape_hour = int(request.POST.get('auto_scrape_hour', 9))
             settings.auto_lock_offset_minutes = int(request.POST.get('auto_lock_offset_minutes', 10))
+            settings.tick_interval = max(10, int(request.POST.get('tick_interval', 300)))
+
+            def _parse_dt(val):
+                if not val:
+                    return None
+                return datetime.strptime(val, '%Y-%m-%dT%H:%M').replace(tzinfo=timezone.utc)
+
+            settings.auto_scrape_dt = _parse_dt(request.POST.get('auto_scrape_dt', ''))
+            settings.auto_lock_dt = _parse_dt(request.POST.get('auto_lock_dt', ''))
             settings.save()
             messages.success(request, 'Auto-pilot settings saved.')
-        except (ValueError, TypeError):
-            messages.error(request, 'Invalid auto-pilot settings.')
+        except (ValueError, TypeError) as e:
+            messages.error(request, f'Invalid auto-pilot settings: {e}')
 
     elif 'scrape' in request.POST:
         week = int(request.POST.get('scrape_week', settings.scrape_week))
