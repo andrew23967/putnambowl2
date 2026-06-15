@@ -1016,3 +1016,13 @@ def generate_recap(request):
     settings.weekly_recap = recap
     settings.save()
     return JsonResponse({'recap': recap})
+
+
+@staff_member_required
+@require_POST
+def send_test_email(request):
+    from .email_utils import send_picks_published_email
+    settings = SiteSettings.get()
+    send_picks_published_email(settings)
+    messages.success(request, 'Test email queued — check logs for result.')
+    return redirect('main:pickdash')

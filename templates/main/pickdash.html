@@ -268,6 +268,11 @@
       <button disabled class="ctrl-btn" style="width:100%;opacity:.35;cursor:not-allowed;">Next Week →</button>
       {% endif %}
 
+      <form method="post" action="{% url 'main:send_test_email' %}" style="margin-bottom:0;">
+        {% csrf_token %}
+        <button type="submit" class="ctrl-btn" style="width:100%;">Send Test Email</button>
+      </form>
+
       <hr class="dash-hr">
 
       <!-- Danger -->
