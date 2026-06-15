@@ -938,7 +938,13 @@ def pickdash(request):
         settings.publish = False
         settings.edit = True
         settings.lock_picks = False
+        settings.weekly_recap = ''
+        settings.first_game_dt = None
+        settings.auto_lock_dt = None
         settings.save()
+        for p in User.objects.select_related('profile').all():
+            p.profile.preseason_submitted = False
+            p.profile.save()
         messages.success(request, 'New season started.')
 
     games = Game.objects.order_by('graded', 'id')
