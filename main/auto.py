@@ -256,6 +256,7 @@ def auto_tick():
         return
 
     now = datetime.now(timezone.utc)
+    log.info('[auto_tick] tick at %s UTC | week=%s publish=%s lock=%s', now.strftime('%H:%M'), settings.week, settings.publish, settings.lock_picks)
 
     # 1. Scrape + Publish on configured weekday + hour
     if (not settings.publish
