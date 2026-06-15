@@ -86,7 +86,7 @@ def build_recap(week):
     games_str = '\n'.join(game_lines)
 
     prompt = f"""You are the commissioner of a private NFL pick'em fantasy league called PutnamBowl.
-Write a short, punchy weekly recap for Week {week}. Keep it 3 short paragraphs. Be witty and direct — call people out by name, celebrate the winner, mock the loser a bit. No fluff, no filler.
+Write a factual weekly recap for Week {week} in 3 short paragraphs. Report what happened: who won, who lost, the scores, and how people's picks went. Straightforward and informative — no jokes, no sarcasm, no filler.
 
 Week {week} results:
 
