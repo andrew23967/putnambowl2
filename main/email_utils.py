@@ -43,8 +43,9 @@ def _format_lock_dt(lock_dt, tz_str='UTC'):
 
 def send_picks_published_email(site_settings):
     """Send weekly picks-live notification to all non-bot users with an email address."""
+    print(f'[email] send_picks_published_email called, week={site_settings.week}', flush=True)
     if not django_settings.EMAIL_HOST_USER:
-        log.warning('Email not configured — skipping picks published email.')
+        print('[email] EMAIL_HOST_USER not set — skipping.', flush=True)
         return
 
     recipients = list(
@@ -53,8 +54,9 @@ def send_picks_published_email(site_settings):
         .exclude(profile__is_bot=True)
         .values_list('email', flat=True)
     )
+    print(f'[email] recipients: {recipients}', flush=True)
     if not recipients:
-        log.info('No recipients for picks published email.')
+        print('[email] No recipients — skipping.', flush=True)
         return
 
     week = site_settings.week
@@ -86,6 +88,7 @@ def send_picks_published_email(site_settings):
 
     def _send():
         try:
+            print(f'[email] attempting send to {recipients}', flush=True)
             send_mail(
                 subject=subject,
                 message=body,
@@ -93,8 +96,8 @@ def send_picks_published_email(site_settings):
                 recipient_list=recipients,
                 fail_silently=False,
             )
-            log.info('Picks published email sent to %d recipients for week %d.', len(recipients), week)
+            print(f'[email] sent OK to {len(recipients)} recipients for week {week}', flush=True)
         except Exception as e:
-            log.error('Failed to send picks published email: %s', e)
+            print(f'[email] FAILED: {e}', flush=True)
 
     threading.Thread(target=_send, daemon=True).start()
