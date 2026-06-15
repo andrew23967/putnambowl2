@@ -1,4 +1,5 @@
 import logging
+import threading
 from datetime import datetime, timezone
 
 from django.core.mail import send_mail
@@ -83,14 +84,17 @@ def send_picks_published_email(site_settings):
         f'\n\n──\nPutnamBowl'
     )
 
-    try:
-        send_mail(
-            subject=subject,
-            message=body,
-            from_email=django_settings.DEFAULT_FROM_EMAIL,
-            recipient_list=recipients,
-            fail_silently=False,
-        )
-        log.info('Picks published email sent to %d recipients for week %d.', len(recipients), week)
-    except Exception as e:
-        log.error('Failed to send picks published email: %s', e)
+    def _send():
+        try:
+            send_mail(
+                subject=subject,
+                message=body,
+                from_email=django_settings.DEFAULT_FROM_EMAIL,
+                recipient_list=recipients,
+                fail_silently=False,
+            )
+            log.info('Picks published email sent to %d recipients for week %d.', len(recipients), week)
+        except Exception as e:
+            log.error('Failed to send picks published email: %s', e)
+
+    threading.Thread(target=_send, daemon=True).start()
