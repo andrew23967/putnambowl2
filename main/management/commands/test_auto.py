@@ -38,7 +38,7 @@ class Command(BaseCommand):
         settings.publish = False
         settings.lock_picks = False
         settings.edit = True
-        settings.grade_api = 'espn'
+        settings.grade_api = 'nfl_data_py'
         settings.save()
 
         for week in range(start_week, end_week + 1):
@@ -47,7 +47,7 @@ class Command(BaseCommand):
 
             # 1. Scrape + publish (skip get_first_game_dt — not needed for test timing)
             self.stdout.write('  Scraping...')
-            games_data = scrape_module.scrape(week=week, api_type='espn', year=year)
+            games_data = scrape_module.scrape(week=week, api_type='nfl_data_py', year=year)
             added = 0
             for g in games_data:
                 team1 = ABBREV_TO_TEAM.get(g[0], g[0])
