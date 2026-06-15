@@ -188,8 +188,10 @@ def do_scrape_and_publish(settings, year=None):
 
     try:
         from .email_utils import send_picks_published_email
+        print('[auto] calling send_picks_published_email', flush=True)
         send_picks_published_email(settings)
     except Exception as e:
+        print(f'[auto] email error: {e}', flush=True)
         log.error('Email send failed: %s', e)
 
     return added

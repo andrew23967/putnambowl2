@@ -805,6 +805,13 @@ def pickdash(request):
         if first_dt and settings.lock_mode == 'offset' and settings.auto_lock_offset_minutes:
             settings.auto_lock_dt = first_dt - _td2(minutes=settings.auto_lock_offset_minutes)
         settings.save()
+        if settings.publish:
+            try:
+                from .email_utils import send_picks_published_email
+                print('[manual scrape] calling send_picks_published_email', flush=True)
+                send_picks_published_email(settings)
+            except Exception as _email_err:
+                print(f'[manual scrape] email error: {_email_err}', flush=True)
         messages.success(request, f'Scraped week {week}: {added} added, {dupes} skipped.')
 
     elif 'grade' in request.POST:
