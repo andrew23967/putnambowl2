@@ -410,6 +410,25 @@ function _syncThemeIcons() {
 }
 document.addEventListener('DOMContentLoaded', _syncThemeIcons);
 </script>
+<script>
+(function() {
+  var dateOpts = {month:'short', day:'numeric'};
+  var timeOpts = {hour:'numeric', minute:'2-digit', timeZoneName:'short'};
+  var fullOpts = {month:'short', day:'numeric', hour:'numeric', minute:'2-digit', timeZoneName:'short'};
+  var dayOpts  = {weekday:'long'};
+  function conv(el, opts) {
+    try { el.textContent = new Date(el.dataset.utc).toLocaleString(undefined, opts); } catch(e) {}
+  }
+  function run(root) {
+    (root||document).querySelectorAll('[data-utc-date]').forEach(function(el){ el.dataset.utc=el.dataset.utcDate; conv(el,dateOpts); });
+    (root||document).querySelectorAll('[data-utc-time]').forEach(function(el){ el.dataset.utc=el.dataset.utcTime; conv(el,timeOpts); });
+    (root||document).querySelectorAll('[data-utc-full]').forEach(function(el){ el.dataset.utc=el.dataset.utcFull; conv(el,fullOpts); });
+    (root||document).querySelectorAll('[data-utc-day]').forEach(function(el){ el.dataset.utc=el.dataset.utcDay; conv(el,dayOpts); });
+  }
+  run();
+  window.initUtcDates = run;
+})();
+</script>
 {% block extra_js %}{% endblock %}
 </body>
 </html>

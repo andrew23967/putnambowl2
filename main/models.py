@@ -15,7 +15,10 @@ class SiteSettings(models.Model):
     auto_enabled = models.BooleanField(default=False)
     auto_scrape_weekday = models.IntegerField(default=1)   # 0=Mon … 6=Sun
     auto_scrape_hour = models.IntegerField(default=9)       # UTC 0-23
+    auto_scrape_minute = models.IntegerField(default=0)     # UTC 0-59
     auto_lock_offset_minutes = models.IntegerField(default=10)
+    lock_mode = models.CharField(max_length=10, default='offset')  # 'offset' or 'manual'
+    auto_tz = models.CharField(max_length=50, default='UTC')
     first_game_dt = models.DateTimeField(null=True, blank=True)
     tick_interval = models.IntegerField(default=300)        # seconds between ticks
     auto_scrape_dt = models.DateTimeField(null=True, blank=True)  # exact UTC time to scrape+publish
@@ -53,7 +56,14 @@ class Game(models.Model):
     graded = models.BooleanField(default=False)
     home_team = models.BooleanField(default=True, help_text='True = team2 is home')
     game_id = models.CharField(max_length=50, blank=True, default='')
-    date = models.CharField(max_length=50, blank=True, default='')
+    game_dt = models.DateTimeField(null=True, blank=True)
+
+    @property
+    def game_dt_iso(self):
+        if self.game_dt:
+            from datetime import timezone as _tz
+            return self.game_dt.astimezone(_tz.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+        return ''
 
     def __str__(self):
         return f'{self.team1} vs {self.team2}'

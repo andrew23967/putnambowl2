@@ -10,8 +10,8 @@
     {% csrf_token %}
     {% for gp in games_with_picks %}
     <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
-      {% if gp.game.date %}
-      <p class="text-xs text-slate-400 mb-3">{{ gp.game.date }}</p>
+      {% if gp.game.game_dt_iso %}
+      <p class="text-xs text-slate-400 mb-3" data-utc-full="{{ gp.game.game_dt_iso }}">{{ gp.game.game_dt_iso }}</p>
       {% endif %}
       <div class="grid grid-cols-2 gap-3">
         <label class="relative cursor-pointer">

@@ -9,7 +9,7 @@ class SiteSettingsAdmin(admin.ModelAdmin):
 
 @admin.register(Game)
 class GameAdmin(admin.ModelAdmin):
-    list_display = ['team1', 'team2', 'points1', 'points2', 'winner', 'graded', 'date']
+    list_display = ['team1', 'team2', 'points1', 'points2', 'winner', 'graded', 'game_dt']
     list_filter = ['graded']
 
 

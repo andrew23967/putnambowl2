@@ -59,6 +59,12 @@ def scrape_nfl_data_py(week, year=None):
     schedule = _get_schedule(year)
     if schedule is None:
         return []
+    from datetime import datetime, timezone as _tz
+    try:
+        from zoneinfo import ZoneInfo
+        _et = ZoneInfo('America/New_York')
+    except Exception:
+        _et = _tz.utc
     games = []
     for game_id, home, away, w, home_ml, away_ml, gameday, gametime in zip(
         schedule['game_id'], schedule['home_team'], schedule['away_team'],
@@ -69,11 +75,17 @@ def scrape_nfl_data_py(week, year=None):
             continue
         if home_ml != home_ml:
             home_ml = away_ml = 0
-        date_str = f"{gameday[5:]}, {gametime}" if gameday and gametime else ''
+        game_dt = None
+        if gameday and gametime:
+            try:
+                dt_local = datetime.strptime(f"{gameday} {str(gametime).strip()}", '%Y-%m-%d %H:%M').replace(tzinfo=_et)
+                game_dt = dt_local.astimezone(_tz.utc)
+            except Exception:
+                pass
         if home_ml >= away_ml:
-            games.append([away, home, away_ml, home_ml, False, game_id, date_str])
+            games.append([away, home, away_ml, home_ml, False, game_id, game_dt])
         else:
-            games.append([home, away, home_ml, away_ml, True, game_id, date_str])
+            games.append([home, away, home_ml, away_ml, True, game_id, game_dt])
     return games
 
 
@@ -99,17 +111,17 @@ def scrape_espn(week, year=None):
             if not home or not away:
                 continue
             date_str = comp.get('date', '')
+            from datetime import datetime, timezone as _tz
+            game_dt = None
             if date_str:
-                from datetime import datetime
                 try:
-                    dt = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
-                    date_str = dt.strftime('%m/%d, %I:%M %p')
+                    game_dt = datetime.fromisoformat(date_str.replace('Z', '+00:00')).astimezone(_tz.utc)
                 except Exception:
-                    date_str = date_str[:10]
+                    pass
             game_id = f"{season}_{week}_{away}_{home}"
             home_full = ABBREV_TO_TEAM.get(home, home)
             away_full = ABBREV_TO_TEAM.get(away, away)
-            games.append([away_full, home_full, 0, 0, False, game_id, date_str])
+            games.append([away_full, home_full, 0, 0, False, game_id, game_dt])
     except Exception as e:
         print(f"scrape_espn error: {e}")
     return games

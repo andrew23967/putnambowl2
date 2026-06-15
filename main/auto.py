@@ -31,13 +31,23 @@ def _current_season_year():
     return today.year if today.month >= 9 else today.year - 1
 
 
-def _next_weekday_hour(weekday, hour):
-    """Return the next UTC datetime for the given weekday (0=Mon) and hour."""
+def _next_weekday_hour(weekday, hour, minute=0):
+    """Return the next FUTURE UTC datetime for the given weekday/hour/minute."""
     now = datetime.now(timezone.utc)
     days_ahead = weekday - now.weekday()
-    if days_ahead < 0 or (days_ahead == 0 and now.hour >= hour):
+    if days_ahead < 0 or (days_ahead == 0 and (now.hour, now.minute) >= (hour, minute)):
         days_ahead += 7
-    return (now + timedelta(days=days_ahead)).replace(hour=hour, minute=0, second=0, microsecond=0)
+    return (now + timedelta(days=days_ahead)).replace(hour=hour, minute=minute, second=0, microsecond=0)
+
+
+def _this_or_next_weekday_hour(weekday, hour, minute=0):
+    """Like _next_weekday_hour but if the time already passed today, returns today's
+    past time so auto_tick fires it immediately on the next check."""
+    now = datetime.now(timezone.utc)
+    days_ahead = weekday - now.weekday()
+    if days_ahead < 0:
+        days_ahead += 7
+    return (now + timedelta(days=days_ahead)).replace(hour=hour, minute=minute, second=0, microsecond=0)
 
 
 def build_recap(week):
@@ -142,13 +152,13 @@ def do_scrape_and_publish(settings, year=None):
         Game.objects.create(
             team1=team1, team2=team2,
             points1=float(settings.multiplier), points2=pts2,
-            home_team=g[4], game_id=game_id, date=g[6]
+            home_team=g[4], game_id=game_id, game_dt=g[6]
         )
         added += 1
 
     first_dt = scrape_module.get_first_game_dt(week=settings.week, year=year)
     settings.first_game_dt = first_dt
-    if first_dt and settings.auto_lock_offset_minutes:
+    if settings.lock_mode == 'offset' and first_dt and settings.auto_lock_offset_minutes:
         settings.auto_lock_dt = first_dt - timedelta(minutes=settings.auto_lock_offset_minutes)
     settings.publish = True
     settings.edit = False
@@ -251,7 +261,9 @@ def do_advance_week(settings):
     settings.lock_picks = False
     settings.first_game_dt = None
     settings.auto_lock_dt = None
-    settings.auto_scrape_dt = _next_weekday_hour(settings.auto_scrape_weekday, settings.auto_scrape_hour)
+    settings.auto_scrape_dt = _next_weekday_hour(settings.auto_scrape_weekday, settings.auto_scrape_hour, settings.auto_scrape_minute)
+    if settings.lock_mode == 'manual' and settings.auto_lock_dt:
+        settings.auto_lock_dt += timedelta(days=7)
     settings.save()
 
     recap = build_recap(completed_week)

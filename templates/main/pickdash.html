@@ -32,37 +32,38 @@
     margin: 0 0 8px;
   }
   .mode-tab {
-    padding: 5px 14px;
+    flex: 1;
+    padding: 11px 14px;
     font-size: .8125rem;
     font-weight: 600;
-    border-radius: 7px;
     cursor: pointer;
     border: none;
-    transition: background .15s, color .15s, box-shadow .15s;
+    border-bottom: 2px solid transparent;
     background: transparent;
     color: var(--muted2);
+    transition: color .15s, border-color .15s;
   }
   .mode-tab.active {
-    background: var(--surface);
     color: var(--text);
-    box-shadow: 0 1px 4px rgba(0,0,0,.2);
+    border-bottom-color: var(--accent);
   }
   .ctrl-btn {
-    padding: 6px 14px;
+    padding: 9px 16px;
     font-size: .8125rem;
-    font-weight: 600;
-    border-radius: 8px;
-    border: 1px solid var(--border2);
+    font-weight: 700;
+    border-radius: 9px;
+    border: 1.5px solid var(--border2);
     cursor: pointer;
-    transition: background .15s, color .15s;
+    transition: background .15s, color .15s, border-color .15s;
     background: var(--surface2);
-    color: var(--muted2);
+    color: var(--text);
     white-space: nowrap;
+    flex: 1;
   }
-  .ctrl-btn:hover { background: var(--surface); color: var(--text); }
-  .ctrl-btn.on-amber { background: rgba(245,158,11,.15); border-color: rgba(245,158,11,.4); color: #fbbf24; }
-  .ctrl-btn.on-red   { background: rgba(239,68,68,.15);  border-color: rgba(239,68,68,.4);  color: #f87171; }
-  .ctrl-btn.on-violet{ background: rgba(139,92,246,.18); border-color: rgba(139,92,246,.5); color: #a78bfa; }
+  .ctrl-btn:hover { background: var(--surface); border-color: var(--border); }
+  .ctrl-btn.on-amber { background: rgba(245,158,11,.18); border-color: rgba(245,158,11,.5); color: #fbbf24; }
+  .ctrl-btn.on-red   { background: rgba(239,68,68,.18);  border-color: rgba(239,68,68,.5);  color: #f87171; }
+  .ctrl-btn.on-violet{ background: rgba(139,92,246,.22); border-color: rgba(139,92,246,.6); color: #a78bfa; }
   .next-card {
     background: var(--surface2);
     border: 1px solid var(--border);
@@ -74,10 +75,10 @@
     background: color-mix(in srgb, var(--accent) 8%, var(--surface2));
   }
   .action-btn {
-    padding: 7px 0;
-    font-size: .8125rem;
-    font-weight: 600;
-    border-radius: 8px;
+    padding: 10px 0;
+    font-size: .875rem;
+    font-weight: 700;
+    border-radius: 9px;
     width: 100%;
     cursor: pointer;
     border: none;
@@ -87,16 +88,16 @@
   .action-btn:hover { filter: brightness(1.12); }
   .action-btn.indigo  { background: #4f46e5; }
   .action-btn.emerald { background: #059669; }
-  .action-btn.slate   { background: #1e293b; }
+  .action-btn.slate   { background: #334155; }
   .action-btn.violet  { background: #7c3aed; }
   .action-btn.red     { background: #dc2626; }
   .danger-btn {
-    padding: 7px 0; font-size: .8125rem; font-weight: 600; border-radius: 8px;
+    padding: 10px 0; font-size: .875rem; font-weight: 700; border-radius: 9px;
     width: 100%; cursor: pointer; background: transparent;
-    border: 1px solid rgba(239,68,68,.35); color: #f87171; transition: background .15s;
+    border: 1.5px solid rgba(239,68,68,.4); color: #f87171; transition: background .15s, border-color .15s;
   }
-  .danger-btn:hover { background: rgba(239,68,68,.1); }
-  hr.dash-hr { border: none; border-top: 1px solid var(--border); margin: 12px 0; }
+  .danger-btn:hover { background: rgba(239,68,68,.1); border-color: rgba(239,68,68,.6); }
+  hr.dash-hr { border: none; border-top: 1px solid var(--border); margin: 18px 0; }
 
   /* Two-column page layout — left controls, right games */
   .dash-layout {
@@ -124,9 +125,9 @@
   /* Game rows */
   .game-row {
     display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 16px;
+    flex-direction: column;
+    gap: 3px;
+    padding: 9px 16px;
     border-bottom: 1px solid var(--border);
   }
   /* Three-way grade toggle */
@@ -138,231 +139,188 @@
     border-radius: 999px;
     padding: 2px;
     cursor: pointer;
-    flex-shrink: 0;
-    min-width: 138px;
+    flex: 1;
   }
   .grade-knob {
     position: absolute;
     top: 2px; bottom: 2px; left: 0;
     width: 33.333%;
-    background: var(--surface);
+    background: rgba(255,255,255,.1);
+    border: 1px solid rgba(255,255,255,.18);
     border-radius: 999px;
     box-shadow: 0 1px 5px rgba(0,0,0,.28);
-    transition: left .18s cubic-bezier(.4,0,.2,1), opacity .15s;
+    transition: left .18s cubic-bezier(.4,0,.2,1), opacity .15s, background .18s;
     pointer-events: none;
+  }
+  [data-theme="light"] .grade-knob {
+    background: rgba(0,0,0,.05);
+    border-color: rgba(0,0,0,.1);
   }
   .grade-opt {
     flex: 1;
-    text-align: center;
-    font-size: .68rem;
-    font-weight: 700;
-    padding: 4px 2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    padding: 5px 4px;
     border-radius: 999px;
     position: relative;
     z-index: 1;
     color: var(--muted);
     transition: color .15s;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    letter-spacing: .01em;
   }
   .grade-opt.active { color: var(--text); }
+  .grade-name { font-size:.68rem;font-weight:700;line-height:1; }
+  .grade-pts  { font-size:.5rem;font-weight:600;color:var(--muted);line-height:1;transition:color .15s; }
+  .grade-opt.active .grade-pts { color:var(--muted2); }
 </style>
 {% endblock %}
 
 {% block content %}
 
-<!-- Header -->
-<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;flex-wrap:wrap;">
-  <div>
-    <h1 style="font-size:1.15rem;font-weight:800;color:var(--text);margin:0 0 2px;">Pick Dashboard</h1>
-    <p style="font-size:.8rem;color:var(--muted2);margin:0;">Week {{ settings.week }}</p>
-  </div>
-  <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-    <div style="display:flex;flex-wrap:wrap;gap:5px;">
-      <span class="tag {% if settings.publish %}tag-amber{% else %}tag-muted{% endif %}">Publish {% if settings.publish %}ON{% else %}OFF{% endif %}</span>
-      <span class="tag {% if settings.lock_picks %}tag-red{% else %}tag-muted{% endif %}">{% if settings.lock_picks %}Locked{% else %}Open{% endif %}</span>
-      <span class="tag tag-muted">{{ settings.multiplier }}×</span>
-      <span class="tag {% if settings.auto_enabled %}tag-accent{% else %}tag-muted{% endif %}">Auto {% if settings.auto_enabled %}ON{% else %}OFF{% endif %}</span>
-      <span class="tag tag-muted">{{ games|length }} game{{ games|length|pluralize }}</span>
-    </div>
-    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:3px;display:flex;gap:3px;flex-shrink:0;">
-      <button id="btn-manual" class="mode-tab" onclick="setMode('manual')">Manual</button>
-      <button id="btn-auto"   class="mode-tab" onclick="setMode('auto')">Auto-Pilot</button>
-    </div>
-  </div>
-</div>
-
 <div class="dash-layout">
 
-  <!-- LEFT: single card with all controls -->
+  <!-- LEFT: single card with tabs -->
   <div>
+    <div class="card" style="padding:0;overflow:hidden;">
+      <!-- Tab strip -->
+      <div style="display:flex;border-bottom:1px solid var(--border);">
+        <button id="btn-manual" class="mode-tab" onclick="setMode('manual')">Manual</button>
+        <button id="btn-auto"   class="mode-tab" onclick="setMode('auto')">Auto-Pilot</button>
+      </div>
 
+    <div style="display:grid;">
     <!-- ===== MANUAL MODE ===== -->
-    <div id="panel-manual">
-      <div class="card" style="padding:16px;display:flex;flex-direction:column;gap:0;">
+    <div id="panel-manual" style="grid-area:1/1;align-self:start;padding:20px;display:flex;flex-direction:column;gap:0;transition:opacity .15s;">
 
-        <!-- Toggle controls -->
-        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;">
-          <form method="post">{% csrf_token %}
-            <button name="toggle_publish" class="ctrl-btn {% if settings.publish %}on-amber{% endif %}">
-              {% if settings.publish %}📢 Published{% else %}Publish{% endif %}
-            </button>
-          </form>
-          <form method="post">{% csrf_token %}
-            <button name="toggle_lock" class="ctrl-btn {% if settings.lock_picks %}on-red{% endif %}">
-              {% if settings.lock_picks %}🔒 Locked{% else %}Lock Picks{% endif %}
-            </button>
-          </form>
-          <form method="post">{% csrf_token %}
-            <button name="cycle_multiplier" class="ctrl-btn">{{ settings.multiplier }}× Multiplier</button>
-          </form>
-        </div>
-
-        <hr class="dash-hr" style="margin-top:0;">
-
-        <!-- Add Game -->
-        <p class="dash-section">Add Game</p>
-        <form method="post" style="display:flex;flex-direction:column;gap:7px;margin-bottom:14px;">
-          {% csrf_token %}
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
-            <div>
-              <label class="dash-label">Underdog</label>
-              <select name="underdog" class="dash-input">
-                {% for val, label in add_game_form.underdog.field.choices %}
-                <option value="{{ val }}">{{ label }}</option>{% endfor %}
-              </select>
-            </div>
-            <div>
-              <label class="dash-label">Favorite</label>
-              <select name="favorite" class="dash-input">
-                {% for val, label in add_game_form.favorite.field.choices %}
-                <option value="{{ val }}">{{ label }}</option>{% endfor %}
-              </select>
-            </div>
-          </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:6px;align-items:end;">
-            <div>
-              <label class="dash-label">Dog ML</label>
-              <input name="underdog_moneyline" type="number" placeholder="150" class="dash-input">
-            </div>
-            <div>
-              <label class="dash-label">Fav ML</label>
-              <input name="favorite_moneyline" type="number" placeholder="-150" class="dash-input">
-            </div>
-            <div>
-              <label class="dash-label">Date</label>
-              <input name="date" type="date" class="dash-input">
-            </div>
-            <label style="display:flex;align-items:center;gap:4px;font-size:.8rem;color:var(--muted2);cursor:pointer;padding-bottom:2px;white-space:nowrap;">
-              <input name="favorite_is_home" type="checkbox" checked> Home
-            </label>
-          </div>
-          <button name="add_game" type="submit" class="btn-accent action-btn">Add Game</button>
+      <!-- Manage Picks -->
+      <p class="dash-section">Manage Picks</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:20px;">
+        <form method="post">{% csrf_token %}
+          <button name="toggle_publish" class="ctrl-btn {% if settings.publish %}on-amber{% endif %}" style="width:100%;">
+            {% if settings.publish %}Published{% else %}Publish{% endif %}
+          </button>
         </form>
+        <form method="post">{% csrf_token %}
+          <button name="toggle_lock" class="ctrl-btn {% if settings.lock_picks %}on-red{% endif %}" style="width:100%;">
+            {% if settings.lock_picks %}Locked{% else %}Lock Picks{% endif %}
+          </button>
+        </form>
+      </div>
 
-        <hr class="dash-hr" style="margin-top:0;">
+      <hr class="dash-hr" style="margin-top:0;">
 
-        <!-- Scrape & Grade -->
-        <p class="dash-section">Scrape & Grade</p>
-        <form method="post" style="display:flex;flex-direction:column;gap:7px;margin-bottom:14px;">
-          {% csrf_token %}
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;">
+      <!-- Edit Games -->
+      <p class="dash-section">Edit Games</p>
+      <form method="post" id="scrape-form" style="position:relative;margin-bottom:8px;">
+        {% csrf_token %}
+        <input type="hidden" name="scrape_year" id="sh-year" value="{{ scrape_year }}">
+        <input type="hidden" name="scrape_week" id="sh-week" value="{{ settings.scrape_week }}">
+        <input type="hidden" name="grade_api" id="sh-api" value="{{ settings.grade_api }}">
+        <div style="display:flex;gap:8px;align-items:center;">
+          <button name="scrape" type="submit" class="ctrl-btn" style="flex:1;">Scrape</button>
+          <button name="grade" type="submit" class="ctrl-btn" style="flex:1;">Grade</button>
+          <button type="button" id="scrape-gear-btn" onclick="toggleScrapePopout(event)"
+                  style="padding:9px 11px;background:var(--surface2);border:1.5px solid var(--border2);border-radius:9px;cursor:pointer;color:var(--muted2);font-size:.9rem;line-height:1;flex-shrink:0;">⚙</button>
+        </div>
+        <div id="scrape-popout" style="display:none;position:absolute;top:calc(100% + 8px);left:50%;transform:translateX(-50%);background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;width:200px;z-index:50;box-shadow:0 8px 24px rgba(0,0,0,.3);">
+          <p style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:0 0 10px;">Scrape Settings</p>
+          <div style="display:flex;flex-direction:column;gap:8px;">
             <div>
               <label class="dash-label">Year</label>
-              <input name="scrape_year" type="number" value="{{ scrape_year }}" class="dash-input">
+              <input id="sp-year" type="number" value="{{ scrape_year }}" class="dash-input">
             </div>
             <div>
               <label class="dash-label">Week</label>
-              <input name="scrape_week" type="number" value="{{ settings.scrape_week }}" class="dash-input">
+              <input id="sp-week" type="number" value="{{ settings.scrape_week }}" class="dash-input">
             </div>
             <div>
               <label class="dash-label">API</label>
-              <select name="grade_api" class="dash-input">
+              <select id="sp-api" class="dash-input">
                 {% for val, label in api_options %}
                 <option value="{{ val }}" {% if val == settings.grade_api %}selected{% endif %}>{{ label }}</option>
                 {% endfor %}
               </select>
             </div>
+            <button type="button" onclick="saveScrapeSettings()" class="ctrl-btn" style="width:100%;padding:7px 0;font-size:.8rem;margin-top:2px;">Save</button>
           </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
-            <button name="scrape" type="submit" class="action-btn indigo">Scrape</button>
-            <button name="grade" type="submit" class="action-btn emerald">Grade</button>
-          </div>
-        </form>
-
-        <hr class="dash-hr" style="margin-top:0;">
-
-        <!-- Advance + Recap -->
-        <p class="dash-section">Week</p>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:14px;">
-          {% if all_graded %}
-          <form method="post" onsubmit="return confirm('Advance to week {{ settings.week|add:1 }}?')">
-            {% csrf_token %}
-            <button name="nextweek" class="action-btn slate">Next Week →</button>
-          </form>
-          {% else %}
-          <button disabled class="action-btn slate" style="opacity:.4;cursor:not-allowed;">Next Week →</button>
-          {% endif %}
-          <button id="recap-btn" type="button" onclick="generateRecap()" class="action-btn violet">Generate Recap</button>
         </div>
-        <p id="recap-status" style="font-size:.72rem;color:var(--muted);margin:-8px 0 10px;display:none;"></p>
+      </form>
+      <form method="post" style="margin-bottom:8px;">{% csrf_token %}
+        <button name="cycle_multiplier" class="ctrl-btn" style="width:100%;">{{ settings.multiplier }}× Multiplier</button>
+      </form>
+      <button type="button" onclick="openAddGameModal()" class="ctrl-btn" style="width:100%;margin-bottom:8px;">Manual Add Game</button>
+      <form method="post" onsubmit="return confirm('Delete all games?')">
+        {% csrf_token %}
+        <button name="delete_all_games" class="danger-btn">Delete All Games</button>
+      </form>
 
-        <hr class="dash-hr" style="margin-top:0;">
+      <hr class="dash-hr">
 
-        <!-- Season / Danger -->
-        <p class="dash-section">Season</p>
-        <form method="post" onsubmit="return confirm('Save season and reset all scores?')" style="display:flex;flex-direction:column;gap:7px;margin-bottom:10px;">
-          {% csrf_token %}
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
-            <input name="year" type="number" placeholder="Year (e.g. 2025)" class="dash-input">
-            <input name="notes" type="text" placeholder="Notes" class="dash-input">
-          </div>
-          <button name="newseason" class="action-btn red">Save Season & Reset</button>
-        </form>
-        <form method="post" onsubmit="return confirm('Delete all games?')">
-          {% csrf_token %}
-          <button name="delete_all_games" class="danger-btn">Delete All Games</button>
-        </form>
+      <!-- Advance -->
+      <p class="dash-section">Week</p>
+      {% if all_graded %}
+      <form method="post" onsubmit="return confirm('Advance to week {{ settings.week|add:1 }}?')" style="margin-bottom:0;">
+        {% csrf_token %}
+        <button name="nextweek" class="ctrl-btn" style="width:100%;">Next Week →</button>
+      </form>
+      {% else %}
+      <button disabled class="ctrl-btn" style="width:100%;opacity:.35;cursor:not-allowed;">Next Week →</button>
+      {% endif %}
 
-      </div>
+      <hr class="dash-hr">
+
+      <!-- Danger -->
+      <p class="dash-section">Season</p>
+      <form method="post" onsubmit="return confirm('Save season and reset all scores?')">
+        {% csrf_token %}
+        <button name="newseason" class="action-btn red">Save Season & Reset</button>
+      </form>
+
     </div>
 
     <!-- ===== AUTO MODE ===== -->
-    <div id="panel-auto">
-      <div class="card" style="padding:16px;display:flex;flex-direction:column;gap:0;">
+    <div id="panel-auto" style="grid-area:1/1;align-self:start;padding:20px;display:flex;flex-direction:column;gap:0;transition:opacity .15s;">
 
-        <!-- Header + toggle -->
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
-          <div>
-            <p style="font-size:.9375rem;font-weight:700;color:var(--text);margin:0 0 2px;">Auto-Pilot</p>
-            <p style="font-size:.75rem;color:var(--muted2);margin:0;">Ticks every {{ settings.tick_interval }}s</p>
-          </div>
-          <form method="post">{% csrf_token %}
-            <button name="toggle_auto" class="ctrl-btn {% if settings.auto_enabled %}on-violet{% endif %}">
-              {% if settings.auto_enabled %}ON{% else %}OFF{% endif %}
-            </button>
-          </form>
-        </div>
+        <!-- ON/OFF toggle -->
+        <form method="post" style="margin-bottom:20px;">{% csrf_token %}
+          <button name="toggle_auto" style="
+            width:100%;padding:14px;border:none;border-radius:12px;cursor:pointer;
+            font-size:.9375rem;font-weight:800;letter-spacing:.03em;
+            {% if settings.auto_enabled %}
+              background:rgba(139,92,246,.2);color:#a78bfa;border:1.5px solid rgba(139,92,246,.45);
+            {% else %}
+              background:var(--surface2);color:var(--muted2);border:1.5px solid var(--border2);
+            {% endif %}
+            transition:background .15s,color .15s,border-color .15s;">
+            {% if settings.auto_enabled %}Auto-Pilot ON{% else %}Auto-Pilot OFF{% endif %}
+          </button>
+        </form>
 
         <!-- Status cards -->
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:14px;">
-          <div class="next-card {% if not settings.publish and settings.auto_scrape_dt %}active-card{% endif %}">
-            <p style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin:0 0 5px;">Scrape</p>
-            {% if settings.auto_scrape_dt %}
-              <p style="font-size:.8125rem;font-weight:700;color:var(--text);margin:0;">{{ settings.auto_scrape_dt|date:"M j" }}</p>
-              <p style="font-size:.72rem;color:var(--muted2);margin:0;">{{ settings.auto_scrape_dt|date:"g:i A" }} UTC</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:18px;">
+          <div class="next-card {% if settings.publish %}active-card{% endif %}">
+            <p style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin:0 0 5px;">Publish</p>
+            {% if settings.publish %}
+              <p style="font-size:.8125rem;font-weight:700;color:var(--text);margin:0;">Live</p>
+              <p style="font-size:.72rem;color:var(--muted2);margin:0;">Week {{ settings.week }}</p>
+            {% elif settings.auto_scrape_dt %}
+              <p style="font-size:.8125rem;font-weight:700;color:var(--text);margin:0;" data-utc-day="{{ settings.auto_scrape_dt|date:'c' }}">{{ settings.auto_scrape_dt|date:"l" }}</p>
+              <p style="font-size:.72rem;color:var(--muted2);margin:0;" data-utc-time="{{ settings.auto_scrape_dt|date:'c' }}">{{ settings.auto_scrape_dt|date:"g:i A" }}</p>
             {% else %}
-              <p style="font-size:.8rem;color:var(--muted);margin:0;">Not set</p>
+              <p style="font-size:.8rem;color:var(--muted);margin:0;">Not live</p>
             {% endif %}
-            {% if settings.publish %}<p style="font-size:.65rem;font-weight:600;color:#fbbf24;margin:3px 0 0;">Done</p>{% endif %}
           </div>
-          <div class="next-card {% if settings.publish and not settings.lock_picks and settings.auto_lock_dt %}active-card{% endif %}">
+          <div class="next-card {% if settings.publish and not settings.lock_picks %}active-card{% endif %}">
             <p style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin:0 0 5px;">Lock</p>
             {% if settings.auto_lock_dt %}
-              <p style="font-size:.8125rem;font-weight:700;color:var(--text);margin:0;">{{ settings.auto_lock_dt|date:"M j" }}</p>
-              <p style="font-size:.72rem;color:var(--muted2);margin:0;">{{ settings.auto_lock_dt|date:"g:i A" }} UTC</p>
+              <p style="font-size:.8125rem;font-weight:700;color:var(--text);margin:0;" data-utc-day="{{ settings.auto_lock_dt|date:'c' }}">{{ settings.auto_lock_dt|date:"l" }}</p>
+              <p style="font-size:.72rem;color:var(--muted2);margin:0;" data-utc-time="{{ settings.auto_lock_dt|date:'c' }}">{{ settings.auto_lock_dt|date:"g:i A" }}</p>
+            {% elif settings.lock_mode == 'offset' and display_auto_lock_computed_dt %}
+              <p style="font-size:.8125rem;font-weight:700;color:var(--text);margin:0;" data-utc-day="{{ display_auto_lock_computed_dt|date:'c' }}">{{ display_auto_lock_computed_dt|date:"l" }}</p>
+              <p style="font-size:.72rem;color:var(--muted2);margin:0;" data-utc-time="{{ display_auto_lock_computed_dt|date:'c' }}">{{ display_auto_lock_computed_dt|date:"g:i A" }}</p>
+            {% elif settings.lock_mode == 'offset' %}
+              <p style="font-size:.8rem;color:var(--muted);margin:0;">{{ settings.auto_lock_offset_minutes }}m before kickoff</p>
             {% else %}
               <p style="font-size:.8rem;color:var(--muted);margin:0;">Not set</p>
             {% endif %}
@@ -381,229 +339,450 @@
 
         <hr class="dash-hr" style="margin-top:0;">
 
-        <form method="post" style="display:flex;flex-direction:column;gap:12px;">
+        <form method="post" style="display:flex;flex-direction:column;gap:14px;">
           {% csrf_token %}
 
-          <!-- Schedule -->
+          <!-- Timezone (shared) -->
           <div>
-            <p class="dash-section">Schedule</p>
-            <div style="margin-bottom:7px;">
-              <label class="dash-label">Timezone</label>
-              <select name="tz" id="tz-select" class="dash-input">
-                <option value="America/New_York">Eastern (ET)</option>
-                <option value="America/Chicago">Central (CT)</option>
-                <option value="America/Denver">Mountain (MT)</option>
-                <option value="America/Los_Angeles">Pacific (PT)</option>
-                <option value="America/Anchorage">Alaska (AKT)</option>
-                <option value="Pacific/Honolulu">Hawaii (HT)</option>
-                <option value="UTC">UTC</option>
-              </select>
-            </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
-              <div>
-                <label class="dash-label">Scrape + publish at</label>
-                <input name="auto_scrape_dt" type="datetime-local" class="dash-input"
-                  value="{% if settings.auto_scrape_dt %}{{ settings.auto_scrape_dt|date:'Y-m-d\TH:i' }}{% endif %}">
-                {% if settings.auto_scrape_dt %}<p style="font-size:.67rem;color:var(--muted);margin:2px 0 0;">{{ settings.auto_scrape_dt|date:"M j g:i A" }} UTC</p>{% endif %}
-              </div>
-              <div>
-                <label class="dash-label">Lock picks at</label>
-                <input name="auto_lock_dt" type="datetime-local" class="dash-input"
-                  value="{% if settings.auto_lock_dt %}{{ settings.auto_lock_dt|date:'Y-m-d\TH:i' }}{% endif %}">
-                {% if settings.auto_lock_dt %}<p style="font-size:.67rem;color:var(--muted);margin:2px 0 0;">{{ settings.auto_lock_dt|date:"M j g:i A" }} UTC</p>{% endif %}
-              </div>
-            </div>
+            <label class="dash-label">Timezone</label>
+            <select name="tz" id="tz-select" class="dash-input">
+              <option value="America/New_York" {% if settings.auto_tz == 'America/New_York' %}selected{% endif %}>Eastern (ET)</option>
+              <option value="America/Chicago" {% if settings.auto_tz == 'America/Chicago' %}selected{% endif %}>Central (CT)</option>
+              <option value="America/Denver" {% if settings.auto_tz == 'America/Denver' %}selected{% endif %}>Mountain (MT)</option>
+              <option value="America/Los_Angeles" {% if settings.auto_tz == 'America/Los_Angeles' %}selected{% endif %}>Pacific (PT)</option>
+              <option value="America/Anchorage" {% if settings.auto_tz == 'America/Anchorage' %}selected{% endif %}>Alaska (AKT)</option>
+              <option value="Pacific/Honolulu" {% if settings.auto_tz == 'Pacific/Honolulu' %}selected{% endif %}>Hawaii (HT)</option>
+              <option value="UTC" {% if settings.auto_tz == 'UTC' or not settings.auto_tz %}selected{% endif %}>UTC</option>
+            </select>
           </div>
 
-          <!-- Recurring -->
+          <!-- Scrape schedule -->
           <div>
-            <p class="dash-section">Recurring (after each advance)</p>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px;">
+            <p class="dash-section">Scrape Schedule</p>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
               <div>
-                <label class="dash-label">Scrape day</label>
+                <label class="dash-label">Day</label>
                 <select name="auto_scrape_weekday" class="dash-input">
                   {% for val, name in weekday_options %}
-                  <option value="{{ val }}" {% if settings.auto_scrape_weekday == val %}selected{% endif %}>{{ name }}</option>
+                  <option value="{{ val }}" {% if display_scrape_weekday == val %}selected{% endif %}>{{ name }}</option>
                   {% endfor %}
                 </select>
               </div>
               <div>
-                <label class="dash-label">Scrape hour (UTC)</label>
-                <select name="auto_scrape_hour" class="dash-input">
-                  {% for h in hour_options %}
-                  <option value="{{ h }}" {% if settings.auto_scrape_hour == h %}selected{% endif %}>{{ h }}:00</option>
-                  {% endfor %}
-                </select>
-              </div>
-            </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
-              <div>
-                <label class="dash-label">Lock offset (min before kickoff)</label>
-                <input name="auto_lock_offset_minutes" type="number" min="0" max="120" value="{{ settings.auto_lock_offset_minutes }}" class="dash-input">
-              </div>
-              <div>
-                <label class="dash-label">Tick interval (sec)</label>
-                <input name="tick_interval" type="number" min="10" max="3600" value="{{ settings.tick_interval }}" class="dash-input">
+                <label class="dash-label">Time</label>
+                <input type="time" name="auto_scrape_time" class="dash-input" value="{{ display_scrape_time }}">
               </div>
             </div>
           </div>
 
-          <button name="save_auto" class="btn-accent" style="padding:7px 18px;font-size:.8125rem;font-weight:600;border:none;border-radius:8px;cursor:pointer;color:#fff;align-self:flex-start;">
-            Save Settings
-          </button>
+          <!-- Lock picks -->
+          <div>
+            <p class="dash-section">Lock Picks</p>
+            <div style="display:flex;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;overflow:hidden;margin-bottom:10px;">
+              <label style="flex:1;display:flex;align-items:center;justify-content:center;padding:7px;cursor:pointer;font-size:.8rem;font-weight:600;gap:6px;">
+                <input type="radio" name="lock_mode" value="offset" {% if settings.lock_mode != 'manual' %}checked{% endif %} onchange="setLockMode('offset')" style="display:none;">
+                <span id="lm-offset-tab" style="color:{% if settings.lock_mode != 'manual' %}var(--text){% else %}var(--muted){% endif %};">Before kickoff</span>
+              </label>
+              <label style="flex:1;display:flex;align-items:center;justify-content:center;padding:7px;cursor:pointer;font-size:.8rem;font-weight:600;gap:6px;border-left:1px solid var(--border2);">
+                <input type="radio" name="lock_mode" value="manual" {% if settings.lock_mode == 'manual' %}checked{% endif %} onchange="setLockMode('manual')" style="display:none;">
+                <span id="lm-manual-tab" style="color:{% if settings.lock_mode == 'manual' %}var(--text){% else %}var(--muted){% endif %};">Specific time</span>
+              </label>
+            </div>
+            <div id="lock-offset-fields" style="display:{% if settings.lock_mode != 'manual' %}block{% else %}none{% endif %};">
+              <label class="dash-label">Minutes before kickoff</label>
+              <input name="auto_lock_offset_minutes" type="number" min="0" max="240" value="{{ settings.auto_lock_offset_minutes }}" class="dash-input">
+            </div>
+            <div id="lock-manual-fields" style="display:{% if settings.lock_mode == 'manual' %}block{% else %}none{% endif %};">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+                <div>
+                  <label class="dash-label">Day</label>
+                  <select name="auto_lock_weekday" class="dash-input">
+                    {% for val, name in weekday_options %}
+                    <option value="{{ val }}" {% if display_lock_weekday == val %}selected{% endif %}>{{ name }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div>
+                  <label class="dash-label">Time</label>
+                  <input type="time" name="auto_lock_time" class="dash-input" value="{{ display_lock_time }}">
+                </div>
+              </div>
+              {% if settings.auto_lock_dt %}<p style="font-size:.67rem;color:var(--muted);margin:4px 0 0;">Next: <span data-utc-full="{{ settings.auto_lock_dt|date:'c' }}">{{ settings.auto_lock_dt|date:"M j, g:i A" }}</span> · repeats weekly</p>{% endif %}
+            </div>
+          </div>
+
+          <!-- Misc -->
+          <div>
+            <p class="dash-section">Other</p>
+            <label class="dash-label">Tick interval (sec)</label>
+            <input name="tick_interval" type="number" min="10" max="3600" value="{{ settings.tick_interval }}" class="dash-input">
+          </div>
+
+          <button name="save_auto" class="action-btn indigo" style="padding:10px 0;">Save Settings</button>
         </form>
 
-      </div>
-    </div>
+    </div><!-- end panel-auto -->
+    </div><!-- end panel grid -->
 
+    </div><!-- end card -->
   </div><!-- end left -->
 
   <!-- RIGHT: games (sticky, scrollable) -->
   <div class="dash-right">
-    <div class="card" style="overflow:hidden;">
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface);z-index:1;">
-        <p style="font-weight:700;color:var(--text);margin:0;font-size:.9375rem;">Week {{ settings.week }} Games</p>
-        <span style="font-size:.72rem;color:var(--muted);">{{ games|length }} game{{ games|length|pluralize }}{% if all_graded and games %} · all graded{% endif %}</span>
-      </div>
+      <p style="font-size:.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;padding:10px 16px 6px;margin:0;">Week {{ settings.week }} · <span id="game-counter">{{ games|length }} game{{ games|length|pluralize }}</span>{% if all_graded and games %} · all graded{% endif %}</p>
+      <div id="game-list-inner">
       {% if games %}
       {% for game in games %}
       <div class="game-row" id="game-row-{{ game.id }}" data-graded="{% if game.graded %}1{% else %}0{% endif %}">
-        <div style="flex:1;min-width:0;">
-          <div style="display:flex;align-items:baseline;gap:3px;flex-wrap:wrap;">
-            <span style="font-size:.8125rem;font-weight:700;color:var(--text);">{{ game.team1_abbrev }}</span>
-            <span style="font-size:.65rem;color:var(--muted);margin-right:2px;">({{ game.points1 }})</span>
-            <span style="font-size:.72rem;color:var(--muted2);">vs</span>
-            <span style="font-size:.8125rem;font-weight:700;color:var(--text);margin-left:2px;">{{ game.team2_abbrev }}</span>
-            <span style="font-size:.65rem;color:var(--muted);">({{ game.points2 }})</span>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div class="grade-toggle" data-game-id="{{ game.id }}" data-winner="{{ game.winner }}">
+            <div class="grade-knob"></div>
+            <div class="grade-opt" data-val="team1"><span class="grade-name">{{ game.team1_abbrev }}</span><span class="grade-pts">{{ game.points1 }}</span></div>
+            <div class="grade-opt" data-val="tie"><span class="grade-name">TIE</span></div>
+            <div class="grade-opt" data-val="team2"><span class="grade-name">{{ game.team2_abbrev }}</span><span class="grade-pts">{{ game.points2 }}</span></div>
           </div>
-          {% if game.date %}<p style="font-size:.67rem;color:var(--muted);margin:1px 0 0;">{{ game.date }}</p>{% endif %}
+          <button type="button" class="danger-btn" style="width:auto;padding:2px 8px;font-size:.7rem;" onclick="deleteGame('{{ game.id }}', this)">✕</button>
         </div>
-        <div class="grade-toggle" data-game-id="{{ game.id }}" data-winner="{{ game.winner }}">
-          <div class="grade-knob"></div>
-          <div class="grade-opt" data-val="team1">{{ game.team1_abbrev }}</div>
-          <div class="grade-opt" data-val="tie">TIE</div>
-          <div class="grade-opt" data-val="team2">{{ game.team2_abbrev }}</div>
-        </div>
-        <form method="post" onsubmit="return confirm('Delete?')">{% csrf_token %}
-          <input type="hidden" name="game_id" value="{{ game.id }}">
-          <button name="delete_game" class="danger-btn" style="width:auto;padding:2px 8px;font-size:.7rem;">✕</button>
-        </form>
+        <p style="font-size:.65rem;color:var(--muted);margin:0;padding:0 4px;text-align:{% if game.home_team %}right{% else %}left{% endif %};">{% if game.game_dt_iso %}<span data-utc-full="{{ game.game_dt_iso }}">{{ game.game_dt_iso }}</span> · {% endif %}@ {% if game.home_team %}{{ game.team2_abbrev }}{% else %}{{ game.team1_abbrev }}{% endif %}</p>
       </div>
       {% endfor %}
       {% else %}
-      <div style="padding:40px;text-align:center;color:var(--muted);font-size:.875rem;">No games yet.</div>
+      <div class="no-games-msg" style="padding:40px;text-align:center;color:var(--muted);font-size:.875rem;">No games yet.</div>
       {% endif %}
-    </div>
+      </div>
   </div>
 
 </div>
+
+<!-- Add Game Modal -->
+<div id="add-game-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);backdrop-filter:blur(4px);z-index:200;align-items:center;justify-content:center;">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:32px 32px 28px;width:min(600px,calc(100vw - 32px));max-height:90vh;overflow-y:auto;position:relative;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
+      <h2 style="font-size:1rem;font-weight:800;color:var(--text);margin:0;">Add Game</h2>
+      <button onclick="closeAddGameModal()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.5rem;line-height:1;padding:0 4px;">&times;</button>
+    </div>
+    <div id="add-game-success" style="display:none;background:rgba(5,150,105,.15);border:1px solid rgba(5,150,105,.35);border-radius:8px;padding:8px 12px;margin-bottom:14px;font-size:.8125rem;color:#34d399;font-weight:600;"></div>
+    <div id="add-game-error" style="display:none;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);border-radius:8px;padding:8px 12px;margin-bottom:14px;font-size:.8125rem;color:#f87171;font-weight:600;"></div>
+    <form id="add-game-form" style="display:flex;flex-direction:column;gap:10px;">
+      {% csrf_token %}
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div>
+          <label class="dash-label">Underdog</label>
+          <select name="underdog" class="dash-input">
+            {% for val, label in add_game_form.underdog.field.choices %}<option value="{{ val }}">{{ label }}</option>{% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="dash-label">Favorite</label>
+          <select name="favorite" class="dash-input">
+            {% for val, label in add_game_form.favorite.field.choices %}<option value="{{ val }}">{{ label }}</option>{% endfor %}
+          </select>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:8px;align-items:end;">
+        <div>
+          <label class="dash-label">Dog ML</label>
+          <input name="underdog_moneyline" type="number" placeholder="150" class="dash-input">
+        </div>
+        <div>
+          <label class="dash-label">Fav ML</label>
+          <input name="favorite_moneyline" type="number" placeholder="-150" class="dash-input">
+        </div>
+        <div>
+          <label class="dash-label">Date & Time</label>
+          <input name="game_dt" type="datetime-local" class="dash-input">
+          <input type="hidden" name="game_dt_offset" id="game-dt-offset">
+        </div>
+        <label style="display:flex;align-items:center;gap:4px;font-size:.8rem;color:var(--muted2);cursor:pointer;padding-bottom:4px;white-space:nowrap;">
+          <input name="favorite_is_home" type="checkbox" checked> Home
+        </label>
+      </div>
+      <button type="submit" class="action-btn indigo" style="margin-top:4px;">Add Game</button>
+    </form>
+  </div>
+</div>
+
 {% endblock %}
 
 {% block extra_js %}
 <script>
-(function() {
-  try {
-    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    const sel = document.getElementById('tz-select');
-    if (sel) for (let i = 0; i < sel.options.length; i++) {
-      if (sel.options[i].value === tz) { sel.selectedIndex = i; break; }
-    }
-  } catch(e) {}
-})();
+function setLockMode(mode) {
+  document.getElementById('lock-offset-fields').style.display = mode === 'offset' ? 'block' : 'none';
+  document.getElementById('lock-manual-fields').style.display = mode === 'manual' ? 'block' : 'none';
+  document.getElementById('lm-offset-tab').style.color = mode === 'offset' ? 'var(--text)' : 'var(--muted)';
+  document.getElementById('lm-manual-tab').style.color = mode === 'manual' ? 'var(--text)' : 'var(--muted)';
+}
 
 function setMode(mode) {
-  const isAuto = mode === 'auto';
-  document.getElementById('panel-manual').style.display = isAuto ? 'none' : 'block';
-  document.getElementById('panel-auto').style.display   = isAuto ? 'block' : 'none';
+  var isAuto = mode === 'auto';
+  var manual = document.getElementById('panel-manual');
+  var auto   = document.getElementById('panel-auto');
+  manual.style.opacity       = isAuto ? '0' : '1';
+  manual.style.pointerEvents = isAuto ? 'none' : '';
+  auto.style.opacity         = isAuto ? '1' : '0';
+  auto.style.pointerEvents   = isAuto ? '' : 'none';
   document.getElementById('btn-auto').classList.toggle('active', isAuto);
   document.getElementById('btn-manual').classList.toggle('active', !isAuto);
   localStorage.setItem('dashMode', mode);
 }
-const saved = localStorage.getItem('dashMode');
+var saved = localStorage.getItem('dashMode');
 setMode(saved || ({{ settings.auto_enabled|yesno:"true,false" }} ? 'auto' : 'manual'));
 
-function generateRecap() {
-  const btn = document.getElementById('recap-btn');
-  const status = document.getElementById('recap-status');
-  btn.disabled = true; btn.textContent = 'Generating…';
-  status.style.display = 'none';
-  fetch("{% url 'main:generate_recap' %}", { method:'POST', headers:{'X-CSRFToken':'{{ csrf_token }}'} })
-  .then(r => r.json())
-  .then(d => {
-    if (d.recap) {
-      btn.textContent = 'Recap Generated ✓'; btn.style.background = '#059669';
-      status.textContent = 'Saved — visible on home page.'; status.style.display = 'block';
-    } else {
-      btn.textContent = 'Generate Recap'; btn.disabled = false;
-      status.textContent = 'Error: ' + (d.error || 'unknown'); status.style.display = 'block';
-    }
-  })
-  .catch(() => { btn.textContent = 'Generate Recap'; btn.disabled = false; status.textContent = 'Network error.'; status.style.display = 'block'; });
+// FLIP animation
+function flipToBottom(el, container) {
+  if (!el || !container) return;
+  var children = Array.from(container.children);
+  var before = children.map(function(c) { return c.getBoundingClientRect().top; });
+  container.appendChild(el);
+  Array.from(container.children).forEach(function(child) {
+    var oldIdx = children.indexOf(child);
+    var dy = (oldIdx === -1 ? before[before.length - 1] : before[oldIdx]) - child.getBoundingClientRect().top;
+    if (Math.abs(dy) < 1) return;
+    child.style.transition = 'none';
+    child.style.transform = 'translateY(' + dy + 'px)';
+    requestAnimationFrame(function() { requestAnimationFrame(function() {
+      child.style.transition = 'transform .4s cubic-bezier(.25,0,.2,1)';
+      child.style.transform = '';
+    }); });
+  });
 }
 
-// Three-way grade toggle
-(function() {
-  const WINNER_URL = "{% url 'main:ajax_set_winner' %}";
-  const CSRF = "{{ csrf_token }}";
-  const POSITIONS = {team1: '0%', tie: '33.333%', team2: '66.666%'};
-  const INDICES   = {team1: 0,   tie: 1,          team2: 2};
+// Grade toggle
+var WINNER_URL = "{% url 'main:ajax_set_winner' %}";
+var CSRF = "{{ csrf_token }}";
+var POSITIONS   = {team1: '0%', tie: '33.333%', team2: '66.666%'};
+var INDICES     = {team1: 0, tie: 1, team2: 2};
+var KNOB_COLORS = {team1: '#3b82f6', tie: '', team2: '#ef4444'};
 
-  function applyKnob(toggle, winner) {
-    const knob = toggle.querySelector('.grade-knob');
-    const opts = toggle.querySelectorAll('.grade-opt');
-    if (winner && POSITIONS[winner] !== undefined) {
-      knob.style.opacity = '1';
-      knob.style.left = POSITIONS[winner];
-      opts.forEach((o, i) => o.classList.toggle('active', i === INDICES[winner]));
+function applyKnob(toggle, winner) {
+  var knob = toggle.querySelector('.grade-knob');
+  var opts = toggle.querySelectorAll('.grade-opt');
+  if (winner && POSITIONS[winner] !== undefined) {
+    var idx = INDICES[winner];
+    var color = KNOB_COLORS[winner];
+    knob.style.opacity = '1';
+    knob.style.left = POSITIONS[winner];
+    knob.style.background = color || '';
+    opts.forEach(function(o, i) {
+      var isActive = i === idx;
+      o.classList.toggle('active', isActive);
+      o.style.color = (isActive && color) ? '#fff' : '';
+      var pts = o.querySelector('.grade-pts');
+      if (pts) pts.style.color = (isActive && color) ? 'rgba(255,255,255,.6)' : '';
+    });
+  } else {
+    knob.style.opacity = '0';
+    knob.style.background = '';
+    opts.forEach(function(o) {
+      o.classList.remove('active');
+      o.style.color = '';
+      var pts = o.querySelector('.grade-pts');
+      if (pts) pts.style.color = '';
+    });
+  }
+}
+
+function initGradeToggle(toggle) {
+  applyKnob(toggle, toggle.dataset.winner);
+  toggle.querySelectorAll('.grade-opt').forEach(function(opt) {
+    opt.addEventListener('click', function() {
+      var gameId = toggle.dataset.gameId;
+      var prev   = toggle.dataset.winner;
+      var val    = opt.dataset.val;
+      var next   = (val === prev) ? '' : val;
+      toggle.dataset.winner = next;
+      applyKnob(toggle, next);
+      fetch(WINNER_URL, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': CSRF},
+        body: 'game_id=' + encodeURIComponent(gameId) + '&winner=' + encodeURIComponent(next)
+      })
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (!d.ok) { toggle.dataset.winner = prev; applyKnob(toggle, prev); return; }
+        var row = toggle.closest('.game-row');
+        var list = row && row.parentElement;
+        if (!list) return;
+        if (!prev && next) {
+          row.dataset.graded = '1';
+          flipToBottom(row, list);
+        } else if (prev && !next) {
+          var firstGraded = list.querySelector('.game-row[data-graded="1"]');
+          row.dataset.graded = '0';
+          if (firstGraded) list.insertBefore(row, firstGraded);
+          else list.prepend(row);
+        }
+      })
+      .catch(function() { toggle.dataset.winner = prev; applyKnob(toggle, prev); });
+    });
+  });
+}
+
+document.querySelectorAll('.grade-toggle').forEach(function(t) { initGradeToggle(t); });
+
+// Shared state for game counter
+var gameCount = {{ games|length }};
+var gameCounter = document.getElementById('game-counter');
+function updateGameCounter() {
+  if (gameCounter) gameCounter.textContent = gameCount + ' game' + (gameCount === 1 ? '' : 's');
+}
+
+// Delete single game via AJAX
+var DELETE_URL = "{% url 'main:ajax_delete_game' %}";
+function deleteGame(gameId, btn) {
+  btn.disabled = true;
+  fetch(DELETE_URL, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': CSRF},
+    body: 'game_id=' + encodeURIComponent(gameId)
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(d) {
+    if (d.ok) {
+      var row = btn.closest('.game-row');
+      if (row) row.remove();
+      gameCount--;
+      updateGameCounter();
+      var gl = document.getElementById('game-list-inner');
+      if (gl && !gl.querySelector('.game-row')) {
+        var msg = document.createElement('div');
+        msg.className = 'no-games-msg';
+        msg.style.cssText = 'padding:40px;text-align:center;color:var(--muted);font-size:.875rem;';
+        msg.textContent = 'No games yet.';
+        gl.appendChild(msg);
+      }
     } else {
-      knob.style.opacity = '0';
-      opts.forEach(o => o.classList.remove('active'));
+      btn.disabled = false;
     }
+  })
+  .catch(function() { btn.disabled = false; });
+}
+
+// Scrape settings popout
+function toggleScrapePopout(e) {
+  e.stopPropagation();
+  var pop = document.getElementById('scrape-popout');
+  pop.style.display = pop.style.display === 'none' ? 'block' : 'none';
+}
+function saveScrapeSettings() {
+  document.getElementById('sh-year').value = document.getElementById('sp-year').value;
+  document.getElementById('sh-week').value = document.getElementById('sp-week').value;
+  document.getElementById('sh-api').value  = document.getElementById('sp-api').value;
+  document.getElementById('scrape-popout').style.display = 'none';
+}
+document.addEventListener('click', function(e) {
+  var pop = document.getElementById('scrape-popout');
+  var btn = document.getElementById('scrape-gear-btn');
+  if (pop && pop.style.display !== 'none' && !pop.contains(e.target) && e.target !== btn) {
+    pop.style.display = 'none';
+  }
+});
+
+// Add Game Modal
+(function() {
+  var modal      = document.getElementById('add-game-modal');
+  var form       = document.getElementById('add-game-form');
+  var successEl  = document.getElementById('add-game-success');
+  var errorEl    = document.getElementById('add-game-error');
+  var gameList   = document.getElementById('game-list-inner');
+  var ADD_URL    = "{% url 'main:ajax_add_game' %}";
+
+  function esc(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
-  document.querySelectorAll('.grade-toggle').forEach(function(toggle) {
-    applyKnob(toggle, toggle.dataset.winner);
+  function makeGameRow(g) {
+    var align = g.home_team ? 'right' : 'left';
+    var homeAbbrev = g.home_team ? esc(g.team2_abbrev) : esc(g.team1_abbrev);
+    var dateStr = g.game_dt_iso ? '<span data-utc-full="' + esc(g.game_dt_iso) + '">' + esc(g.game_dt_iso) + '</span> · ' : '';
+    var row = document.createElement('div');
+    row.className = 'game-row';
+    row.id = 'game-row-' + g.id;
+    row.dataset.graded = '0';
+    row.innerHTML =
+      '<div style="display:flex;align-items:center;gap:8px;">' +
+        '<div class="grade-toggle" data-game-id="' + g.id + '" data-winner="">' +
+          '<div class="grade-knob"></div>' +
+          '<div class="grade-opt" data-val="team1"><span class="grade-name">' + esc(g.team1_abbrev) + '</span><span class="grade-pts">' + esc(g.points1) + '</span></div>' +
+          '<div class="grade-opt" data-val="tie"><span class="grade-name">TIE</span></div>' +
+          '<div class="grade-opt" data-val="team2"><span class="grade-name">' + esc(g.team2_abbrev) + '</span><span class="grade-pts">' + esc(g.points2) + '</span></div>' +
+        '</div>' +
+        '<button type="button" class="danger-btn" style="width:auto;padding:2px 8px;font-size:.7rem;" onclick="deleteGame(\'' + g.id + '\', this)">&#x2715;</button>' +
+      '</div>' +
+      '<p style="font-size:.65rem;color:var(--muted);margin:0;padding:0 4px;text-align:' + align + ';">' + dateStr + '@ ' + homeAbbrev + '</p>';
+    return row;
+  }
 
-    toggle.querySelectorAll('.grade-opt').forEach(function(opt) {
-      opt.addEventListener('click', function() {
-        const gameId = toggle.dataset.gameId;
-        const prev   = toggle.dataset.winner;
-        const val    = opt.dataset.val;
-        const next   = (val === prev) ? '' : val;
+  window.openAddGameModal = function() {
+    modal.style.display = 'flex';
+    successEl.style.display = 'none';
+    errorEl.style.display = 'none';
+    var off = document.getElementById('game-dt-offset');
+    if (off) off.value = new Date().getTimezoneOffset();
+  };
 
-        toggle.dataset.winner = next;
-        applyKnob(toggle, next);
+  window.closeAddGameModal = function() {
+    modal.style.display = 'none';
+    form.reset();
+    var cb = form.querySelector('[name="favorite_is_home"]');
+    if (cb) cb.checked = true;
+    successEl.style.display = 'none';
+    errorEl.style.display = 'none';
+  };
 
-        fetch(WINNER_URL, {
-          method: 'POST',
-          headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': CSRF},
-          body: 'game_id=' + encodeURIComponent(gameId) + '&winner=' + encodeURIComponent(next)
-        })
-        .then(function(r) { return r.json(); })
-        .then(function(d) {
-          if (!d.ok) {
-            toggle.dataset.winner = prev;
-            applyKnob(toggle, prev);
-            return;
-          }
-          var row = toggle.closest('.game-row');
-          if (!row) return;
-          var list = row.parentElement;
-          if (next) {
-            row.dataset.graded = '1';
-            list.appendChild(row);
-          } else {
-            row.dataset.graded = '0';
-            var firstGraded = list.querySelector('.game-row[data-graded="1"]');
-            if (firstGraded) list.insertBefore(row, firstGraded);
-            else list.prepend(row);
-          }
-        })
-        .catch(function() {
-          toggle.dataset.winner = prev;
-          applyKnob(toggle, prev);
-        });
-      });
+  modal.addEventListener('click', function(e) { if (e.target === modal) closeAddGameModal(); });
+  document.addEventListener('keydown', function(e) { if (e.key === 'Escape' && modal.style.display === 'flex') closeAddGameModal(); });
+
+  form.addEventListener('submit', function(e) {
+    e.preventDefault();
+    successEl.style.display = 'none';
+    errorEl.style.display = 'none';
+    var btn = form.querySelector('[type="submit"]');
+    btn.disabled = true;
+    btn.textContent = 'Adding…';
+
+    fetch(ADD_URL, {
+      method: 'POST',
+      body: new FormData(form),
+      headers: {'X-CSRFToken': CSRF}
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      btn.disabled = false;
+      btn.textContent = 'Add Game';
+      if (d.ok) {
+        successEl.textContent = 'Game added! Fill in another or close.';
+        successEl.style.display = 'block';
+        form.querySelector('[name="underdog_moneyline"]').value = '';
+        form.querySelector('[name="favorite_moneyline"]').value = '';
+        form.querySelector('[name="game_dt"]').value = '';
+        form.querySelector('[name="underdog"]').selectedIndex = 0;
+        form.querySelector('[name="favorite"]').selectedIndex = 0;
+        var cb = form.querySelector('[name="favorite_is_home"]');
+        if (cb) cb.checked = true;
+
+        var noMsg = gameList.querySelector('.no-games-msg');
+        if (noMsg) noMsg.remove();
+
+        var row = makeGameRow(d.game);
+        var firstGraded = gameList.querySelector('.game-row[data-graded="1"]');
+        if (firstGraded) gameList.insertBefore(row, firstGraded);
+        else gameList.appendChild(row);
+        initGradeToggle(row.querySelector('.grade-toggle'));
+        if (window.initUtcDates) initUtcDates(row);
+        gameCount++;
+        updateGameCounter();
+      } else {
+        var msgs = d.errors ? Object.values(d.errors).flat().join('; ') : 'Failed to add game.';
+        errorEl.textContent = msgs;
+        errorEl.style.display = 'block';
+      }
+    })
+    .catch(function() {
+      btn.disabled = false;
+      btn.textContent = 'Add Game';
+      errorEl.textContent = 'Network error.';
+      errorEl.style.display = 'block';
     });
   });
 })();

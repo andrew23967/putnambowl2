@@ -20,5 +20,7 @@ urlpatterns = [
     path('dashboard/bugs/', views.buglog, name='buglog'),
     path('dashboard/analytics/', views.secret_analytics, name='secret_analytics'),
     path('dashboard/generate-recap/', views.generate_recap, name='generate_recap'),
+    path('dashboard/picks/delete-game/', views.ajax_delete_game, name='ajax_delete_game'),
     path('dashboard/picks/set-winner/', views.ajax_set_winner, name='ajax_set_winner'),
+    path('dashboard/picks/add-game/', views.ajax_add_game, name='ajax_add_game'),
 ]

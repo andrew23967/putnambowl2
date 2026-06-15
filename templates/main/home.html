@@ -481,28 +481,45 @@
       </div>
       {% else %}
       <!-- Locked / graded display -->
-      <div style="display:flex;align-items:center;gap:5px;flex-wrap:nowrap;overflow:hidden;">
-        <span class="team-name {% if game.graded and game.winner == 'team1' %}winner{% endif %}" {% if pick and pick.choice == 'team1' %}style="text-decoration:underline;text-underline-offset:3px;text-decoration-thickness:1.5px;"{% endif %}>{{ game.team1_abbrev }}</span>
-        <span style="font-size:.6rem;color:var(--muted);">{{ game.points1 }}</span>
-        <span class="vs-sep">{% if game.graded %}{% if game.winner == 'team1' %}◀{% elif game.winner == 'team2' %}▶{% else %}T{% endif %}{% else %}vs{% endif %}</span>
-        <span style="font-size:.6rem;color:var(--muted);">{{ game.points2 }}</span>
-        <span class="team-name {% if game.graded and game.winner == 'team2' %}winner{% endif %}" {% if pick and pick.choice == 'team2' %}style="text-decoration:underline;text-underline-offset:3px;text-decoration-thickness:1.5px;"{% endif %}>{{ game.team2_abbrev }}</span>
-      </div>
-      {% endif %}
-      {% if not forloop.last %}
-      <div class="game-sep">
-        <div class="game-sep-line"></div>
-        <span class="game-sep-text">{% if game.date %}{{ game.date }} · {% endif %}@ {% if game.home_team %}{{ game.team2_abbrev }}{% else %}{{ game.team1_abbrev }}{% endif %}</span>
-      </div>
-      {% endif %}
-      {% if dist and settings.lock_picks %}
-      <div class="pick-dist" style="display:flex;align-items:center;justify-content:flex-end;gap:6px;margin-top:5px;">
-        <span style="font-size:.55rem;font-weight:700;color:#3b82f6;white-space:nowrap;">{{ game.team1_abbrev }} {{ dist.team1_pct }}%</span>
-        <div style="width:20px;height:20px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:conic-gradient(rgba(59,130,246,.8) 0% {{ dist.team1_pct }}%,rgba(239,68,68,.7) {{ dist.team1_pct }}% 100%);">
-          <div style="width:11px;height:11px;border-radius:50%;background:var(--surface2);"></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:4px;">
+        <div style="display:flex;align-items:center;gap:4px;">
+          <span class="team-name {% if game.graded and game.winner == 'team1' %}winner{% endif %}" style="font-size:.875rem;{% if pick and pick.choice == 'team1' %}text-decoration:underline;text-underline-offset:3px;text-decoration-thickness:1.5px;{% endif %}">{{ game.team1_abbrev }}</span>
+          <span style="font-size:.65rem;color:var(--muted);">{{ game.points1 }}</span>
         </div>
-        <span style="font-size:.55rem;font-weight:700;color:#ef4444;white-space:nowrap;">{{ dist.team2_pct }}% {{ game.team2_abbrev }}</span>
+        <span class="vs-sep">{% if game.graded %}{% if game.winner == 'team1' %}◀{% elif game.winner == 'team2' %}▶{% else %}T{% endif %}{% else %}vs{% endif %}</span>
+        <div style="display:flex;align-items:center;gap:4px;">
+          <span style="font-size:.65rem;color:var(--muted);">{{ game.points2 }}</span>
+          <span class="team-name {% if game.graded and game.winner == 'team2' %}winner{% endif %}" style="font-size:.875rem;{% if pick and pick.choice == 'team2' %}text-decoration:underline;text-underline-offset:3px;text-decoration-thickness:1.5px;{% endif %}">{{ game.team2_abbrev }}</span>
+        </div>
       </div>
+      {% endif %}
+      <div class="game-sep"><div class="game-sep-line"></div></div>
+      {% if settings.lock_picks %}
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:2px;">
+        {% if not game.home_team %}
+        <span class="game-sep-text">{% if game.game_dt_iso %}<span data-utc-full="{{ game.game_dt_iso }}">{{ game.game_dt_iso }}</span> · {% endif %}@ {{ game.team1_abbrev }}</span>
+        <div style="display:flex;align-items:center;gap:4px;">
+          {% if dist %}<span style="font-size:.5rem;font-weight:700;color:#3b82f6;white-space:nowrap;">{{ dist.team1_pct }}%</span>
+          <div style="width:14px;height:14px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:conic-gradient(rgba(59,130,246,.8) 0% {{ dist.team1_pct }}%,rgba(239,68,68,.7) {{ dist.team1_pct }}% 100%);"><div style="width:8px;height:8px;border-radius:50%;background:var(--surface2);"></div></div>
+          <span style="font-size:.5rem;font-weight:700;color:#ef4444;white-space:nowrap;">{{ dist.team2_pct }}%</span>{% endif %}
+          {% if game.graded and pick %}<span style="font-size:.75rem;{% if pick.choice == game.winner %}color:#22c55e;{% else %}color:#ef4444;{% endif %}">{% if pick.choice == game.winner %}✓{% else %}✗{% endif %}</span>{% endif %}
+        </div>
+        {% else %}
+        <div style="display:flex;align-items:center;gap:4px;">
+          {% if dist %}<span style="font-size:.5rem;font-weight:700;color:#3b82f6;white-space:nowrap;">{{ dist.team1_pct }}%</span>
+          <div style="width:14px;height:14px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:conic-gradient(rgba(59,130,246,.8) 0% {{ dist.team1_pct }}%,rgba(239,68,68,.7) {{ dist.team1_pct }}% 100%);"><div style="width:8px;height:8px;border-radius:50%;background:var(--surface2);"></div></div>
+          <span style="font-size:.5rem;font-weight:700;color:#ef4444;white-space:nowrap;">{{ dist.team2_pct }}%</span>{% endif %}
+          {% if game.graded and pick %}<span style="font-size:.75rem;{% if pick.choice == game.winner %}color:#22c55e;{% else %}color:#ef4444;{% endif %}">{% if pick.choice == game.winner %}✓{% else %}✗{% endif %}</span>{% endif %}
+        </div>
+        <span class="game-sep-text">{% if game.game_dt_iso %}<span data-utc-full="{{ game.game_dt_iso }}">{{ game.game_dt_iso }}</span> · {% endif %}@ {{ game.team2_abbrev }}</span>
+        {% endif %}
+      </div>
+      {% else %}
+      {% if game.game_dt_iso %}
+      <div style="display:flex;justify-content:{% if game.home_team %}flex-end{% else %}flex-start{% endif %};margin-top:2px;">
+        <span class="game-sep-text"><span data-utc-full="{{ game.game_dt_iso }}">{{ game.game_dt_iso }}</span> · @ {% if game.home_team %}{{ game.team2_abbrev }}{% else %}{{ game.team1_abbrev }}{% endif %}</span>
+      </div>
+      {% endif %}
       {% endif %}
     </div>
   </div>
@@ -609,7 +626,7 @@
           </div>
           <div class="pick-knob" style="{% if pick %}left:{% if pick.choice == 'team2' %}50%{% else %}3px{% endif %};{% else %}display:none;{% endif %}"></div>
         </div>
-        <p style="font-size:.45rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin:4px 0 0;text-align:{% if game.home_team %}right{% else %}left{% endif %};">@ {% if game.home_team %}{{ game.team2_abbrev }}{% else %}{{ game.team1_abbrev }}{% endif %}</p>
+        <p style="font-size:.45rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin:4px 0 0;text-align:{% if game.home_team %}right{% else %}left{% endif %};">{% if game.game_dt_iso %}<span data-utc-full="{{ game.game_dt_iso }}">{{ game.game_dt_iso }}</span> · {% endif %}@ {% if game.home_team %}{{ game.team2_abbrev }}{% else %}{{ game.team1_abbrev }}{% endif %}</p>
       </div>
       {% endwith %}{% endfor %}
     </div>
@@ -1098,6 +1115,7 @@ function openGamesExpand() {
     grid.style.gridTemplateColumns = 'repeat(4, 1fr)';
     grid.dataset.grouped = '1';
     initPickDrag(grid);
+    if (typeof initUtcDates === 'function') initUtcDates(grid);
   }
   modal.style.display = 'flex';
   document.body.style.overflow = 'hidden';

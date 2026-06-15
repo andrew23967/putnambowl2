@@ -94,18 +94,8 @@ def home(request, week=1):
     for game in games:
         if not game.graded:
             next_game = game
-            if game.date:
-                try:
-                    dt = datetime.strptime(game.date.strip(), "%m/%d, %I:%M %p")
-                    year = datetime.now().year
-                    dt = dt.replace(year=year)
-                    et = timezone(timedelta(hours=-5))  # ET (EST)
-                    dt_et = dt.replace(tzinfo=et)
-                    if dt_et.timestamp() < datetime.now(tz=timezone.utc).timestamp():
-                        dt_et = dt_et.replace(year=year + 1)
-                    next_game_ts = int(dt_et.timestamp() * 1000)
-                except (ValueError, AttributeError):
-                    pass
+            if game.game_dt:
+                next_game_ts = int(game.game_dt.timestamp() * 1000)
             break
     raw_dist = {}
     for p in Pick.objects.filter(game__in=games).values('game_id', 'choice'):
@@ -255,6 +245,56 @@ def ajax_save_pick(request):
         user=request.user, game=game,
         defaults={'choice': choice}
     )
+    return JsonResponse({'ok': True})
+
+
+@staff_member_required
+@require_POST
+def ajax_add_game(request):
+    settings = SiteSettings.get()
+    form = forms.GameForm(request.POST)
+    if not form.is_valid():
+        return JsonResponse({'ok': False, 'errors': dict(form.errors)})
+    d = form.cleaned_data
+    ug_ml = d.get('underdog_moneyline') or 0
+    fav_ml = d.get('favorite_moneyline') or 0
+    points2 = (_calculate_points(ug_ml, abs(fav_ml)) * settings.multiplier
+               if ug_ml and fav_ml else settings.multiplier)
+    raw_dt = d.get('game_dt')
+    if raw_dt:
+        from datetime import timedelta, timezone as _tz
+        offset_min = int(request.POST.get('game_dt_offset', 0))
+        game_dt_utc = (raw_dt + timedelta(minutes=offset_min)).replace(tzinfo=_tz.utc)
+    else:
+        game_dt_utc = None
+    game = Game.objects.create(
+        team1=d['underdog'],
+        team2=d['favorite'],
+        points1=float(settings.multiplier),
+        points2=points2,
+        home_team=d['favorite_is_home'],
+        game_dt=game_dt_utc,
+    )
+    return JsonResponse({'ok': True, 'game': {
+        'id': game.id,
+        'team1_abbrev': game.team1_abbrev,
+        'team2_abbrev': game.team2_abbrev,
+        'points1': game.points1,
+        'points2': game.points2,
+        'home_team': game.home_team,
+        'game_dt_iso': game.game_dt_iso,
+    }})
+
+
+@staff_member_required
+@require_POST
+def ajax_delete_game(request):
+    game_id = request.POST.get('game_id')
+    try:
+        game = Game.objects.get(id=game_id)
+    except Game.DoesNotExist:
+        return JsonResponse({'ok': False, 'error': 'Game not found'})
+    game.delete()
     return JsonResponse({'ok': True})
 
 
@@ -602,6 +642,14 @@ def accountdash(request):
 def pickdash(request):
     settings = SiteSettings.get()
 
+    if settings.auto_enabled:
+        try:
+            from .auto import auto_tick
+            auto_tick()
+            settings = SiteSettings.get()
+        except Exception:
+            pass
+
     if 'add_game' in request.POST:
         form = forms.GameForm(request.POST)
         if form.is_valid():
@@ -615,7 +663,7 @@ def pickdash(request):
                 points1=float(settings.multiplier),
                 points2=points2,
                 home_team=d['favorite_is_home'],
-                date=d.get('date', ''),
+                game_dt=None,
             )
             messages.success(request, 'Game added.')
 
@@ -647,8 +695,16 @@ def pickdash(request):
         settings.save()
 
     elif 'cycle_multiplier' in request.POST:
-        settings.multiplier = settings.multiplier * 2 if settings.multiplier < 4 else 1
+        old_mult = settings.multiplier
+        new_mult = old_mult * 2 if old_mult < 4 else 1
+        settings.multiplier = new_mult
         settings.save()
+        ratio = new_mult / old_mult
+        for game in Game.objects.all():
+            game.points1 = round(game.points1 * ratio, 2)
+            game.points2 = round(game.points2 * ratio, 2)
+            game.save()
+
 
     elif 'toggle_auto' in request.POST:
         settings.auto_enabled = not settings.auto_enabled
@@ -657,25 +713,49 @@ def pickdash(request):
     elif 'save_auto' in request.POST:
         try:
             from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
-            settings.auto_scrape_weekday = int(request.POST.get('auto_scrape_weekday', 1))
-            settings.auto_scrape_hour = int(request.POST.get('auto_scrape_hour', 9))
             settings.auto_lock_offset_minutes = int(request.POST.get('auto_lock_offset_minutes', 10))
             settings.tick_interval = max(10, int(request.POST.get('tick_interval', 300)))
+            lock_mode = request.POST.get('lock_mode', 'offset')
+            settings.lock_mode = lock_mode if lock_mode in ('offset', 'manual') else 'offset'
 
             tz_str = request.POST.get('tz', 'UTC')
             try:
                 tz = ZoneInfo(tz_str)
             except (ZoneInfoNotFoundError, KeyError):
                 tz = timezone.utc
+            settings.auto_tz = tz_str
 
-            def _parse_dt(val):
-                if not val:
-                    return None
-                local_dt = datetime.strptime(val, '%Y-%m-%dT%H:%M').replace(tzinfo=tz)
-                return local_dt.astimezone(timezone.utc)
+            # Convert local scrape weekday+time → UTC
+            time_str = request.POST.get('auto_scrape_time', '09:00')
+            try:
+                local_hour, local_minute = (int(x) for x in time_str.split(':')[:2])
+            except Exception:
+                local_hour, local_minute = 9, 0
+            local_weekday = int(request.POST.get('auto_scrape_weekday', 1))
+            offset_seconds = int(datetime.now(tz).utcoffset().total_seconds())
+            local_total_minutes = local_hour * 60 + local_minute
+            utc_total_minutes = local_total_minutes - offset_seconds // 60
+            settings.auto_scrape_hour = (utc_total_minutes // 60) % 24
+            settings.auto_scrape_minute = utc_total_minutes % 60
+            settings.auto_scrape_weekday = (local_weekday + utc_total_minutes // (60 * 24)) % 7
+            from .auto import _next_weekday_hour, _this_or_next_weekday_hour
+            settings.auto_scrape_dt = _this_or_next_weekday_hour(settings.auto_scrape_weekday, settings.auto_scrape_hour, settings.auto_scrape_minute)
 
-            settings.auto_scrape_dt = _parse_dt(request.POST.get('auto_scrape_dt', ''))
-            settings.auto_lock_dt = _parse_dt(request.POST.get('auto_lock_dt', ''))
+            if settings.lock_mode == 'manual':
+                lock_time_str = request.POST.get('auto_lock_time', '09:00')
+                lock_weekday = int(request.POST.get('auto_lock_weekday', 0))
+                try:
+                    lock_hour, lock_minute = (int(x) for x in lock_time_str.split(':')[:2])
+                except Exception:
+                    lock_hour, lock_minute = 9, 0
+                local_lock_minutes = lock_hour * 60 + lock_minute
+                utc_lock_minutes = local_lock_minutes - offset_seconds // 60
+                utc_lock_hour = (utc_lock_minutes // 60) % 24
+                utc_lock_minute = utc_lock_minutes % 60
+                utc_lock_weekday = (lock_weekday + utc_lock_minutes // (60 * 24)) % 7
+                settings.auto_lock_dt = _next_weekday_hour(utc_lock_weekday, utc_lock_hour, utc_lock_minute)
+            else:
+                settings.auto_lock_dt = None
             settings.save()
             tz_label = tz_str.replace('_', ' ')
             messages.success(request, f'Auto-pilot settings saved (times converted from {tz_label} to UTC).')
@@ -706,9 +786,16 @@ def pickdash(request):
             Game.objects.create(
                 team1=team1, team2=team2,
                 points1=float(settings.multiplier), points2=pts2,
-                home_team=g[4], game_id=game_id, date=g[6]
+                home_team=g[4], game_id=game_id, game_dt=g[6]
             )
             added += 1
+        from django.db.models import Min
+        from datetime import timedelta as _td2
+        first_dt = Game.objects.filter(game_dt__isnull=False).aggregate(Min('game_dt'))['game_dt__min']
+        settings.first_game_dt = first_dt
+        if first_dt and settings.lock_mode == 'offset' and settings.auto_lock_offset_minutes:
+            settings.auto_lock_dt = first_dt - _td2(minutes=settings.auto_lock_offset_minutes)
+        settings.save()
         messages.success(request, f'Scraped week {week}: {added} added, {dupes} skipped.')
 
     elif 'grade' in request.POST:
@@ -836,6 +923,32 @@ def pickdash(request):
     from .auto import WEEKDAY_NAMES
     weekday_options = list(WEEKDAY_NAMES.items())[:5]  # Mon–Fri only
 
+    # Convert stored UTC scrape weekday+hour → local for display
+    try:
+        from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+        _tz = ZoneInfo(settings.auto_tz or 'UTC')
+    except Exception:
+        _tz = timezone.utc
+    _now = datetime.now(_tz)
+    _offset_hours = int(_now.utcoffset().total_seconds() // 3600)
+    _utc_total_minutes = settings.auto_scrape_hour * 60 + getattr(settings, 'auto_scrape_minute', 0) + _offset_hours * 60
+    _display_hour = (_utc_total_minutes // 60) % 24
+    _display_minute = _utc_total_minutes % 60
+    display_scrape_time = f'{_display_hour:02d}:{_display_minute:02d}'
+    display_scrape_weekday = (settings.auto_scrape_weekday + _utc_total_minutes // (60 * 24)) % 7
+
+    from datetime import timedelta as _td
+    display_auto_lock_computed_dt = None
+    if settings.lock_mode == 'offset' and getattr(settings, 'first_game_dt', None):
+        display_auto_lock_computed_dt = settings.first_game_dt - _td(minutes=settings.auto_lock_offset_minutes)
+
+    display_lock_weekday = 0
+    display_lock_time = '09:00'
+    if settings.auto_lock_dt:
+        _lock_local = settings.auto_lock_dt.astimezone(_tz)
+        display_lock_weekday = _lock_local.weekday()
+        display_lock_time = _lock_local.strftime('%H:%M')
+
     return render(request, 'main/pickdash.html', {
         'add_game_form': forms.GameForm(),
         'save_season_form': save_season_form,
@@ -845,7 +958,11 @@ def pickdash(request):
         'api_options': [('nfl_data_py', 'NFL Data Py'), ('espn', 'ESPN API')],
         'scrape_year': default_scrape_year,
         'weekday_options': weekday_options,
-        'hour_options': list(range(24)),
+        'display_scrape_time': display_scrape_time,
+        'display_scrape_weekday': display_scrape_weekday,
+        'display_lock_weekday': display_lock_weekday,
+        'display_lock_time': display_lock_time,
+        'display_auto_lock_computed_dt': display_auto_lock_computed_dt,
     })
 
 

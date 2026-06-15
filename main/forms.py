@@ -8,8 +8,9 @@ class GameForm(forms.Form):
     underdog_moneyline = forms.FloatField(initial=0, required=False, label='Underdog ML (e.g. 150)')
     favorite_moneyline = forms.FloatField(initial=0, required=False, label='Favorite ML (e.g. -150)')
     favorite_is_home = forms.BooleanField(initial=True, required=False)
-    date = forms.CharField(max_length=50, required=False,
-                           widget=forms.TextInput(attrs={'type': 'date'}))
+    game_dt = forms.DateTimeField(required=False,
+                                  input_formats=['%Y-%m-%dT%H:%M', '%Y-%m-%d %H:%M'],
+                                  widget=forms.DateTimeInput(attrs={'type': 'datetime-local'}))
 
 
 class PreseasonForm(forms.Form):

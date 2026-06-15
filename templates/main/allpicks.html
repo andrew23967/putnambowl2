@@ -34,7 +34,7 @@
       <span class="text-xs text-slate-400">({{ gd.game.points2 }})</span>
     </div>
     <div class="flex items-center gap-3">
-      {% if gd.game.date %}<span class="text-xs text-slate-400">{{ gd.game.date }}</span>{% endif %}
+      {% if gd.game.game_dt_iso %}<span class="text-xs text-slate-400" data-utc-full="{{ gd.game.game_dt_iso }}">{{ gd.game.game_dt_iso }}</span>{% endif %}
       {% if gd.game.graded %}
         <span class="text-xs font-semibold px-2 py-0.5 rounded-full
           {% if gd.game.winner == 'tie' %}bg-slate-100 text-slate-600
