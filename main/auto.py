@@ -138,7 +138,7 @@ def do_scrape_and_publish(settings, year=None):
         added += 1
 
     first_dt = scrape_module.get_first_game_dt(week=settings.week, year=year)
-    settings.first_game_dt = first_dt
+    settings.first_game_dt = first_dt  # None is fine — auto_tick handles the fallback
     settings.publish = True
     settings.edit = False
     settings.save()

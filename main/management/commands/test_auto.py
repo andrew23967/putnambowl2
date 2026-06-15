@@ -15,8 +15,11 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         from django.contrib.auth.models import User
+        from django.db.models import Q
         from main.models import SiteSettings, Game, Pick
-        from main.auto import do_scrape_and_publish, do_lock_picks, do_grade, do_advance_week
+        from main.auto import do_lock_picks, do_grade, do_advance_week, _calculate_points
+        from main.teams import ABBREV_TO_TEAM
+        from main import scrape as scrape_module
 
         year = options['year']
         start_week = options['start_week']
@@ -42,9 +45,25 @@ class Command(BaseCommand):
             settings.refresh_from_db()
             self.stdout.write(f'\n=== Week {week} ({year}) ===')
 
-            # 1. Scrape + publish
+            # 1. Scrape + publish (skip get_first_game_dt — not needed for test timing)
             self.stdout.write('  Scraping...')
-            added = do_scrape_and_publish(settings, year=year)
+            games_data = scrape_module.scrape(week=week, api_type='espn', year=year)
+            added = 0
+            for g in games_data:
+                team1 = ABBREV_TO_TEAM.get(g[0], g[0])
+                team2 = ABBREV_TO_TEAM.get(g[1], g[1])
+                game_id = g[5]
+                if Game.objects.filter(Q(game_id=game_id) | Q(team1=team1, team2=team2)).exists():
+                    continue
+                ug_ml, fav_ml = g[2], g[3]
+                pts2 = (_calculate_points(ug_ml, abs(fav_ml)) * settings.multiplier
+                        if ug_ml and fav_ml else float(settings.multiplier))
+                Game.objects.create(team1=team1, team2=team2, points1=float(settings.multiplier),
+                                    points2=pts2, home_team=g[4], game_id=game_id, date=g[6])
+                added += 1
+            settings.publish = True
+            settings.edit = False
+            settings.save()
             self.stdout.write(f'  {added} games added.')
 
             # Random picks for all players

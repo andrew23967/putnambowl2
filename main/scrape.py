@@ -192,7 +192,7 @@ def get_first_game_dt(week, year=None):
     try:
         url = (f"https://site.api.espn.com/apis/site/v2/sports/football/nfl/"
                f"scoreboard?dates={season}&seasontype=2&week={week}")
-        data = requests.get(url, timeout=10).json()
+        data = requests.get(url, timeout=(5, 8)).json()
         earliest = None
         for event in data.get('events', []):
             comp = event.get('competitions', [{}])[0]
