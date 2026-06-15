@@ -117,8 +117,8 @@ def build_recap(week):
     return f"{p1_text}\n\n{p2_text}\n\n{p3_text}"
 
 
-def do_scrape_and_publish(settings):
-    year = _current_season_year()
+def do_scrape_and_publish(settings, year=None):
+    year = year or _current_season_year()
     games_data = scrape_module.scrape(week=settings.week, api_type=settings.grade_api, year=year)
     added = 0
     for g in games_data:
@@ -152,8 +152,8 @@ def do_lock_picks(settings):
     log.info('Auto: picks locked for week %s', settings.week)
 
 
-def do_grade(settings):
-    year = _current_season_year()
+def do_grade(settings, year=None):
+    year = year or _current_season_year()
     results = scrape_module.grade(week=settings.week, api_type=settings.grade_api, year=year)
     graded = 0
     for game in Game.objects.filter(graded=False):
