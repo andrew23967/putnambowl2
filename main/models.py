@@ -23,6 +23,8 @@ class SiteSettings(models.Model):
     tick_interval = models.IntegerField(default=300)        # seconds between ticks
     auto_scrape_dt = models.DateTimeField(null=True, blank=True)  # exact UTC time to scrape+publish
     auto_lock_dt = models.DateTimeField(null=True, blank=True)    # exact UTC time to lock picks
+    scrape_filter_from_day = models.IntegerField(null=True, blank=True)  # 0=Mon…6=Sun, None=no filter
+    scrape_filter_to_day = models.IntegerField(null=True, blank=True)
 
     class Meta:
         verbose_name = 'Site Settings'

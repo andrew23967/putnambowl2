@@ -738,6 +738,11 @@ def pickdash(request):
             settings.auto_scrape_hour = (utc_total_minutes // 60) % 24
             settings.auto_scrape_minute = utc_total_minutes % 60
             settings.auto_scrape_weekday = (local_weekday + utc_total_minutes // (60 * 24)) % 7
+            from_day = request.POST.get('scrape_filter_from_day', '')
+            to_day = request.POST.get('scrape_filter_to_day', '')
+            settings.scrape_filter_from_day = int(from_day) if from_day != '' else None
+            settings.scrape_filter_to_day = int(to_day) if to_day != '' else None
+
             from .auto import _next_weekday_hour, _this_or_next_weekday_hour
             settings.auto_scrape_dt = _this_or_next_weekday_hour(settings.auto_scrape_weekday, settings.auto_scrape_hour, settings.auto_scrape_minute)
 
@@ -922,6 +927,7 @@ def pickdash(request):
 
     from .auto import WEEKDAY_NAMES
     weekday_options = list(WEEKDAY_NAMES.items())[:5]  # Mon–Fri only
+    weekday_options_all = list(WEEKDAY_NAMES.items())   # All 7 days for filter
 
     # Convert stored UTC scrape weekday+hour → local for display
     try:
@@ -958,6 +964,7 @@ def pickdash(request):
         'api_options': [('nfl_data_py', 'NFL Data Py'), ('espn', 'ESPN API')],
         'scrape_year': default_scrape_year,
         'weekday_options': weekday_options,
+        'weekday_options_all': weekday_options_all,
         'display_scrape_time': display_scrape_time,
         'display_scrape_weekday': display_scrape_weekday,
         'display_lock_weekday': display_lock_weekday,

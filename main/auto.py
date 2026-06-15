@@ -136,11 +136,32 @@ def build_recap(week):
     return f"{p1_text}\n\n{p2_text}\n\n{p3_text}"
 
 
+def _game_day_in_filter(game_dt, from_day, to_day, tz_str='UTC'):
+    if from_day is None or to_day is None:
+        return True
+    if game_dt is None:
+        return True
+    try:
+        from zoneinfo import ZoneInfo
+        tz = ZoneInfo(tz_str or 'UTC')
+    except Exception:
+        tz = timezone.utc
+    day = game_dt.astimezone(tz).weekday()
+    if from_day <= to_day:
+        return from_day <= day <= to_day
+    return day >= from_day or day <= to_day
+
+
 def do_scrape_and_publish(settings, year=None):
     year = year or _current_season_year()
     games_data = scrape_module.scrape(week=settings.week, api_type=settings.grade_api, year=year)
+    from_day = settings.scrape_filter_from_day
+    to_day = settings.scrape_filter_to_day
     added = 0
     for g in games_data:
+        game_dt = g[6]
+        if not _game_day_in_filter(game_dt, from_day, to_day, settings.auto_tz):
+            continue
         team1 = ABBREV_TO_TEAM.get(g[0], g[0])
         team2 = ABBREV_TO_TEAM.get(g[1], g[1])
         game_id = g[5]
@@ -152,7 +173,7 @@ def do_scrape_and_publish(settings, year=None):
         Game.objects.create(
             team1=team1, team2=team2,
             points1=float(settings.multiplier), points2=pts2,
-            home_team=g[4], game_id=game_id, game_dt=g[6]
+            home_team=g[4], game_id=game_id, game_dt=game_dt
         )
         added += 1
 

@@ -375,6 +375,32 @@
             </div>
           </div>
 
+          <!-- Scrape filter -->
+          <div>
+            <p class="dash-section">Game Day Filter</p>
+            <p style="font-size:.67rem;color:var(--muted);margin:0 0 8px;">Only add games that fall on days within this range. Leave blank to include all days.</p>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+              <div>
+                <label class="dash-label">From</label>
+                <select name="scrape_filter_from_day" class="dash-input">
+                  <option value="">All</option>
+                  {% for val, name in weekday_options_all %}
+                  <option value="{{ val }}" {% if settings.scrape_filter_from_day == val %}selected{% endif %}>{{ name }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div>
+                <label class="dash-label">To</label>
+                <select name="scrape_filter_to_day" class="dash-input">
+                  <option value="">All</option>
+                  {% for val, name in weekday_options_all %}
+                  <option value="{{ val }}" {% if settings.scrape_filter_to_day == val %}selected{% endif %}>{{ name }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+            </div>
+          </div>
+
           <!-- Lock picks -->
           <div>
             <p class="dash-section">Lock Picks</p>
