@@ -1,18 +1,20 @@
 import time
+import random
 from django.core.management.base import BaseCommand
 
 
 class Command(BaseCommand):
-    help = 'Rapid-fire test of auto-pilot using historical data (default: 2024, weeks 1-3, 30s delays).'
+    help = 'Rapid-fire test of auto-pilot using historical data (default: 2024, weeks 1-3, 10s delays).'
 
     def add_arguments(self, parser):
         parser.add_argument('--year', type=int, default=2024)
         parser.add_argument('--start-week', type=int, default=1)
         parser.add_argument('--end-week', type=int, default=3)
-        parser.add_argument('--lock-delay', type=int, default=30, help='Seconds before locking picks')
-        parser.add_argument('--grade-delay', type=int, default=30, help='Seconds before grading')
+        parser.add_argument('--lock-delay', type=int, default=10, help='Seconds before locking picks')
+        parser.add_argument('--grade-delay', type=int, default=10, help='Seconds before grading')
 
     def handle(self, *args, **options):
+        from django.contrib.auth.models import User
         from main.models import SiteSettings, Game, Pick
         from main.auto import do_scrape_and_publish, do_lock_picks, do_grade, do_advance_week
 
@@ -43,7 +45,18 @@ class Command(BaseCommand):
             # 1. Scrape + publish
             self.stdout.write('  Scraping...')
             added = do_scrape_and_publish(settings, year=year)
-            self.stdout.write(f'  {added} games added. Waiting {lock_delay}s to lock picks...')
+            self.stdout.write(f'  {added} games added.')
+
+            # Random picks for all players
+            players = User.objects.filter(is_active=True)
+            games = list(Game.objects.all())
+            pick_count = 0
+            for player in players:
+                for game in games:
+                    choice = random.choice(['team1', 'team2'])
+                    Pick.objects.get_or_create(user=player, game=game, defaults={'choice': choice})
+                    pick_count += 1
+            self.stdout.write(f'  {pick_count} random picks made. Waiting {lock_delay}s to lock...')
 
             # 2. Lock picks
             time.sleep(lock_delay)
