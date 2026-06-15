@@ -104,10 +104,12 @@ Write the recap now. Plain text only, no markdown, no headers."""
         from django.conf import settings as django_settings
         api_key = getattr(django_settings, 'GEMINI_API_KEY', '')
         if api_key:
-            import google.generativeai as genai
-            genai.configure(api_key=api_key)
-            model = genai.GenerativeModel('gemini-2.0-flash')
-            response = model.generate_content(prompt)
+            from google import genai
+            client = genai.Client(api_key=api_key)
+            response = client.models.generate_content(
+                model='gemini-2.0-flash',
+                contents=prompt,
+            )
             recap = response.text.strip()
             log.info('Gemini recap generated for week %s', week)
             return recap
