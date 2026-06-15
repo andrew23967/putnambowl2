@@ -107,7 +107,7 @@ Write the recap now. Plain text only, no markdown, no headers."""
             from google import genai
             client = genai.Client(api_key=api_key)
             response = client.models.generate_content(
-                model='gemini-2.5-flash',
+                model='gemini-3.5-flash',
                 contents=prompt,
             )
             recap = response.text.strip()
