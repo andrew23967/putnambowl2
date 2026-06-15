@@ -92,12 +92,7 @@ LOGIN_URL = '/login/'
 LOGIN_REDIRECT_URL = '/home/1/'
 LOGOUT_REDIRECT_URL = '/login/'
 
-# ── Email (Gmail SMTP) ──────────────────────────────────────────────────────
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = 'smtp.gmail.com'
-EMAIL_PORT = 587
-EMAIL_USE_TLS = True
-EMAIL_HOST_USER = env('EMAIL_HOST_USER', default='')
-EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD', default='')
-DEFAULT_FROM_EMAIL = env('EMAIL_HOST_USER', default='')
+# ── Email (Resend) ──────────────────────────────────────────────────────────
+RESEND_API_KEY = env('RESEND_API_KEY', default='')
+RESEND_FROM = env('RESEND_FROM', default='onboarding@resend.dev')
 SITE_URL = env('SITE_URL', default='http://localhost:8000')

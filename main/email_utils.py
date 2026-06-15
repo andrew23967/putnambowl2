@@ -2,7 +2,6 @@ import logging
 import threading
 from datetime import datetime, timezone
 
-from django.core.mail import send_mail
 from django.conf import settings as django_settings
 from django.contrib.auth.models import User
 
@@ -10,7 +9,6 @@ log = logging.getLogger(__name__)
 
 
 def _format_lock_delta(lock_dt):
-    """Return human-readable time until lock_dt, e.g. '2 days 4 hours'."""
     now = datetime.now(timezone.utc)
     delta = lock_dt - now
     if delta.total_seconds() <= 0:
@@ -30,7 +28,6 @@ def _format_lock_delta(lock_dt):
 
 
 def _format_lock_dt(lock_dt, tz_str='UTC'):
-    """Return lock time as readable local string, e.g. 'Sunday at 11:00 AM ET'."""
     try:
         from zoneinfo import ZoneInfo
         tz = ZoneInfo(tz_str or 'UTC')
@@ -38,14 +35,18 @@ def _format_lock_dt(lock_dt, tz_str='UTC'):
         tz = timezone.utc
     local = lock_dt.astimezone(tz)
     tz_label = tz_str.replace('_', ' ').split('/')[-1] if tz_str else 'UTC'
-    return local.strftime(f'%A at %-I:%M %p') + f' {tz_label}'
+    hour = local.hour % 12 or 12
+    minute = local.strftime('%M')
+    ampm = 'AM' if local.hour < 12 else 'PM'
+    return f'{local.strftime("%A")} at {hour}:{minute} {ampm} {tz_label}'
 
 
 def send_picks_published_email(site_settings):
     """Send weekly picks-live notification to all non-bot users with an email address."""
+    api_key = getattr(django_settings, 'RESEND_API_KEY', '')
     print(f'[email] send_picks_published_email called, week={site_settings.week}', flush=True)
-    if not django_settings.EMAIL_HOST_USER:
-        print('[email] EMAIL_HOST_USER not set — skipping.', flush=True)
+    if not api_key:
+        print('[email] RESEND_API_KEY not set — skipping.', flush=True)
         return
 
     recipients = list(
@@ -61,9 +62,9 @@ def send_picks_published_email(site_settings):
 
     week = site_settings.week
     site_url = getattr(django_settings, 'SITE_URL', 'http://localhost:8000')
+    from_email = getattr(django_settings, 'RESEND_FROM', 'onboarding@resend.dev')
     picks_url = f'{site_url}/picks/'
 
-    # Lock time info
     lock_line = ''
     if site_settings.auto_lock_dt:
         time_left = _format_lock_delta(site_settings.auto_lock_dt)
@@ -72,7 +73,6 @@ def send_picks_published_email(site_settings):
     elif site_settings.first_game_dt:
         lock_line = 'Picks lock before the first kickoff.\n'
 
-    # Previous week recap
     recap_section = ''
     if site_settings.weekly_recap:
         recap_section = f'\n── Last Week ─────────────────────────────────\n\n{site_settings.weekly_recap}\n'
@@ -88,14 +88,15 @@ def send_picks_published_email(site_settings):
 
     def _send():
         try:
+            import resend
+            resend.api_key = api_key
             print(f'[email] attempting send to {recipients}', flush=True)
-            send_mail(
-                subject=subject,
-                message=body,
-                from_email=django_settings.DEFAULT_FROM_EMAIL,
-                recipient_list=recipients,
-                fail_silently=False,
-            )
+            resend.Emails.send({
+                'from': from_email,
+                'to': recipients,
+                'subject': subject,
+                'text': body,
+            })
             print(f'[email] sent OK to {len(recipients)} recipients for week {week}', flush=True)
         except Exception as e:
             print(f'[email] FAILED: {e}', flush=True)
