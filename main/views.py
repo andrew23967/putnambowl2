@@ -647,8 +647,8 @@ def pickdash(request):
             from .auto import auto_tick
             auto_tick()
             settings = SiteSettings.get()
-        except Exception:
-            pass
+        except Exception as _e:
+            print(f'[auto_tick error] {_e}', flush=True)
 
     if 'add_game' in request.POST:
         form = forms.GameForm(request.POST)
@@ -758,7 +758,7 @@ def pickdash(request):
                 utc_lock_hour = (utc_lock_minutes // 60) % 24
                 utc_lock_minute = utc_lock_minutes % 60
                 utc_lock_weekday = (lock_weekday + utc_lock_minutes // (60 * 24)) % 7
-                settings.auto_lock_dt = _next_weekday_hour(utc_lock_weekday, utc_lock_hour, utc_lock_minute)
+                settings.auto_lock_dt = _this_or_next_weekday_hour(utc_lock_weekday, utc_lock_hour, utc_lock_minute)
             else:
                 settings.auto_lock_dt = None
             settings.save()
