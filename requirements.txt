@@ -10,3 +10,4 @@ nfl-data-py==0.3.2
 pandas>=3.0
 numpy>=2.0
 resend
+google-generativeai

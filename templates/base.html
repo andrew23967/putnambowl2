@@ -220,7 +220,7 @@
     <div style="display:flex;align-items:center;height:52px;gap:8px;">
 
       <!-- Logo -->
-      <a href="{% url 'main:home' week=1 %}" style="display:flex;align-items:center;gap:8px;margin-right:16px;text-decoration:none;">
+      <a href="{% url 'main:home' week=settings.week %}" style="display:flex;align-items:center;gap:8px;margin-right:16px;text-decoration:none;">
         <svg width="24" height="27" viewBox="0 0 24 27" fill="none" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0;">
           <!-- Bowl body -->
           <path d="M3 7 C4 13 7 18 11 18 L13 18 C17 18 20 13 21 7 Z" fill="url(#pb-lg1)"/>
@@ -267,7 +267,7 @@
       {% if request.user.is_authenticated %}
       <!-- Desktop links -->
       <div class="hidden-mobile" style="display:flex;align-items:center;gap:2px;flex:1;">
-        <a href="{% url 'main:home' week=1 %}" class="nav-link">Home</a>
+        <a href="{% url 'main:home' week=settings.week %}" class="nav-link">Home</a>
         <a href="{% url 'main:rules' %}" class="nav-link">Rules</a>
         {% if request.user.is_staff %}
         <div class="nav-group" style="position:relative;">
@@ -328,7 +328,7 @@
   {% if request.user.is_authenticated %}
   <div id="mobile-menu" style="border-top:1px solid var(--border);padding:8px 16px 12px;">
     <div style="display:flex;flex-direction:column;gap:2px;">
-      <a href="{% url 'main:home' week=1 %}" class="nav-link">Home</a>
+      <a href="{% url 'main:home' week=settings.week %}" class="nav-link">Home</a>
       <a href="{% url 'main:rules' %}" class="nav-link">Rules</a>
       {% if request.user.is_staff %}
       <div style="height:1px;background:var(--border);margin:4px 0;"></div>

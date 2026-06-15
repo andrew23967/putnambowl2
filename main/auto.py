@@ -51,7 +51,7 @@ def _this_or_next_weekday_hour(weekday, hour, minute=0):
 
 
 def build_recap(week):
-    """Generate recap text for the given week. Returns string or None if no history."""
+    """Generate recap text for the given week using Gemini. Falls back to template if unavailable."""
     try:
         hist = History.objects.get(week=week)
     except History.DoesNotExist:
@@ -67,73 +67,65 @@ def build_recap(week):
     if not ranked:
         return None
 
-    winner_name = ranked[0][0]
-    winner_pts = ranked[0][1]
-    total_players = len(ranked)
-    league_avg = round(sum(s for _, s in ranked) / max(total_players, 1), 1)
-    last_place_name = ranked[-1][0]
-    last_place_pts = ranked[-1][1]
+    # Build a structured summary to feed to Gemini
+    league_avg = round(sum(s for _, s in ranked) / len(ranked), 1)
+    standings_str = '\n'.join(f'{i+1}. {name}: {pts} pts' for i, (name, pts) in enumerate(ranked))
+
+    game_lines = []
+    for g in games_data:
+        winner_key = g.get('winner')
+        t1, t2 = g.get('team1', ''), g.get('team2', '')
+        p1, p2 = g.get('points1', 0), g.get('points2', 0)
+        winner = t1 if winner_key == 'team1' else (t2 if winner_key == 'team2' else 'Tie')
+        picks = ', '.join(
+            f"{u}→{'team1' if pd.get('pick')=='team1' else 'team2'}"
+            for u, pd in g.get('player_picks', {}).items()
+        )
+        game_lines.append(f'{t1} ({p1}pts) vs {t2} ({p2}pts) — winner: {winner} | picks: {picks}')
+
+    games_str = '\n'.join(game_lines)
+
+    prompt = f"""You are the commissioner of a private NFL pick'em fantasy league called PutnamBowl.
+Write a short, punchy weekly recap for Week {week}. Keep it 3 short paragraphs. Be witty and direct — call people out by name, celebrate the winner, mock the loser a bit. No fluff, no filler.
+
+Week {week} results:
+
+Standings (points earned this week):
+{standings_str}
+
+League average: {league_avg} pts
+
+Games:
+{games_str}
+
+Write the recap now. Plain text only, no markdown, no headers."""
+
+    try:
+        from django.conf import settings as django_settings
+        api_key = getattr(django_settings, 'GEMINI_API_KEY', '')
+        if api_key:
+            import google.generativeai as genai
+            genai.configure(api_key=api_key)
+            model = genai.GenerativeModel('gemini-2.0-flash')
+            response = model.generate_content(prompt)
+            recap = response.text.strip()
+            log.info('Gemini recap generated for week %s', week)
+            return recap
+    except Exception as e:
+        log.error('Gemini recap failed: %s', e)
+        print(f'[recap] Gemini failed: {e}', flush=True)
+
+    # Fallback to template-based recap
+    winner_name, winner_pts = ranked[0]
+    last_place_name, last_place_pts = ranked[-1]
     second_name = ranked[1][0] if len(ranked) > 1 else None
     second_pts = ranked[1][1] if len(ranked) > 1 else 0
 
-    upsets, locks = [], []
-    for g in games_data:
-        w = g.get('winner')
-        p1, p2 = g.get('points1', 0), g.get('points2', 0)
-        t1, t2 = g.get('team1', ''), g.get('team2', '')
-        if w == 'team2' and p2 > p1 * 1.5:
-            upsets.append((t2, t1, p2))
-        elif w == 'team1' and p1 > p2 * 1.5:
-            upsets.append((t1, t2, p1))
-        elif w == 'team1' and p1 <= p2:
-            locks.append((t1, t2))
-        elif w == 'team2' and p2 <= p1:
-            locks.append((t2, t1))
-
-    biggest_upset = max(upsets, key=lambda x: x[2]) if upsets else None
-    burned = []
-    if biggest_upset:
-        upset_winner, upset_loser, _ = biggest_upset
-        for g in games_data:
-            t1, t2 = g.get('team1', ''), g.get('team2', '')
-            if upset_winner in (t1, t2):
-                loser_choice = 'team1' if upset_winner == t2 else 'team2'
-                for u, pd in g.get('player_picks', {}).items():
-                    if pd.get('pick') == loser_choice:
-                        burned.append(u)
-
-    p1_text = (
-        f"Week {week} is in the books. {winner_name} took the week with {winner_pts} points"
-        + (f", edging out {second_name} who finished with {second_pts}" if second_name else "")
-        + f". The league average was {league_avg} points — if you're reading this hoping it was higher, it wasn't."
-    )
-
-    if upsets:
-        upset_strs = [f"{w} over {l} ({pts} pts on the table)" for w, l, pts in upsets]
-        p2_text = (
-            f"The week had {'an upset' if len(upsets) == 1 else f'{len(upsets)} upsets'} worth noting: "
-            + "; ".join(upset_strs) + ". "
-            + (f"Anyone who had {biggest_upset[1]} in that spot is probably still thinking about it. "
-               if biggest_upset else "")
-            + (f"That includes {', '.join(burned)}, who learned the hard way." if burned else "")
-        )
-    else:
-        chalk_strs = [f"{w} over {l}" for w, l in locks[:3]]
-        p2_text = (
-            "Chalk week — the favorites mostly held. "
-            + (f"Results like {', '.join(chalk_strs)} kept things predictable. " if chalk_strs else "")
-            + "When the favorites win every game it separates the people who actually did research from the ones who just picked their gut."
-        )
-
-    p3_text = (
-        f"{last_place_name} finished last this week with {last_place_pts} points"
-        + (f", which is {round(league_avg - last_place_pts, 1)} below average" if last_place_pts < league_avg else "")
-        + ". "
-        + "The standings are always one good week away from a shakeup, so nobody's safe. "
-        + "New picks drop soon — don't blow it."
-    )
-
-    return f"{p1_text}\n\n{p2_text}\n\n{p3_text}"
+    p1 = (f"Week {week} is in the books. {winner_name} took the week with {winner_pts} points"
+          + (f", edging out {second_name} who finished with {second_pts}" if second_name else "")
+          + f". League average was {league_avg} points.")
+    p2 = f"{last_place_name} finished last with {last_place_pts} points. Better luck next week."
+    return f"{p1}\n\n{p2}"
 
 
 def _game_day_in_filter(game_dt, from_day, to_day, tz_str='UTC'):

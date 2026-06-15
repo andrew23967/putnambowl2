@@ -10,23 +10,23 @@ from main.models import SiteSettings, SeasonRecord
 
 def register(request):
     if request.user.is_authenticated:
-        return redirect('main:home', week=1)
+        return redirect('main:home', week=SiteSettings.get().week)
     form = RegisterForm(request.POST or None)
     if form.is_valid():
         user = form.save()
         login(request, user)
-        return redirect('main:home', week=1)
+        return redirect('main:home', week=SiteSettings.get().week)
     return render(request, 'accounts/register.html', {'form': form})
 
 
 def login_view(request):
     if request.user.is_authenticated:
-        return redirect('main:home', week=1)
+        return redirect('main:home', week=SiteSettings.get().week)
     form = AuthenticationForm(data=request.POST or None)
     if request.method == 'POST' and form.is_valid():
         user = form.get_user()
         login(request, user)
-        return redirect('main:home', week=1)
+        return redirect('main:home', week=SiteSettings.get().week)
     return render(request, 'accounts/login.html', {'form': form})
 
 

@@ -89,10 +89,11 @@ STORAGES = {
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 LOGIN_URL = '/login/'
-LOGIN_REDIRECT_URL = '/home/1/'
+LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/login/'
 
 # ── Email (Resend) ──────────────────────────────────────────────────────────
 RESEND_API_KEY = env('RESEND_API_KEY', default='')
 RESEND_FROM = env('RESEND_FROM', default='onboarding@resend.dev')
 SITE_URL = env('SITE_URL', default='http://localhost:8000')
+GEMINI_API_KEY = env('GEMINI_API_KEY', default='')

@@ -170,8 +170,13 @@
   [data-theme="light"] #chart-toggle,
   [data-theme="light"] #analytics-toggle { border-color: rgba(0,0,0,.12) !important; background: rgba(0,0,0,.012) !important; }
   [data-theme="light"] #toggle-pill,
-  [data-theme="light"] #analytics-pill { background: #fff !important; border-color: rgba(0,0,0,.14) !important; }
+  [data-theme="light"] #analytics-pill { background: #edf0f3 !important; border-color: rgba(0,0,0,.1) !important; }
   [data-theme="light"] .vs-sep { color: var(--muted); }
+  [data-theme="light"] #week-slider { background: rgba(0,0,0,.15); }
+  [data-theme="light"] #week-slider::-webkit-slider-thumb { background: rgba(0,0,0,.5); border-color: rgba(0,0,0,.2); }
+  [data-theme="light"] #week-slider::-moz-range-thumb { background: rgba(0,0,0,.5); border-color: rgba(0,0,0,.2); }
+  [data-theme="light"] #week-slider::-moz-range-track { background: rgba(0,0,0,.15); }
+  [data-theme="light"] #week-slider::-moz-range-progress { background: rgba(0,0,0,.3); }
   [data-theme="light"] .game-sep-line { background: rgba(0,0,0,.07); }
   [data-theme="light"] .dist-bar { background: rgba(0,0,0,.07); }
   [data-theme="light"] #games-track, [data-theme="light"] #lb-track { background: rgba(0,0,0,.07); }
@@ -1303,8 +1308,10 @@ function mobTab(tab){
   function updateFill(){
     const min=+slider.min,max=+slider.max,val=+slider.value;
     const pct=max>min?((val-min)/(max-min))*100:0;
+    const isLight=document.documentElement.dataset.theme==='light';
     const fill=`color-mix(in srgb,${accentColor} 55%,transparent)`;
-    slider.style.background=`linear-gradient(to right,${fill} 0%,${fill} ${pct}%,rgba(255,255,255,.07) ${pct}%,rgba(255,255,255,.07) 100%)`;
+    const track=isLight?'rgba(0,0,0,.15)':'rgba(255,255,255,.07)';
+    slider.style.background=`linear-gradient(to right,${fill} 0%,${fill} ${pct}%,${track} ${pct}%,${track} 100%)`;
   }
   updateFill();
   slider.addEventListener('input',()=>{ label.textContent='W'+slider.value; updateFill(); });
