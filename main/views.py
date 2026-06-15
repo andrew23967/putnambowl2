@@ -888,6 +888,7 @@ def pickdash(request):
                 p.profile.score += 10
             p.save()
 
+        completed_week = settings.week
         Pick.objects.all().delete()
         Game.objects.all().delete()
         settings.week += 1
@@ -895,7 +896,17 @@ def pickdash(request):
         settings.publish = False
         settings.edit = True
         settings.lock_picks = False
+        settings.first_game_dt = None
+        settings.auto_lock_dt = None
         settings.save()
+
+        from .auto import build_recap
+        recap = build_recap(completed_week)
+        if recap:
+            settings.refresh_from_db()
+            settings.weekly_recap = recap
+            settings.save()
+
         messages.success(request, f'Advanced to week {settings.week}.')
 
     elif 'newseason' in request.POST:
