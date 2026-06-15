@@ -258,6 +258,23 @@ def ajax_save_pick(request):
     return JsonResponse({'ok': True})
 
 
+@staff_member_required
+@require_POST
+def ajax_set_winner(request):
+    game_id = request.POST.get('game_id')
+    winner = request.POST.get('winner', '')
+    if winner not in ('team1', 'tie', 'team2', ''):
+        return JsonResponse({'ok': False, 'error': 'Invalid winner'})
+    try:
+        game = Game.objects.get(id=game_id)
+    except Game.DoesNotExist:
+        return JsonResponse({'ok': False, 'error': 'Game not found'})
+    game.winner = winner
+    game.graded = bool(winner)
+    game.save()
+    return JsonResponse({'ok': True})
+
+
 @login_required
 def pickform(request):
     settings = SiteSettings.get()
@@ -629,10 +646,6 @@ def pickdash(request):
             settings.edit = False
         settings.save()
 
-    elif 'toggle_edit' in request.POST:
-        settings.edit = not settings.edit
-        settings.save()
-
     elif 'cycle_multiplier' in request.POST:
         settings.multiplier = settings.multiplier * 2 if settings.multiplier < 4 else 1
         settings.save()
@@ -643,20 +656,29 @@ def pickdash(request):
 
     elif 'save_auto' in request.POST:
         try:
+            from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
             settings.auto_scrape_weekday = int(request.POST.get('auto_scrape_weekday', 1))
             settings.auto_scrape_hour = int(request.POST.get('auto_scrape_hour', 9))
             settings.auto_lock_offset_minutes = int(request.POST.get('auto_lock_offset_minutes', 10))
             settings.tick_interval = max(10, int(request.POST.get('tick_interval', 300)))
 
+            tz_str = request.POST.get('tz', 'UTC')
+            try:
+                tz = ZoneInfo(tz_str)
+            except (ZoneInfoNotFoundError, KeyError):
+                tz = timezone.utc
+
             def _parse_dt(val):
                 if not val:
                     return None
-                return datetime.strptime(val, '%Y-%m-%dT%H:%M').replace(tzinfo=timezone.utc)
+                local_dt = datetime.strptime(val, '%Y-%m-%dT%H:%M').replace(tzinfo=tz)
+                return local_dt.astimezone(timezone.utc)
 
             settings.auto_scrape_dt = _parse_dt(request.POST.get('auto_scrape_dt', ''))
             settings.auto_lock_dt = _parse_dt(request.POST.get('auto_lock_dt', ''))
             settings.save()
-            messages.success(request, 'Auto-pilot settings saved.')
+            tz_label = tz_str.replace('_', ' ')
+            messages.success(request, f'Auto-pilot settings saved (times converted from {tz_label} to UTC).')
         except (ValueError, TypeError) as e:
             messages.error(request, f'Invalid auto-pilot settings: {e}')
 
@@ -804,7 +826,7 @@ def pickdash(request):
         settings.save()
         messages.success(request, 'New season started.')
 
-    games = Game.objects.all()
+    games = Game.objects.order_by('graded', 'id')
     all_graded = all(g.graded for g in games) if games else False
     save_season_form = forms.SaveSeasonForm()
     from datetime import date as _date

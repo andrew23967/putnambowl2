@@ -1,297 +1,611 @@
 {% extends 'base.html' %}
 {% block title %}Pick Dashboard — PutnamBowl{% endblock %}
+
+{% block extra_head %}
+<style>
+  .dash-input {
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    color: var(--text);
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: .8125rem;
+    width: 100%;
+    outline: none;
+    transition: border-color .15s;
+  }
+  .dash-input:focus { border-color: var(--accent); }
+  .dash-input option { background: var(--surface); color: var(--text); }
+  .dash-label {
+    display: block;
+    font-size: .72rem;
+    font-weight: 500;
+    color: var(--muted2);
+    margin-bottom: 3px;
+  }
+  .dash-section {
+    font-size: .65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .07em;
+    color: var(--muted);
+    margin: 0 0 8px;
+  }
+  .mode-tab {
+    padding: 5px 14px;
+    font-size: .8125rem;
+    font-weight: 600;
+    border-radius: 7px;
+    cursor: pointer;
+    border: none;
+    transition: background .15s, color .15s, box-shadow .15s;
+    background: transparent;
+    color: var(--muted2);
+  }
+  .mode-tab.active {
+    background: var(--surface);
+    color: var(--text);
+    box-shadow: 0 1px 4px rgba(0,0,0,.2);
+  }
+  .ctrl-btn {
+    padding: 6px 14px;
+    font-size: .8125rem;
+    font-weight: 600;
+    border-radius: 8px;
+    border: 1px solid var(--border2);
+    cursor: pointer;
+    transition: background .15s, color .15s;
+    background: var(--surface2);
+    color: var(--muted2);
+    white-space: nowrap;
+  }
+  .ctrl-btn:hover { background: var(--surface); color: var(--text); }
+  .ctrl-btn.on-amber { background: rgba(245,158,11,.15); border-color: rgba(245,158,11,.4); color: #fbbf24; }
+  .ctrl-btn.on-red   { background: rgba(239,68,68,.15);  border-color: rgba(239,68,68,.4);  color: #f87171; }
+  .ctrl-btn.on-violet{ background: rgba(139,92,246,.18); border-color: rgba(139,92,246,.5); color: #a78bfa; }
+  .next-card {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+  }
+  .next-card.active-card {
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 8%, var(--surface2));
+  }
+  .action-btn {
+    padding: 7px 0;
+    font-size: .8125rem;
+    font-weight: 600;
+    border-radius: 8px;
+    width: 100%;
+    cursor: pointer;
+    border: none;
+    color: #fff;
+    transition: filter .15s;
+  }
+  .action-btn:hover { filter: brightness(1.12); }
+  .action-btn.indigo  { background: #4f46e5; }
+  .action-btn.emerald { background: #059669; }
+  .action-btn.slate   { background: #1e293b; }
+  .action-btn.violet  { background: #7c3aed; }
+  .action-btn.red     { background: #dc2626; }
+  .danger-btn {
+    padding: 7px 0; font-size: .8125rem; font-weight: 600; border-radius: 8px;
+    width: 100%; cursor: pointer; background: transparent;
+    border: 1px solid rgba(239,68,68,.35); color: #f87171; transition: background .15s;
+  }
+  .danger-btn:hover { background: rgba(239,68,68,.1); }
+  hr.dash-hr { border: none; border-top: 1px solid var(--border); margin: 12px 0; }
+
+  /* Two-column page layout — left controls, right games */
+  .dash-layout {
+    display: grid;
+    grid-template-columns: 380px 1fr;
+    gap: 16px;
+    align-items: start;
+  }
+  .dash-right {
+    position: sticky;
+    top: 68px;
+    max-height: calc(100vh - 84px);
+    overflow-y: auto;
+    border-radius: 12px;
+  }
+  .dash-right::-webkit-scrollbar { width: 4px; }
+  .dash-right::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 4px; }
+
+  /* Collapse to single column only on phones */
+  @media (max-width: 600px) {
+    .dash-layout { grid-template-columns: 1fr; }
+    .dash-right { position: static; max-height: none; }
+  }
+
+  /* Game rows */
+  .game-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  /* Three-way grade toggle */
+  .grade-toggle {
+    position: relative;
+    display: flex;
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-radius: 999px;
+    padding: 2px;
+    cursor: pointer;
+    flex-shrink: 0;
+    min-width: 138px;
+  }
+  .grade-knob {
+    position: absolute;
+    top: 2px; bottom: 2px; left: 0;
+    width: 33.333%;
+    background: var(--surface);
+    border-radius: 999px;
+    box-shadow: 0 1px 5px rgba(0,0,0,.28);
+    transition: left .18s cubic-bezier(.4,0,.2,1), opacity .15s;
+    pointer-events: none;
+  }
+  .grade-opt {
+    flex: 1;
+    text-align: center;
+    font-size: .68rem;
+    font-weight: 700;
+    padding: 4px 2px;
+    border-radius: 999px;
+    position: relative;
+    z-index: 1;
+    color: var(--muted);
+    transition: color .15s;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    letter-spacing: .01em;
+  }
+  .grade-opt.active { color: var(--text); }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="mb-6 flex items-center justify-between">
+
+<!-- Header -->
+<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;flex-wrap:wrap;">
   <div>
-    <h1 class="text-xl font-bold text-slate-900">Pick Dashboard</h1>
-    <p class="text-slate-500 text-sm">Week {{ settings.week }} — manage games and settings.</p>
+    <h1 style="font-size:1.15rem;font-weight:800;color:var(--text);margin:0 0 2px;">Pick Dashboard</h1>
+    <p style="font-size:.8rem;color:var(--muted2);margin:0;">Week {{ settings.week }}</p>
   </div>
-  <!-- Status pills -->
-  <div class="flex gap-2 flex-wrap justify-end">
-    <form method="post">{% csrf_token %}
-      <button name="toggle_publish" class="px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all
-        {% if settings.publish %}bg-amber-100 border-amber-300 text-amber-800 hover:bg-amber-200{% else %}bg-slate-100 border-slate-200 text-slate-600 hover:bg-slate-200{% endif %}">
-        Publish {% if settings.publish %}ON{% else %}OFF{% endif %}
-      </button>
-    </form>
-    <form method="post">{% csrf_token %}
-      <button name="toggle_lock" class="px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all
-        {% if settings.lock_picks %}bg-red-100 border-red-300 text-red-700 hover:bg-red-200{% else %}bg-slate-100 border-slate-200 text-slate-600 hover:bg-slate-200{% endif %}">
-        Picks Locked {% if settings.lock_picks %}ON{% else %}OFF{% endif %}
-      </button>
-    </form>
-    <form method="post">{% csrf_token %}
-      <button name="toggle_edit" class="px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all
-        {% if settings.edit %}bg-emerald-100 border-emerald-300 text-emerald-700 hover:bg-emerald-200{% else %}bg-slate-100 border-slate-200 text-slate-600 hover:bg-slate-200{% endif %}">
-        Edit {% if settings.edit %}ON{% else %}OFF{% endif %}
-      </button>
-    </form>
-    <form method="post">{% csrf_token %}
-      <button name="cycle_multiplier" class="px-3 py-1.5 text-xs font-semibold rounded-lg border bg-slate-100 border-slate-200 text-slate-600 hover:bg-slate-200">
-        {{ settings.multiplier }}× Multiplier
-      </button>
-    </form>
-    <form method="post">{% csrf_token %}
-      <button name="toggle_auto" class="px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all
-        {% if settings.auto_enabled %}bg-violet-100 border-violet-300 text-violet-800 hover:bg-violet-200{% else %}bg-slate-100 border-slate-200 text-slate-600 hover:bg-slate-200{% endif %}">
-        Auto-Pilot {% if settings.auto_enabled %}ON{% else %}OFF{% endif %}
-      </button>
-    </form>
+  <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+    <div style="display:flex;flex-wrap:wrap;gap:5px;">
+      <span class="tag {% if settings.publish %}tag-amber{% else %}tag-muted{% endif %}">Publish {% if settings.publish %}ON{% else %}OFF{% endif %}</span>
+      <span class="tag {% if settings.lock_picks %}tag-red{% else %}tag-muted{% endif %}">{% if settings.lock_picks %}Locked{% else %}Open{% endif %}</span>
+      <span class="tag tag-muted">{{ settings.multiplier }}×</span>
+      <span class="tag {% if settings.auto_enabled %}tag-accent{% else %}tag-muted{% endif %}">Auto {% if settings.auto_enabled %}ON{% else %}OFF{% endif %}</span>
+      <span class="tag tag-muted">{{ games|length }} game{{ games|length|pluralize }}</span>
+    </div>
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:3px;display:flex;gap:3px;flex-shrink:0;">
+      <button id="btn-manual" class="mode-tab" onclick="setMode('manual')">Manual</button>
+      <button id="btn-auto"   class="mode-tab" onclick="setMode('auto')">Auto-Pilot</button>
+    </div>
   </div>
 </div>
 
-<div class="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-6">
-  <!-- Add game -->
-  <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-    <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-4">Add Game</p>
-    <form method="post" class="space-y-3">
-      {% csrf_token %}
-      <div>
-        <label class="block text-xs font-medium text-slate-600 mb-1">Underdog</label>
-        <select name="underdog" class="w-full px-2.5 py-1.5 text-sm border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 ring-theme">
-          {% for val, label in add_game_form.underdog.field.choices %}
-          <option value="{{ val }}">{{ label }}</option>{% endfor %}
-        </select>
-      </div>
-      <div>
-        <label class="block text-xs font-medium text-slate-600 mb-1">Favorite</label>
-        <select name="favorite" class="w-full px-2.5 py-1.5 text-sm border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 ring-theme">
-          {% for val, label in add_game_form.favorite.field.choices %}
-          <option value="{{ val }}">{{ label }}</option>{% endfor %}
-        </select>
-      </div>
-      <div class="grid grid-cols-2 gap-2">
-        <div>
-          <label class="block text-xs font-medium text-slate-600 mb-1">Dog ML</label>
-          <input name="underdog_moneyline" type="number" placeholder="e.g. 150" class="w-full px-2.5 py-1.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 ring-theme">
-        </div>
-        <div>
-          <label class="block text-xs font-medium text-slate-600 mb-1">Fav ML</label>
-          <input name="favorite_moneyline" type="number" placeholder="e.g. -150" class="w-full px-2.5 py-1.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 ring-theme">
-        </div>
-      </div>
-      <div class="grid grid-cols-2 gap-2">
-        <div>
-          <label class="block text-xs font-medium text-slate-600 mb-1">Date</label>
-          <input name="date" type="date" class="w-full px-2.5 py-1.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 ring-theme">
-        </div>
-        <div class="flex items-end pb-1">
-          <label class="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
-            <input name="favorite_is_home" type="checkbox" checked class="rounded"> Fav is Home
-          </label>
-        </div>
-      </div>
-      <button name="add_game" type="submit" class="w-full py-2 text-xs font-semibold btn-theme rounded-lg">Add Game</button>
-    </form>
-  </div>
+<div class="dash-layout">
 
-  <!-- Scrape -->
-  <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-    <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-4">Scrape & Grade</p>
-    <form method="post" class="space-y-3">
-      {% csrf_token %}
-      <div class="grid grid-cols-2 gap-2">
-        <div>
-          <label class="block text-xs font-medium text-slate-600 mb-1">Year</label>
-          <input name="scrape_year" type="number" value="{{ scrape_year }}" class="w-full px-2.5 py-1.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 ring-theme">
-        </div>
-        <div>
-          <label class="block text-xs font-medium text-slate-600 mb-1">Week</label>
-          <input name="scrape_week" type="number" value="{{ settings.scrape_week }}" class="w-full px-2.5 py-1.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 ring-theme">
-        </div>
-      </div>
-      <div>
-        <label class="block text-xs font-medium text-slate-600 mb-1">API</label>
-        <select name="grade_api" class="w-full px-2.5 py-1.5 text-sm border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 ring-theme">
-          {% for val, label in api_options %}
-          <option value="{{ val }}" {% if val == settings.grade_api %}selected{% endif %}>{{ label }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <button name="scrape" type="submit" class="w-full py-2 text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg">Scrape Games</button>
-      <button name="grade" type="submit" class="w-full py-2 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg">Grade Results</button>
-    </form>
-  </div>
+  <!-- LEFT: single card with all controls -->
+  <div>
 
-  <!-- Week / Season controls -->
-  <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
-    <div>
-      <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Advance Week</p>
-      {% if all_graded %}
-      <form method="post" onsubmit="return confirm('Advance to week {{ settings.week|add:1 }}?')">
-        {% csrf_token %}
-        <button name="nextweek" class="w-full py-2 text-xs font-semibold bg-slate-900 hover:bg-slate-800 text-white rounded-lg">Next Week →</button>
-      </form>
+    <!-- ===== MANUAL MODE ===== -->
+    <div id="panel-manual">
+      <div class="card" style="padding:16px;display:flex;flex-direction:column;gap:0;">
+
+        <!-- Toggle controls -->
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;">
+          <form method="post">{% csrf_token %}
+            <button name="toggle_publish" class="ctrl-btn {% if settings.publish %}on-amber{% endif %}">
+              {% if settings.publish %}📢 Published{% else %}Publish{% endif %}
+            </button>
+          </form>
+          <form method="post">{% csrf_token %}
+            <button name="toggle_lock" class="ctrl-btn {% if settings.lock_picks %}on-red{% endif %}">
+              {% if settings.lock_picks %}🔒 Locked{% else %}Lock Picks{% endif %}
+            </button>
+          </form>
+          <form method="post">{% csrf_token %}
+            <button name="cycle_multiplier" class="ctrl-btn">{{ settings.multiplier }}× Multiplier</button>
+          </form>
+        </div>
+
+        <hr class="dash-hr" style="margin-top:0;">
+
+        <!-- Add Game -->
+        <p class="dash-section">Add Game</p>
+        <form method="post" style="display:flex;flex-direction:column;gap:7px;margin-bottom:14px;">
+          {% csrf_token %}
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+            <div>
+              <label class="dash-label">Underdog</label>
+              <select name="underdog" class="dash-input">
+                {% for val, label in add_game_form.underdog.field.choices %}
+                <option value="{{ val }}">{{ label }}</option>{% endfor %}
+              </select>
+            </div>
+            <div>
+              <label class="dash-label">Favorite</label>
+              <select name="favorite" class="dash-input">
+                {% for val, label in add_game_form.favorite.field.choices %}
+                <option value="{{ val }}">{{ label }}</option>{% endfor %}
+              </select>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:6px;align-items:end;">
+            <div>
+              <label class="dash-label">Dog ML</label>
+              <input name="underdog_moneyline" type="number" placeholder="150" class="dash-input">
+            </div>
+            <div>
+              <label class="dash-label">Fav ML</label>
+              <input name="favorite_moneyline" type="number" placeholder="-150" class="dash-input">
+            </div>
+            <div>
+              <label class="dash-label">Date</label>
+              <input name="date" type="date" class="dash-input">
+            </div>
+            <label style="display:flex;align-items:center;gap:4px;font-size:.8rem;color:var(--muted2);cursor:pointer;padding-bottom:2px;white-space:nowrap;">
+              <input name="favorite_is_home" type="checkbox" checked> Home
+            </label>
+          </div>
+          <button name="add_game" type="submit" class="btn-accent action-btn">Add Game</button>
+        </form>
+
+        <hr class="dash-hr" style="margin-top:0;">
+
+        <!-- Scrape & Grade -->
+        <p class="dash-section">Scrape & Grade</p>
+        <form method="post" style="display:flex;flex-direction:column;gap:7px;margin-bottom:14px;">
+          {% csrf_token %}
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;">
+            <div>
+              <label class="dash-label">Year</label>
+              <input name="scrape_year" type="number" value="{{ scrape_year }}" class="dash-input">
+            </div>
+            <div>
+              <label class="dash-label">Week</label>
+              <input name="scrape_week" type="number" value="{{ settings.scrape_week }}" class="dash-input">
+            </div>
+            <div>
+              <label class="dash-label">API</label>
+              <select name="grade_api" class="dash-input">
+                {% for val, label in api_options %}
+                <option value="{{ val }}" {% if val == settings.grade_api %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+            <button name="scrape" type="submit" class="action-btn indigo">Scrape</button>
+            <button name="grade" type="submit" class="action-btn emerald">Grade</button>
+          </div>
+        </form>
+
+        <hr class="dash-hr" style="margin-top:0;">
+
+        <!-- Advance + Recap -->
+        <p class="dash-section">Week</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:14px;">
+          {% if all_graded %}
+          <form method="post" onsubmit="return confirm('Advance to week {{ settings.week|add:1 }}?')">
+            {% csrf_token %}
+            <button name="nextweek" class="action-btn slate">Next Week →</button>
+          </form>
+          {% else %}
+          <button disabled class="action-btn slate" style="opacity:.4;cursor:not-allowed;">Next Week →</button>
+          {% endif %}
+          <button id="recap-btn" type="button" onclick="generateRecap()" class="action-btn violet">Generate Recap</button>
+        </div>
+        <p id="recap-status" style="font-size:.72rem;color:var(--muted);margin:-8px 0 10px;display:none;"></p>
+
+        <hr class="dash-hr" style="margin-top:0;">
+
+        <!-- Season / Danger -->
+        <p class="dash-section">Season</p>
+        <form method="post" onsubmit="return confirm('Save season and reset all scores?')" style="display:flex;flex-direction:column;gap:7px;margin-bottom:10px;">
+          {% csrf_token %}
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+            <input name="year" type="number" placeholder="Year (e.g. 2025)" class="dash-input">
+            <input name="notes" type="text" placeholder="Notes" class="dash-input">
+          </div>
+          <button name="newseason" class="action-btn red">Save Season & Reset</button>
+        </form>
+        <form method="post" onsubmit="return confirm('Delete all games?')">
+          {% csrf_token %}
+          <button name="delete_all_games" class="danger-btn">Delete All Games</button>
+        </form>
+
+      </div>
+    </div>
+
+    <!-- ===== AUTO MODE ===== -->
+    <div id="panel-auto">
+      <div class="card" style="padding:16px;display:flex;flex-direction:column;gap:0;">
+
+        <!-- Header + toggle -->
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+          <div>
+            <p style="font-size:.9375rem;font-weight:700;color:var(--text);margin:0 0 2px;">Auto-Pilot</p>
+            <p style="font-size:.75rem;color:var(--muted2);margin:0;">Ticks every {{ settings.tick_interval }}s</p>
+          </div>
+          <form method="post">{% csrf_token %}
+            <button name="toggle_auto" class="ctrl-btn {% if settings.auto_enabled %}on-violet{% endif %}">
+              {% if settings.auto_enabled %}ON{% else %}OFF{% endif %}
+            </button>
+          </form>
+        </div>
+
+        <!-- Status cards -->
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:14px;">
+          <div class="next-card {% if not settings.publish and settings.auto_scrape_dt %}active-card{% endif %}">
+            <p style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin:0 0 5px;">Scrape</p>
+            {% if settings.auto_scrape_dt %}
+              <p style="font-size:.8125rem;font-weight:700;color:var(--text);margin:0;">{{ settings.auto_scrape_dt|date:"M j" }}</p>
+              <p style="font-size:.72rem;color:var(--muted2);margin:0;">{{ settings.auto_scrape_dt|date:"g:i A" }} UTC</p>
+            {% else %}
+              <p style="font-size:.8rem;color:var(--muted);margin:0;">Not set</p>
+            {% endif %}
+            {% if settings.publish %}<p style="font-size:.65rem;font-weight:600;color:#fbbf24;margin:3px 0 0;">Done</p>{% endif %}
+          </div>
+          <div class="next-card {% if settings.publish and not settings.lock_picks and settings.auto_lock_dt %}active-card{% endif %}">
+            <p style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin:0 0 5px;">Lock</p>
+            {% if settings.auto_lock_dt %}
+              <p style="font-size:.8125rem;font-weight:700;color:var(--text);margin:0;">{{ settings.auto_lock_dt|date:"M j" }}</p>
+              <p style="font-size:.72rem;color:var(--muted2);margin:0;">{{ settings.auto_lock_dt|date:"g:i A" }} UTC</p>
+            {% else %}
+              <p style="font-size:.8rem;color:var(--muted);margin:0;">Not set</p>
+            {% endif %}
+            {% if settings.lock_picks %}<p style="font-size:.65rem;font-weight:600;color:#f87171;margin:3px 0 0;">Done</p>{% endif %}
+          </div>
+          <div class="next-card {% if settings.lock_picks %}active-card{% endif %}">
+            <p style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin:0 0 5px;">Grade</p>
+            {% if settings.lock_picks %}
+              <p style="font-size:.8125rem;font-weight:700;color:var(--text);margin:0;">Running</p>
+              <p style="font-size:.72rem;color:var(--muted2);margin:0;">{% if all_graded and games %}All done{% elif games %}In progress{% else %}Waiting{% endif %}</p>
+            {% else %}
+              <p style="font-size:.8rem;color:var(--muted);margin:0;">After lock</p>
+            {% endif %}
+          </div>
+        </div>
+
+        <hr class="dash-hr" style="margin-top:0;">
+
+        <form method="post" style="display:flex;flex-direction:column;gap:12px;">
+          {% csrf_token %}
+
+          <!-- Schedule -->
+          <div>
+            <p class="dash-section">Schedule</p>
+            <div style="margin-bottom:7px;">
+              <label class="dash-label">Timezone</label>
+              <select name="tz" id="tz-select" class="dash-input">
+                <option value="America/New_York">Eastern (ET)</option>
+                <option value="America/Chicago">Central (CT)</option>
+                <option value="America/Denver">Mountain (MT)</option>
+                <option value="America/Los_Angeles">Pacific (PT)</option>
+                <option value="America/Anchorage">Alaska (AKT)</option>
+                <option value="Pacific/Honolulu">Hawaii (HT)</option>
+                <option value="UTC">UTC</option>
+              </select>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+              <div>
+                <label class="dash-label">Scrape + publish at</label>
+                <input name="auto_scrape_dt" type="datetime-local" class="dash-input"
+                  value="{% if settings.auto_scrape_dt %}{{ settings.auto_scrape_dt|date:'Y-m-d\TH:i' }}{% endif %}">
+                {% if settings.auto_scrape_dt %}<p style="font-size:.67rem;color:var(--muted);margin:2px 0 0;">{{ settings.auto_scrape_dt|date:"M j g:i A" }} UTC</p>{% endif %}
+              </div>
+              <div>
+                <label class="dash-label">Lock picks at</label>
+                <input name="auto_lock_dt" type="datetime-local" class="dash-input"
+                  value="{% if settings.auto_lock_dt %}{{ settings.auto_lock_dt|date:'Y-m-d\TH:i' }}{% endif %}">
+                {% if settings.auto_lock_dt %}<p style="font-size:.67rem;color:var(--muted);margin:2px 0 0;">{{ settings.auto_lock_dt|date:"M j g:i A" }} UTC</p>{% endif %}
+              </div>
+            </div>
+          </div>
+
+          <!-- Recurring -->
+          <div>
+            <p class="dash-section">Recurring (after each advance)</p>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px;">
+              <div>
+                <label class="dash-label">Scrape day</label>
+                <select name="auto_scrape_weekday" class="dash-input">
+                  {% for val, name in weekday_options %}
+                  <option value="{{ val }}" {% if settings.auto_scrape_weekday == val %}selected{% endif %}>{{ name }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div>
+                <label class="dash-label">Scrape hour (UTC)</label>
+                <select name="auto_scrape_hour" class="dash-input">
+                  {% for h in hour_options %}
+                  <option value="{{ h }}" {% if settings.auto_scrape_hour == h %}selected{% endif %}>{{ h }}:00</option>
+                  {% endfor %}
+                </select>
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+              <div>
+                <label class="dash-label">Lock offset (min before kickoff)</label>
+                <input name="auto_lock_offset_minutes" type="number" min="0" max="120" value="{{ settings.auto_lock_offset_minutes }}" class="dash-input">
+              </div>
+              <div>
+                <label class="dash-label">Tick interval (sec)</label>
+                <input name="tick_interval" type="number" min="10" max="3600" value="{{ settings.tick_interval }}" class="dash-input">
+              </div>
+            </div>
+          </div>
+
+          <button name="save_auto" class="btn-accent" style="padding:7px 18px;font-size:.8125rem;font-weight:600;border:none;border-radius:8px;cursor:pointer;color:#fff;align-self:flex-start;">
+            Save Settings
+          </button>
+        </form>
+
+      </div>
+    </div>
+
+  </div><!-- end left -->
+
+  <!-- RIGHT: games (sticky, scrollable) -->
+  <div class="dash-right">
+    <div class="card" style="overflow:hidden;">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface);z-index:1;">
+        <p style="font-weight:700;color:var(--text);margin:0;font-size:.9375rem;">Week {{ settings.week }} Games</p>
+        <span style="font-size:.72rem;color:var(--muted);">{{ games|length }} game{{ games|length|pluralize }}{% if all_graded and games %} · all graded{% endif %}</span>
+      </div>
+      {% if games %}
+      {% for game in games %}
+      <div class="game-row" id="game-row-{{ game.id }}" data-graded="{% if game.graded %}1{% else %}0{% endif %}">
+        <div style="flex:1;min-width:0;">
+          <div style="display:flex;align-items:baseline;gap:3px;flex-wrap:wrap;">
+            <span style="font-size:.8125rem;font-weight:700;color:var(--text);">{{ game.team1_abbrev }}</span>
+            <span style="font-size:.65rem;color:var(--muted);margin-right:2px;">({{ game.points1 }})</span>
+            <span style="font-size:.72rem;color:var(--muted2);">vs</span>
+            <span style="font-size:.8125rem;font-weight:700;color:var(--text);margin-left:2px;">{{ game.team2_abbrev }}</span>
+            <span style="font-size:.65rem;color:var(--muted);">({{ game.points2 }})</span>
+          </div>
+          {% if game.date %}<p style="font-size:.67rem;color:var(--muted);margin:1px 0 0;">{{ game.date }}</p>{% endif %}
+        </div>
+        <div class="grade-toggle" data-game-id="{{ game.id }}" data-winner="{{ game.winner }}">
+          <div class="grade-knob"></div>
+          <div class="grade-opt" data-val="team1">{{ game.team1_abbrev }}</div>
+          <div class="grade-opt" data-val="tie">TIE</div>
+          <div class="grade-opt" data-val="team2">{{ game.team2_abbrev }}</div>
+        </div>
+        <form method="post" onsubmit="return confirm('Delete?')">{% csrf_token %}
+          <input type="hidden" name="game_id" value="{{ game.id }}">
+          <button name="delete_game" class="danger-btn" style="width:auto;padding:2px 8px;font-size:.7rem;">✕</button>
+        </form>
+      </div>
+      {% endfor %}
       {% else %}
-      <p class="text-xs text-slate-400">Grade all games before advancing.</p>
+      <div style="padding:40px;text-align:center;color:var(--muted);font-size:.875rem;">No games yet.</div>
       {% endif %}
-      <button id="recap-btn" type="button" onclick="generateRecap()" class="w-full mt-2 py-2 text-xs font-semibold bg-violet-600 hover:bg-violet-700 text-white rounded-lg transition-colors">
-        Generate Recap
-      </button>
-      <p id="recap-status" class="text-xs text-slate-400 mt-1 hidden"></p>
     </div>
-    <hr class="border-slate-100">
-    <div>
-      <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">New Season</p>
-      <form method="post" onsubmit="return confirm('Save season and reset all scores?')" class="space-y-2">
-        {% csrf_token %}
-        <input name="year" type="number" placeholder="Year (e.g. 2025)" class="w-full px-2.5 py-1.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 ring-theme">
-        <textarea name="notes" rows="2" placeholder="Notes (optional)" class="w-full px-2.5 py-1.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 ring-theme resize-none"></textarea>
-        <button name="newseason" class="w-full py-2 text-xs font-semibold bg-red-600 hover:bg-red-700 text-white rounded-lg">Save Season & Reset</button>
-      </form>
-    </div>
-    <form method="post" onsubmit="return confirm('Delete all games?')">
-      {% csrf_token %}
-      <button name="delete_all_games" class="w-full py-2 text-xs font-semibold border border-red-300 text-red-600 hover:bg-red-50 rounded-lg">Delete All Games</button>
-    </form>
   </div>
-</div>
 
-<!-- Automation settings -->
-<div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 mb-6">
-  <div class="flex items-center justify-between mb-4">
-    <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide">Auto-Pilot Settings</p>
-    <span class="text-xs font-semibold px-2 py-0.5 rounded-full {% if settings.auto_enabled %}bg-violet-100 text-violet-700{% else %}bg-slate-100 text-slate-500{% endif %}">
-      {% if settings.auto_enabled %}Active · ticking every {{ settings.tick_interval }}s{% else %}Off{% endif %}
-    </span>
-  </div>
-  <form method="post">
-    {% csrf_token %}
-    <!-- Scheduled times -->
-    <p class="text-xs font-medium text-slate-500 mb-2">Scheduled times (UTC — leave blank to clear)</p>
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
-      <div>
-        <label class="block text-xs font-medium text-slate-600 mb-1">Scrape + publish at</label>
-        <input name="auto_scrape_dt" type="datetime-local"
-          value="{% if settings.auto_scrape_dt %}{{ settings.auto_scrape_dt|date:'Y-m-d\TH:i' }}{% endif %}"
-          class="w-full px-2.5 py-1.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 ring-theme">
-        <p class="text-xs text-slate-400 mt-0.5">
-          {% if settings.auto_scrape_dt %}Scheduled: {{ settings.auto_scrape_dt|date:"D M j, g:i A" }} UTC{% else %}Not scheduled{% endif %}
-        </p>
-      </div>
-      <div>
-        <label class="block text-xs font-medium text-slate-600 mb-1">Lock picks at</label>
-        <input name="auto_lock_dt" type="datetime-local"
-          value="{% if settings.auto_lock_dt %}{{ settings.auto_lock_dt|date:'Y-m-d\TH:i' }}{% endif %}"
-          class="w-full px-2.5 py-1.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 ring-theme">
-        <p class="text-xs text-slate-400 mt-0.5">
-          {% if settings.auto_lock_dt %}Scheduled: {{ settings.auto_lock_dt|date:"D M j, g:i A" }} UTC{% else %}Not scheduled (auto-set after scrape){% endif %}
-        </p>
-      </div>
-      <div>
-        <label class="block text-xs font-medium text-slate-600 mb-1">Tick interval (seconds)</label>
-        <input name="tick_interval" type="number" min="10" max="3600" value="{{ settings.tick_interval }}"
-          class="w-full px-2.5 py-1.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 ring-theme">
-        <p class="text-xs text-slate-400 mt-0.5">Set to 60 for testing, 300 for production</p>
-      </div>
-    </div>
-    <!-- Recurring schedule (for auto-advance to recalculate next scrape) -->
-    <p class="text-xs font-medium text-slate-500 mb-2">Recurring schedule (used after each week advance)</p>
-    <div class="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
-      <div>
-        <label class="block text-xs font-medium text-slate-600 mb-1">Scrape day (UTC)</label>
-        <select name="auto_scrape_weekday" class="w-full px-2.5 py-1.5 text-sm border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 ring-theme">
-          {% for val, name in weekday_options %}
-          <option value="{{ val }}" {% if settings.auto_scrape_weekday == val %}selected{% endif %}>{{ name }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div>
-        <label class="block text-xs font-medium text-slate-600 mb-1">Scrape hour (UTC)</label>
-        <select name="auto_scrape_hour" class="w-full px-2.5 py-1.5 text-sm border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 ring-theme">
-          {% for h in hour_options %}
-          <option value="{{ h }}" {% if settings.auto_scrape_hour == h %}selected{% endif %}>{{ h }}:00</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div>
-        <label class="block text-xs font-medium text-slate-600 mb-1">Lock offset (min before kickoff)</label>
-        <input name="auto_lock_offset_minutes" type="number" min="0" max="120" value="{{ settings.auto_lock_offset_minutes }}"
-          class="w-full px-2.5 py-1.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 ring-theme">
-      </div>
-    </div>
-    <button name="save_auto" class="px-4 py-1.5 text-xs font-semibold bg-violet-600 hover:bg-violet-700 text-white rounded-lg transition-colors">Save Settings</button>
-  </form>
-</div>
-
-<!-- Games table -->
-<div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-  <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
-    <p class="font-semibold text-slate-900">Current Games</p>
-    <span class="text-xs text-slate-400">{{ games|length }} game{{ games|length|pluralize }}</span>
-  </div>
-  {% if games %}
-  <div class="divide-y divide-slate-100">
-    {% for game in games %}
-    <div class="flex items-center gap-4 px-5 py-3">
-      <div class="flex-1 min-w-0">
-        <p class="text-sm font-medium text-slate-900">{{ game.team1 }} <span class="text-slate-400 font-normal text-xs">({{ game.points1 }})</span> vs {{ game.team2 }} <span class="text-slate-400 font-normal text-xs">({{ game.points2 }})</span></p>
-        {% if game.date %}<p class="text-xs text-slate-400">{{ game.date }}</p>{% endif %}
-      </div>
-      <div class="flex items-center gap-2 flex-shrink-0">
-        {% if game.graded %}
-          <span class="text-xs font-semibold px-2 py-0.5 rounded-full
-            {% if game.winner == 'tie' %}bg-slate-100 text-slate-600
-            {% else %}bg-emerald-100 text-emerald-700{% endif %}">
-            {% if game.winner == 'team1' %}{{ game.team1_abbrev }}
-            {% elif game.winner == 'team2' %}{{ game.team2_abbrev }}
-            {% else %}TIE{% endif %}
-          </span>
-        {% else %}
-          <span class="text-xs text-slate-400">Ungraded</span>
-        {% endif %}
-        <form method="post">{% csrf_token %}
-          <input type="hidden" name="game_id" value="{{ game.id }}">
-          <button name="toggle_winner" class="px-2 py-1 text-xs border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-md">Toggle</button>
-        </form>
-        <form method="post" onsubmit="return confirm('Delete this game?')">{% csrf_token %}
-          <input type="hidden" name="game_id" value="{{ game.id }}">
-          <button name="delete_game" class="px-2 py-1 text-xs border border-red-200 text-red-500 hover:bg-red-50 rounded-md">✕</button>
-        </form>
-      </div>
-    </div>
-    {% endfor %}
-  </div>
-  {% else %}
-  <div class="p-10 text-center text-slate-400 text-sm">No games added yet.</div>
-  {% endif %}
 </div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
+(function() {
+  try {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const sel = document.getElementById('tz-select');
+    if (sel) for (let i = 0; i < sel.options.length; i++) {
+      if (sel.options[i].value === tz) { sel.selectedIndex = i; break; }
+    }
+  } catch(e) {}
+})();
+
+function setMode(mode) {
+  const isAuto = mode === 'auto';
+  document.getElementById('panel-manual').style.display = isAuto ? 'none' : 'block';
+  document.getElementById('panel-auto').style.display   = isAuto ? 'block' : 'none';
+  document.getElementById('btn-auto').classList.toggle('active', isAuto);
+  document.getElementById('btn-manual').classList.toggle('active', !isAuto);
+  localStorage.setItem('dashMode', mode);
+}
+const saved = localStorage.getItem('dashMode');
+setMode(saved || ({{ settings.auto_enabled|yesno:"true,false" }} ? 'auto' : 'manual'));
+
 function generateRecap() {
   const btn = document.getElementById('recap-btn');
   const status = document.getElementById('recap-status');
-  btn.disabled = true;
-  btn.textContent = 'Generating…';
-  status.classList.add('hidden');
-
-  fetch("{% url 'main:generate_recap' %}", {
-    method: 'POST',
-    headers: {'X-CSRFToken': '{{ csrf_token }}'}
-  })
+  btn.disabled = true; btn.textContent = 'Generating…';
+  status.style.display = 'none';
+  fetch("{% url 'main:generate_recap' %}", { method:'POST', headers:{'X-CSRFToken':'{{ csrf_token }}'} })
   .then(r => r.json())
   .then(d => {
     if (d.recap) {
-      btn.textContent = 'Recap Generated ✓';
-      btn.classList.replace('bg-violet-600', 'bg-emerald-600');
-      btn.classList.replace('hover:bg-violet-700', 'hover:bg-emerald-700');
-      status.textContent = 'Saved — visible on home page until next publish.';
-      status.classList.remove('hidden');
+      btn.textContent = 'Recap Generated ✓'; btn.style.background = '#059669';
+      status.textContent = 'Saved — visible on home page.'; status.style.display = 'block';
     } else {
-      btn.textContent = 'Generate Recap';
-      btn.disabled = false;
-      status.textContent = 'Error: ' + (d.error || 'unknown');
-      status.classList.remove('hidden');
+      btn.textContent = 'Generate Recap'; btn.disabled = false;
+      status.textContent = 'Error: ' + (d.error || 'unknown'); status.style.display = 'block';
     }
   })
-  .catch(() => {
-    btn.textContent = 'Generate Recap';
-    btn.disabled = false;
-    status.textContent = 'Network error.';
-    status.classList.remove('hidden');
-  });
+  .catch(() => { btn.textContent = 'Generate Recap'; btn.disabled = false; status.textContent = 'Network error.'; status.style.display = 'block'; });
 }
+
+// Three-way grade toggle
+(function() {
+  const WINNER_URL = "{% url 'main:ajax_set_winner' %}";
+  const CSRF = "{{ csrf_token }}";
+  const POSITIONS = {team1: '0%', tie: '33.333%', team2: '66.666%'};
+  const INDICES   = {team1: 0,   tie: 1,          team2: 2};
+
+  function applyKnob(toggle, winner) {
+    const knob = toggle.querySelector('.grade-knob');
+    const opts = toggle.querySelectorAll('.grade-opt');
+    if (winner && POSITIONS[winner] !== undefined) {
+      knob.style.opacity = '1';
+      knob.style.left = POSITIONS[winner];
+      opts.forEach((o, i) => o.classList.toggle('active', i === INDICES[winner]));
+    } else {
+      knob.style.opacity = '0';
+      opts.forEach(o => o.classList.remove('active'));
+    }
+  }
+
+  document.querySelectorAll('.grade-toggle').forEach(function(toggle) {
+    applyKnob(toggle, toggle.dataset.winner);
+
+    toggle.querySelectorAll('.grade-opt').forEach(function(opt) {
+      opt.addEventListener('click', function() {
+        const gameId = toggle.dataset.gameId;
+        const prev   = toggle.dataset.winner;
+        const val    = opt.dataset.val;
+        const next   = (val === prev) ? '' : val;
+
+        toggle.dataset.winner = next;
+        applyKnob(toggle, next);
+
+        fetch(WINNER_URL, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': CSRF},
+          body: 'game_id=' + encodeURIComponent(gameId) + '&winner=' + encodeURIComponent(next)
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+          if (!d.ok) {
+            toggle.dataset.winner = prev;
+            applyKnob(toggle, prev);
+            return;
+          }
+          var row = toggle.closest('.game-row');
+          if (!row) return;
+          var list = row.parentElement;
+          if (next) {
+            row.dataset.graded = '1';
+            list.appendChild(row);
+          } else {
+            row.dataset.graded = '0';
+            var firstGraded = list.querySelector('.game-row[data-graded="1"]');
+            if (firstGraded) list.insertBefore(row, firstGraded);
+            else list.prepend(row);
+          }
+        })
+        .catch(function() {
+          toggle.dataset.winner = prev;
+          applyKnob(toggle, prev);
+        });
+      });
+    });
+  });
+})();
 </script>
 {% endblock %}
