@@ -185,6 +185,13 @@ def do_scrape_and_publish(settings, year=None):
     settings.edit = False
     settings.save()
     log.info('Auto scrape+publish: week %s, %s games added, first kickoff %s', settings.week, added, first_dt)
+
+    try:
+        from .email_utils import send_picks_published_email
+        send_picks_published_email(settings)
+    except Exception as e:
+        log.error('Email send failed: %s', e)
+
     return added
 
 

@@ -268,7 +268,6 @@
       <!-- Desktop links -->
       <div class="hidden-mobile" style="display:flex;align-items:center;gap:2px;flex:1;">
         <a href="{% url 'main:home' week=1 %}" class="nav-link">Home</a>
-        <a href="{% url 'main:preseason' %}" class="nav-link">Preseason</a>
         <a href="{% url 'main:rules' %}" class="nav-link">Rules</a>
         {% if request.user.is_staff %}
         <div class="nav-group" style="position:relative;">
@@ -330,7 +329,6 @@
   <div id="mobile-menu" style="border-top:1px solid var(--border);padding:8px 16px 12px;">
     <div style="display:flex;flex-direction:column;gap:2px;">
       <a href="{% url 'main:home' week=1 %}" class="nav-link">Home</a>
-      <a href="{% url 'main:preseason' %}" class="nav-link">Preseason</a>
       <a href="{% url 'main:rules' %}" class="nav-link">Rules</a>
       {% if request.user.is_staff %}
       <div style="height:1px;background:var(--border);margin:4px 0;"></div>

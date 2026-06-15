@@ -128,6 +128,10 @@
   @keyframes pod-glow { 0%,100%{box-shadow:0 -6px 28px rgba(245,158,11,.4),0 0 60px rgba(245,158,11,.1);} 50%{box-shadow:0 -8px 48px rgba(245,158,11,.75),0 0 120px rgba(245,158,11,.25);} }
   @keyframes pod-float { 0%,100%{transform:translateY(0);} 50%{transform:translateY(-9px);} }
 
+  /* Chart no-data */
+  .no-data-msg { display:none;position:absolute;inset:0;align-items:center;justify-content:center;font-size:.75rem;color:var(--muted);pointer-events:none;border:1px solid var(--border);border-radius:8px; }
+  .no-data-msg.show { display:flex; }
+
   /* Chart expand */
   .chart-wrap { position:relative;cursor:pointer; }
   .chart-wrap .expand-hint {
@@ -135,14 +139,20 @@
     display:inline-flex;align-items:center;gap:4px;
     font-size:.6875rem;font-weight:600;letter-spacing:.02em;
     color:var(--muted2);
-    background:rgba(14,20,34,.75);
+    background:rgba(14,20,34,.72);
     border:1px solid rgba(255,255,255,.12);
     border-radius:6px;padding:3px 8px;
-    opacity:.55;transition:opacity .2s,background .2s;
+    opacity:.65;transition:opacity .2s,background .2s;
     pointer-events:none;user-select:none;backdrop-filter:blur(4px);
   }
-  .chart-wrap:hover .expand-hint { opacity:1;background:rgba(255,255,255,.08); }
+  .chart-wrap:hover .expand-hint { opacity:1;background:rgba(14,20,34,.88); }
   .chart-wrap:hover canvas { opacity:.9; }
+  [data-theme="light"] .chart-wrap .expand-hint {
+    background:rgba(255,255,255,.82);
+    border-color:rgba(0,0,0,.12);
+    color:var(--muted);
+  }
+  [data-theme="light"] .chart-wrap:hover .expand-hint { background:rgba(255,255,255,.96); }
 
   /* Modal */
   #chart-modal { display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);backdrop-filter:blur(4px);z-index:9999;align-items:center;justify-content:center; }
@@ -157,6 +167,10 @@
   [data-theme="light"] .pick-pts { color: rgba(0,0,0,.3); }
   [data-theme="light"] .pick-opt[data-selected="true"] .pick-pts { color: rgba(0,0,0,.5); }
   [data-theme="light"] .pts-tag { background: rgba(0,0,0,.06); }
+  [data-theme="light"] #chart-toggle,
+  [data-theme="light"] #analytics-toggle { border-color: rgba(0,0,0,.12) !important; background: rgba(0,0,0,.012) !important; }
+  [data-theme="light"] #toggle-pill,
+  [data-theme="light"] #analytics-pill { background: #fff !important; border-color: rgba(0,0,0,.14) !important; }
   [data-theme="light"] .vs-sep { color: var(--muted); }
   [data-theme="light"] .game-sep-line { background: rgba(0,0,0,.07); }
   [data-theme="light"] .dist-bar { background: rgba(0,0,0,.07); }
@@ -549,7 +563,7 @@
     </div>
     <div class="chart-wrap" onclick="openModal('mainChart')" title="Click to enlarge">
       <span class="expand-hint">⛶ Expand</span>
-      <div class="chart-canvas-wrap" style="position:relative;height:300px;"><canvas id="mainChart"></canvas></div>
+      <div class="chart-canvas-wrap" style="position:relative;height:300px;"><canvas id="mainChart"></canvas><div class="no-data-msg" id="mainChart-nodata">No data yet</div></div>
     </div>
     </div><!-- end main chart section -->
 
@@ -558,13 +572,13 @@
       <p style="font-size:.625rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin:0 0 10px;">Points Per Week</p>
       <div class="chart-wrap" onclick="openModal('weeklyChart')" title="Click to enlarge">
         <span class="expand-hint">⛶ Expand</span>
-        <div class="chart-canvas-wrap" style="position:relative;height:210px;"><canvas id="weeklyChart"></canvas></div>
+        <div class="chart-canvas-wrap" style="position:relative;height:210px;"><canvas id="weeklyChart"></canvas><div class="no-data-msg" id="weeklyChart-nodata">No data yet</div></div>
       </div>
     </div>
 
     <!-- Win Rate / Efficiency toggle -->
     {% if win_rate_chart %}
-    <div style="border-top:1px solid var(--border);padding-top:8px;">
+    <div>
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
         <div id="analytics-toggle" style="position:relative;display:flex;align-items:center;width:150px;height:24px;background:transparent;border:1px solid rgba(255,255,255,.07);border-radius:100px;padding:3px;cursor:grab;user-select:none;touch-action:none;">
           <div id="analytics-pill" style="position:absolute;left:3px;width:calc(50% - 3px);height:calc(100% - 6px);background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.09);border-radius:100px;transition:left .22s cubic-bezier(.4,0,.2,1);pointer-events:none;"></div>
@@ -575,7 +589,7 @@
       </div>
       <div class="chart-wrap" onclick="openModal('analyticsChart')" title="Click to enlarge">
         <span class="expand-hint">⛶ Expand</span>
-        <div class="chart-canvas-wrap" style="position:relative;height:225px;"><canvas id="analyticsChart"></canvas></div>
+        <div class="chart-canvas-wrap" style="position:relative;height:225px;"><canvas id="analyticsChart"></canvas><div class="no-data-msg" id="analyticsChart-nodata">No data yet</div></div>
       </div>
     </div>
 
@@ -585,7 +599,7 @@
       <p style="font-size:.75rem;color:var(--muted);margin:0 0 14px;">How consistent each player's efficiency is week to week — lower is steadier</p>
       <div class="chart-wrap" onclick="openModal('varianceChart')" title="Click to enlarge">
         <span class="expand-hint">⛶ Expand</span>
-        <div class="chart-canvas-wrap" style="position:relative;height:225px;"><canvas id="varianceChart"></canvas></div>
+        <div class="chart-canvas-wrap" style="position:relative;height:225px;"><canvas id="varianceChart"></canvas><div class="no-data-msg" id="varianceChart-nodata">No data yet</div></div>
       </div>
     </div>
     {% endif %}
@@ -849,7 +863,8 @@ function setupPillDrag(trackId,pillId,labelIds,modes,switchFn,getMode){
   return movePill;
 }
 
-function initChart(mode){if(mainChart){mainChart.destroy();mainChart=null;}mainChart=buildMainOn('mainChart',mode);}
+function showNoData(id){const el=document.getElementById(id+'-nodata');if(el)el.classList.add('show');}
+function initChart(mode){if(mainChart){mainChart.destroy();mainChart=null;}mainChart=buildMainOn('mainChart',mode);if(!mainChart)showNoData('mainChart');}
 let movePillMain;
 function switchChart(mode){
   if(mode===currentMode)return;currentMode=mode;initChart(mode);if(movePillMain)movePillMain(mode,true);
@@ -870,7 +885,7 @@ function buildWeeklyOn(cid,showLegend=false){
       plugins:{legend:{...LEG,display:showLegend},tooltip:{...TIP,callbacks:{label:c=>` ${c.dataset.label}: ${c.parsed.y} pts`}}},
       scales:{x:SX,y:SY()},animation:{duration:700,easing:'easeInOutQuart'}}});
 }
-buildWeeklyOn('weeklyChart');
+if(!buildWeeklyOn('weeklyChart'))showNoData('weeklyChart');
 
 // ── win rate / efficiency ──────────────────────────
 let analyticsChart=null,analyticsMode='wr';
@@ -885,7 +900,7 @@ function buildAnalyticsOn(cid,mode,showLegend=false){
       scales:{y:SY({min:0,max:100,ticks:{font:{size:10},color:'#475569',padding:6,callback:v=>v+'%'}}),x:SX},
       animation:{duration:600,easing:'easeInOutQuart'}}});
 }
-function initAnalytics(mode){if(analyticsChart){analyticsChart.destroy();analyticsChart=null;}analyticsChart=buildAnalyticsOn('analyticsChart',mode);}
+function initAnalytics(mode){if(analyticsChart){analyticsChart.destroy();analyticsChart=null;}analyticsChart=buildAnalyticsOn('analyticsChart',mode);if(!analyticsChart)showNoData('analyticsChart');}
 let movePillAnalytics;
 function switchAnalytics(mode){
   if(mode===analyticsMode)return;analyticsMode=mode;initAnalytics(mode);if(movePillAnalytics)movePillAnalytics(mode,true);
@@ -908,7 +923,7 @@ function buildVarianceOn(cid,showLegend=false,showNames=false){
       tooltip:{...TIP,callbacks:{label:c=>` ${c.label}: ${c.parsed.y}`}}},
       scales:{x:xAxis,y:SY()},animation:{duration:700,easing:'easeInOutQuart'}}});
 }
-buildVarianceOn('varianceChart');
+if(!buildVarianceOn('varianceChart'))showNoData('varianceChart');
 
 // ── modal expand ───────────────────────────────────
 let modalChart=null;

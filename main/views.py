@@ -33,6 +33,9 @@ def home(request, week=1):
         return redirect('accounts:login')
 
     settings = SiteSettings.get()
+    if settings.week == 1 and not request.user.profile.preseason_submitted:
+        return redirect('main:preseason')
+
     week = int(week)
     players = User.objects.select_related('profile').all()
 
@@ -531,6 +534,7 @@ def preseason(request):
         request.user.profile.nfc_champ = form.cleaned_data['nfc_champ']
         request.user.profile.afc_champ = form.cleaned_data['afc_champ']
         request.user.profile.superbowl_winner = form.cleaned_data['superbowl_winner']
+        request.user.profile.preseason_submitted = True
         request.user.save()
         messages.success(request, 'Preseason picks saved!')
         return redirect('main:home', week=1)

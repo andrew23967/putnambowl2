@@ -18,6 +18,7 @@ class Profile(models.Model):
     superbowl_winner = models.CharField(max_length=50, choices=TEAMS, default='Arizona Cardinals')
     unread_messages = models.IntegerField(default=0)
     is_bot = models.BooleanField(default=False)
+    preseason_submitted = models.BooleanField(default=False)
 
     def __str__(self):
         return self.user.username
