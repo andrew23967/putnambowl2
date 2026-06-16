@@ -1115,6 +1115,7 @@ def montecarlo_view(request):
         'config': config,
         'available_years': available_years,
         'headers': ['Underdog %', 'Mean', 'Std Dev', 'P10', 'P90', 'Min', 'Max'],
+        'total_games': sum(year_counts.values()),
     })
 
 

@@ -79,7 +79,7 @@
   {% for year, count in year_counts.items %}
     <strong>{{ year }}</strong> ({{ count }} games){% if not forloop.last %}, {% endif %}
   {% endfor %}
-  — total <strong>{{ year_counts.values|sum }} games</strong>
+  — total <strong>{{ total_games }} games</strong>
 </div>
 {% endif %}
 
