@@ -1089,5 +1089,29 @@ def devtools(request):
 
         return redirect('main:devtools')
 
+    from . import sim as sim_module
     bots = User.objects.select_related('profile').filter(profile__is_bot=True).order_by('username')
-    return render(request, 'main/devtools.html', {'bots': bots})
+    return render(request, 'main/devtools.html', {'bots': bots, 'sim_status': sim_module.get_status()})
+
+
+@staff_member_required
+@require_POST
+def sim_control(request):
+    from . import sim as sim_module
+    action = request.POST.get('action')
+    if action == 'start':
+        sim_module.start(
+            lock_delay=request.POST.get('lock_delay', 5),
+            grade_delay=request.POST.get('grade_delay', 5),
+            advance_delay=request.POST.get('advance_delay', 5),
+            year=request.POST.get('year', 2024),
+        )
+    elif action == 'stop':
+        sim_module.stop()
+    return JsonResponse(sim_module.get_status())
+
+
+@staff_member_required
+def sim_status(request):
+    from . import sim as sim_module
+    return JsonResponse(sim_module.get_status())

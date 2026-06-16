@@ -16,6 +16,69 @@
   {% endfor %}
 {% endif %}
 
+<!-- ===== SIMULATION ===== -->
+<div class="rounded-2xl p-5 mb-6" style="background:var(--surface);border:1px solid var(--border);">
+  <p class="text-xs font-semibold uppercase tracking-wide mb-4" style="color:var(--muted);">Season Simulation</p>
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+    <!-- Controls -->
+    <div class="space-y-3">
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-medium mb-1" style="color:var(--muted2);">NFL Season Year</label>
+          <input id="sim-year" type="number" value="2024" min="2000" max="2030"
+                 class="w-full px-3 py-2 text-sm rounded-lg outline-none"
+                 style="background:var(--surface2);border:1px solid var(--border2);color:var(--text);">
+        </div>
+        <div>
+          <label class="block text-xs font-medium mb-1" style="color:var(--muted2);">Lock delay (sec)</label>
+          <input id="sim-lock" type="number" value="5" min="1"
+                 class="w-full px-3 py-2 text-sm rounded-lg outline-none"
+                 style="background:var(--surface2);border:1px solid var(--border2);color:var(--text);">
+        </div>
+        <div>
+          <label class="block text-xs font-medium mb-1" style="color:var(--muted2);">Grade → advance delay (sec)</label>
+          <input id="sim-grade" type="number" value="5" min="1"
+                 class="w-full px-3 py-2 text-sm rounded-lg outline-none"
+                 style="background:var(--surface2);border:1px solid var(--border2);color:var(--text);">
+        </div>
+        <div>
+          <label class="block text-xs font-medium mb-1" style="color:var(--muted2);">Between weeks delay (sec)</label>
+          <input id="sim-advance" type="number" value="5" min="1"
+                 class="w-full px-3 py-2 text-sm rounded-lg outline-none"
+                 style="background:var(--surface2);border:1px solid var(--border2);color:var(--text);">
+        </div>
+      </div>
+      <div class="flex gap-2">
+        <button id="sim-start-btn" onclick="simStart()"
+                class="flex-1 py-2.5 text-sm font-semibold rounded-lg"
+                style="background:var(--accent);color:#fff;">
+          Start Simulation
+        </button>
+        <button id="sim-stop-btn" onclick="simStop()" disabled
+                class="flex-1 py-2.5 text-sm font-semibold rounded-lg"
+                style="background:rgba(239,68,68,.15);color:#ef4444;opacity:.4;">
+          Stop
+        </button>
+      </div>
+    </div>
+
+    <!-- Status -->
+    <div class="rounded-xl p-4 flex flex-col gap-2" style="background:var(--surface2);border:1px solid var(--border2);">
+      <p class="text-xs font-semibold uppercase tracking-wide" style="color:var(--muted);">Status</p>
+      <div class="flex items-center gap-2">
+        <span id="sim-dot" class="w-2 h-2 rounded-full" style="background:var(--muted);flex-shrink:0;"></span>
+        <span id="sim-state" class="text-sm font-medium" style="color:var(--muted2);">idle</span>
+      </div>
+      <p class="text-xs" style="color:var(--muted);">Step: <span id="sim-step">—</span></p>
+      <p class="text-xs" style="color:var(--muted);">Week: <span id="sim-week">—</span></p>
+      <p id="sim-error" class="text-xs" style="color:#ef4444;display:none;"></p>
+    </div>
+
+  </div>
+</div>
+
+<!-- ===== BOTS + CREATE ===== -->
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
   <!-- Create Bot -->
@@ -31,7 +94,7 @@
                  class="w-full px-3 py-2 text-sm rounded-lg outline-none"
                  style="background:var(--surface2);border:1px solid var(--border2);color:var(--text);">
         </div>
-        <p class="text-xs" style="color:var(--muted);">Preference (underdog/favorite) is assigned randomly at creation. Bots auto-pick when games are published.</p>
+        <p class="text-xs" style="color:var(--muted);">Underdog pick % is assigned randomly at creation. Bots auto-pick when games are published.</p>
         <button type="submit"
                 class="w-full py-2.5 text-sm font-semibold rounded-lg"
                 style="background:var(--accent);color:#fff;">
@@ -84,4 +147,67 @@
   </div>
 
 </div>
+
+<script>
+const csrfToken = '{{ csrf_token }}';
+const simUrl = '{% url "main:sim_control" %}';
+const statusUrl = '{% url "main:sim_status" %}';
+let pollInterval = null;
+
+function simStart() {
+  const body = new URLSearchParams({
+    action: 'start',
+    lock_delay: document.getElementById('sim-lock').value,
+    grade_delay: document.getElementById('sim-grade').value,
+    advance_delay: document.getElementById('sim-advance').value,
+    year: document.getElementById('sim-year').value,
+    csrfmiddlewaretoken: csrfToken,
+  });
+  fetch(simUrl, { method: 'POST', body }).then(r => r.json()).then(updateStatus);
+  startPolling();
+}
+
+function simStop() {
+  const body = new URLSearchParams({ action: 'stop', csrfmiddlewaretoken: csrfToken });
+  fetch(simUrl, { method: 'POST', body }).then(r => r.json()).then(updateStatus);
+}
+
+function startPolling() {
+  if (pollInterval) return;
+  pollInterval = setInterval(() => {
+    fetch(statusUrl).then(r => r.json()).then(s => {
+      updateStatus(s);
+      if (!s.running) { clearInterval(pollInterval); pollInterval = null; }
+    });
+  }, 1000);
+}
+
+function updateStatus(s) {
+  const dot = document.getElementById('sim-dot');
+  const state = document.getElementById('sim-state');
+  const step = document.getElementById('sim-step');
+  const week = document.getElementById('sim-week');
+  const err = document.getElementById('sim-error');
+  const startBtn = document.getElementById('sim-start-btn');
+  const stopBtn = document.getElementById('sim-stop-btn');
+
+  dot.style.background = s.running ? '#10b981' : (s.step === 'error' ? '#ef4444' : 'var(--muted)');
+  state.textContent = s.running ? 'running' : s.step;
+  state.style.color = s.running ? '#10b981' : 'var(--muted2)';
+  step.textContent = s.step || '—';
+  week.textContent = s.week != null ? s.week : '—';
+
+  if (s.error) { err.textContent = s.error; err.style.display = ''; }
+  else { err.style.display = 'none'; }
+
+  startBtn.disabled = s.running;
+  startBtn.style.opacity = s.running ? '.4' : '1';
+  stopBtn.disabled = !s.running;
+  stopBtn.style.opacity = s.running ? '1' : '.4';
+}
+
+// Init from server-rendered status
+updateStatus({{ sim_status|safe }});
+{% if sim_status.running %}startPolling();{% endif %}
+</script>
 {% endblock %}
