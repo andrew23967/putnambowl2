@@ -60,7 +60,6 @@
             <p class="text-xs" style="color:var(--muted);">
               Preference: <span class="font-semibold">{{ bot.profile.bot_preference|default:"—" }}</span>
               &nbsp;·&nbsp; Score: {{ bot.profile.score_display }}
-              &nbsp;·&nbsp; Picks locked: {% if bot.profile.preseason_submitted %}yes{% else %}no{% endif %}
             </p>
           </div>
           <form method="post" style="margin:0;" onsubmit="return confirm('Delete {{ bot.username }}?')">
