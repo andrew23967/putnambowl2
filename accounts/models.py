@@ -18,7 +18,7 @@ class Profile(models.Model):
     superbowl_winner = models.CharField(max_length=50, choices=TEAMS, default='Arizona Cardinals')
     unread_messages = models.IntegerField(default=0)
     is_bot = models.BooleanField(default=False)
-    bot_preference = models.CharField(max_length=10, choices=[('underdog', 'Underdog'), ('favorite', 'Favorite')], blank=True, default='')
+    bot_underdog_pct = models.IntegerField(default=50)
     preseason_submitted = models.BooleanField(default=False)
 
     def __str__(self):

@@ -1065,7 +1065,7 @@ def devtools(request):
             if User.objects.filter(username=username).exists():
                 messages.error(request, f'Username "{username}" already exists.')
             else:
-                pref = random.choice(['underdog', 'favorite'])
+                underdog_pct = random.randint(0, 100)
                 bot_user = User.objects.create_user(
                     username=username,
                     password=None,
@@ -1073,10 +1073,10 @@ def devtools(request):
                     is_staff=False,
                 )
                 bot_user.profile.is_bot = True
-                bot_user.profile.bot_preference = pref
+                bot_user.profile.bot_underdog_pct = underdog_pct
                 bot_user.profile.preseason_submitted = True
                 bot_user.profile.save()
-                messages.success(request, f'Created bot "{username}" with {pref} preference.')
+                messages.success(request, f'Created bot "{username}" — {underdog_pct}% underdog / {100 - underdog_pct}% favorite.')
 
         elif action == 'delete_bot':
             uid = request.POST.get('user_id')

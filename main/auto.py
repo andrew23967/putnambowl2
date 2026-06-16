@@ -156,21 +156,16 @@ Write a short introduction (2-3 sentences) to kick off the new season. Introduce
 
 
 def make_bot_picks():
-    """Create picks for all bot users based on their preference."""
+    """Create picks for all bot users based on their underdog percentage."""
     import random as _random
     bots = User.objects.select_related('profile').filter(profile__is_bot=True)
     games = list(Game.objects.all())
     for bot in bots:
-        pref = bot.profile.bot_preference
+        pct = bot.profile.bot_underdog_pct
         for game in games:
             if Pick.objects.filter(user=bot, game=game).exists():
                 continue
-            if pref == 'underdog':
-                choice = 'team2'
-            elif pref == 'favorite':
-                choice = 'team1'
-            else:
-                choice = _random.choice(['team1', 'team2'])
+            choice = 'team2' if _random.randint(1, 100) <= pct else 'team1'
             Pick.objects.create(user=bot, game=game, choice=choice)
     log.info('Bot picks created for %s bots across %s games', len(bots), len(games))
 

@@ -58,7 +58,7 @@
           <div class="flex-1">
             <p class="text-sm font-medium" style="color:var(--text);">{{ bot.username }}</p>
             <p class="text-xs" style="color:var(--muted);">
-              Preference: <span class="font-semibold">{{ bot.profile.bot_preference|default:"—" }}</span>
+              {{ bot.profile.bot_underdog_pct }}% underdog pick chance
               &nbsp;·&nbsp; Score: {{ bot.profile.score_display }}
             </p>
           </div>
