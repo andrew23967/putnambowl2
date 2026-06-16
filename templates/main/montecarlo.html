@@ -38,9 +38,10 @@
         <label class="block text-xs font-medium mb-1" style="color:var(--muted2);">% step size</label>
         <select name="pct_step" class="w-full px-3 py-2 text-sm rounded-lg outline-none"
                 style="background:var(--surface2);border:1px solid var(--border2);color:var(--text);">
-          {% for s in "1,2,5,10"|split:"," %}
-          <option value="{{ s }}" {% if s == config.pct_step|stringformat:"d" %}selected{% endif %}>{{ s }}%</option>
-          {% endfor %}
+          <option value="1" {% if config.pct_step == 1 %}selected{% endif %}>1%</option>
+          <option value="2" {% if config.pct_step == 2 %}selected{% endif %}>2%</option>
+          <option value="5" {% if config.pct_step == 5 %}selected{% endif %}>5%</option>
+          <option value="10" {% if config.pct_step == 10 %}selected{% endif %}>10%</option>
         </select>
       </div>
     </div>
