@@ -280,6 +280,7 @@
             <a href="{% url 'main:accountdash' %}"><span>👥</span> Accounts</a>
             <a href="{% url 'main:announcements' %}"><span>📢</span> Announcements</a>
             <a href="{% url 'main:buglog' %}"><span>🐛</span> Bug Log</a>
+            <a href="{% url 'main:devtools' %}"><span>🛠</span> Developer Tools</a>
           </div>
         </div>
         {% endif %}
@@ -334,6 +335,7 @@
       <div style="height:1px;background:var(--border);margin:4px 0;"></div>
       <a href="{% url 'main:pickdash' %}" class="nav-link">Pick Dashboard</a>
       <a href="{% url 'main:accountdash' %}" class="nav-link">Accounts</a>
+      <a href="{% url 'main:devtools' %}" class="nav-link">Developer Tools</a>
       {% endif %}
       <div style="height:1px;background:var(--border);margin:4px 0;"></div>
       <a href="{% url 'accounts:user_profile' %}" class="nav-link">My Profile</a>
