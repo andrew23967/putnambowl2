@@ -1072,39 +1072,49 @@ def send_test_email(request):
 @staff_member_required
 def montecarlo_view(request):
     results = None
-    error = None
-    config = {'year': 2024, 'n_trials': 2000, 'multiplier': 1.0, 'pct_step': 5}
+    errors = []
+    year_counts = {}
+    available_years = list(range(2016, 2025))
+    config = {
+        'years': [2024],
+        'n_trials': 2000,
+        'multiplier': 1.0,
+        'pct_step': 5,
+    }
 
     if request.method == 'POST':
         try:
-            config['year'] = int(request.POST.get('year', 2024))
+            config['years'] = [int(y) for y in request.POST.getlist('years') if y]
             config['n_trials'] = int(request.POST.get('n_trials', 2000))
             config['multiplier'] = float(request.POST.get('multiplier', 1.0))
             config['pct_step'] = int(request.POST.get('pct_step', 5))
         except ValueError:
             pass
 
-        from . import montecarlo as mc
-        games, err = mc.load_season_games(config['year'], config['multiplier'])
-        if err:
-            error = f'Failed to load season data: {err}'
-        elif not games:
-            error = f'No completed games found for {config["year"]}.'
+        if not config['years']:
+            errors.append('Select at least one season.')
         else:
-            results = mc.run(
-                games,
-                n_trials=config['n_trials'],
-                pct_step=config['pct_step'],
-                multiplier=config['multiplier'],
+            from . import montecarlo as mc
+            games, year_counts, load_errors = mc.load_multi_season(
+                config['years'], config['multiplier']
             )
-            best = max(results, key=lambda r: r['mean'])
-            for r in results:
-                r['is_best'] = r['pct'] == best['pct']
+            errors.extend(load_errors)
+            if not games:
+                errors.append('No completed games found for the selected seasons.')
+            else:
+                results = mc.run(
+                    games,
+                    n_trials=config['n_trials'],
+                    pct_step=config['pct_step'],
+                )
 
     return render(request, 'main/montecarlo.html', {
         'results': results,
-        'error': error,
+        'errors': errors,
+        'year_counts': year_counts,
         'config': config,
+        'available_years': available_years,
+        'headers': ['Underdog %', 'Mean', 'Std Dev', 'P10', 'P90', 'Min', 'Max'],
     })
 
 
