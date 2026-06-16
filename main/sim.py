@@ -7,17 +7,23 @@ log = logging.getLogger(__name__)
 _sim_thread = None
 _stop_event = threading.Event()
 _status = {'running': False, 'step': 'idle', 'week': None, 'error': None}
+_sim_tick_interval = None  # overrides SiteSettings.tick_interval while sim is running
+
+
+def get_tick_interval():
+    return _sim_tick_interval
 
 
 def get_status():
     return dict(_status)
 
 
-def start(lock_delay, grade_delay, advance_delay, year):
-    global _sim_thread, _stop_event
+def start(lock_delay, grade_delay, advance_delay, year, tick_interval=None):
+    global _sim_thread, _stop_event, _sim_tick_interval
     if _sim_thread and _sim_thread.is_alive():
         return False
     _stop_event = threading.Event()
+    _sim_tick_interval = int(tick_interval) if tick_interval else None
     _sim_thread = threading.Thread(
         target=_run,
         args=(int(lock_delay), int(grade_delay), int(advance_delay), int(year), _stop_event),
@@ -29,7 +35,9 @@ def start(lock_delay, grade_delay, advance_delay, year):
 
 
 def stop():
+    global _sim_tick_interval
     _stop_event.set()
+    _sim_tick_interval = None
     _status.update({'running': False, 'step': 'stopped'})
 
 
@@ -108,4 +116,6 @@ def _run(lock_delay, grade_delay, advance_delay, year, stop_event):
         _status.update({'running': False, 'step': 'error', 'error': str(e)})
         return
 
+    global _sim_tick_interval
+    _sim_tick_interval = None
     _status.update({'running': False, 'step': 'stopped' if stop_event.is_set() else 'finished'})

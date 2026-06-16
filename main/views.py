@@ -1105,6 +1105,7 @@ def sim_control(request):
             grade_delay=request.POST.get('grade_delay', 5),
             advance_delay=request.POST.get('advance_delay', 5),
             year=request.POST.get('year', 2024),
+            tick_interval=request.POST.get('tick_interval') or None,
         )
     elif action == 'stop':
         sim_module.stop()
