@@ -1,0 +1,88 @@
+{% extends 'base.html' %}
+{% block title %}Developer Tools — PutnamBowl{% endblock %}
+{% block content %}
+<div class="mb-6">
+  <h1 class="text-xl font-bold" style="color:var(--text);">Developer Tools</h1>
+  <p style="color:var(--muted2);font-size:.875rem;">Testing utilities. Not visible to regular users.</p>
+</div>
+
+{% if messages %}
+  {% for msg in messages %}
+  <div class="mb-4 px-4 py-3 rounded-xl text-sm font-medium"
+       style="background:{% if msg.tags == 'error' %}rgba(239,68,68,.12){% else %}rgba(16,185,129,.12){% endif %};
+              color:{% if msg.tags == 'error' %}#ef4444{% else %}#10b981{% endif %};">
+    {{ msg }}
+  </div>
+  {% endfor %}
+{% endif %}
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+  <!-- Create Bot -->
+  <div>
+    <div class="rounded-2xl p-5" style="background:var(--surface);border:1px solid var(--border);">
+      <p class="text-xs font-semibold uppercase tracking-wide mb-4" style="color:var(--muted);">Create Bot Account</p>
+      <form method="post" class="space-y-3">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="create_bot">
+        <div>
+          <label class="block text-xs font-medium mb-1" style="color:var(--muted2);">Username (leave blank for random)</label>
+          <input name="username" placeholder="e.g. bot_alice"
+                 class="w-full px-3 py-2 text-sm rounded-lg outline-none"
+                 style="background:var(--surface2);border:1px solid var(--border2);color:var(--text);">
+        </div>
+        <p class="text-xs" style="color:var(--muted);">Preference (underdog/favorite) is assigned randomly at creation. Bots auto-pick when games are published.</p>
+        <button type="submit"
+                class="w-full py-2.5 text-sm font-semibold rounded-lg"
+                style="background:var(--accent);color:#fff;">
+          Create Bot
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Bot List -->
+  <div class="lg:col-span-2">
+    <div class="rounded-2xl overflow-hidden" style="background:var(--surface);border:1px solid var(--border);">
+      <div class="px-5 py-4" style="border-bottom:1px solid var(--border);">
+        <p class="font-semibold" style="color:var(--text);">Bot Accounts ({{ bots|length }})</p>
+      </div>
+      {% if bots %}
+      <div>
+        {% for bot in bots %}
+        <div class="flex items-center gap-3 px-5 py-3" style="border-bottom:1px solid var(--border);">
+          <div class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold"
+               style="background:var(--surface2);color:var(--muted2);">
+            {{ bot.username|first|upper }}
+          </div>
+          <div class="flex-1">
+            <p class="text-sm font-medium" style="color:var(--text);">{{ bot.username }}</p>
+            <p class="text-xs" style="color:var(--muted);">
+              Preference: <span class="font-semibold">{{ bot.profile.bot_preference|default:"—" }}</span>
+              &nbsp;·&nbsp; Score: {{ bot.profile.score_display }}
+              &nbsp;·&nbsp; Picks locked: {% if bot.profile.preseason_submitted %}yes{% else %}no{% endif %}
+            </p>
+          </div>
+          <form method="post" style="margin:0;" onsubmit="return confirm('Delete {{ bot.username }}?')">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="delete_bot">
+            <input type="hidden" name="user_id" value="{{ bot.pk }}">
+            <button type="submit"
+                    class="text-xs font-semibold px-3 py-1.5 rounded-lg"
+                    style="background:rgba(239,68,68,.1);color:#ef4444;border:none;cursor:pointer;">
+              Delete
+            </button>
+          </form>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="px-5 py-8 text-center">
+        <p class="text-sm" style="color:var(--muted);">No bots created yet.</p>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+</div>
+{% endblock %}

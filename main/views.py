@@ -812,6 +812,11 @@ def pickdash(request):
                 send_picks_published_email(settings)
             except Exception as _email_err:
                 print(f'[manual scrape] email error: {_email_err}', flush=True)
+            try:
+                from .auto import make_bot_picks
+                make_bot_picks()
+            except Exception as _bot_err:
+                print(f'[manual scrape] bot picks error: {_bot_err}', flush=True)
         messages.success(request, f'Scraped week {week}: {added} added, {dupes} skipped.')
 
     elif 'grade' in request.POST:
@@ -1045,3 +1050,44 @@ def send_test_email(request):
     send_picks_published_email(settings)
     messages.success(request, 'Test email queued — check logs for result.')
     return redirect('main:pickdash')
+
+
+@staff_member_required
+def devtools(request):
+    if request.method == 'POST':
+        action = request.POST.get('action')
+
+        if action == 'create_bot':
+            username = request.POST.get('username', '').strip()
+            if not username:
+                import secrets
+                username = f'bot_{secrets.token_hex(3)}'
+            if User.objects.filter(username=username).exists():
+                messages.error(request, f'Username "{username}" already exists.')
+            else:
+                pref = random.choice(['underdog', 'favorite'])
+                bot_user = User.objects.create_user(
+                    username=username,
+                    password=None,
+                    is_active=True,
+                    is_staff=False,
+                )
+                bot_user.profile.is_bot = True
+                bot_user.profile.bot_preference = pref
+                bot_user.profile.preseason_submitted = True
+                bot_user.profile.save()
+                messages.success(request, f'Created bot "{username}" with {pref} preference.')
+
+        elif action == 'delete_bot':
+            uid = request.POST.get('user_id')
+            try:
+                bot = User.objects.get(pk=uid, profile__is_bot=True)
+                bot.delete()
+                messages.success(request, f'Deleted bot "{bot.username}".')
+            except User.DoesNotExist:
+                messages.error(request, 'Bot not found.')
+
+        return redirect('main:devtools')
+
+    bots = User.objects.select_related('profile').filter(profile__is_bot=True).order_by('username')
+    return render(request, 'main/devtools.html', {'bots': bots})

@@ -155,6 +155,26 @@ Write a short introduction (2-3 sentences) to kick off the new season. Introduce
             "and post a recap here after each week's games are complete.")
 
 
+def make_bot_picks():
+    """Create picks for all bot users based on their preference."""
+    import random as _random
+    bots = User.objects.select_related('profile').filter(profile__is_bot=True)
+    games = list(Game.objects.all())
+    for bot in bots:
+        pref = bot.profile.bot_preference
+        for game in games:
+            if Pick.objects.filter(user=bot, game=game).exists():
+                continue
+            if pref == 'underdog':
+                choice = 'team2'
+            elif pref == 'favorite':
+                choice = 'team1'
+            else:
+                choice = _random.choice(['team1', 'team2'])
+            Pick.objects.create(user=bot, game=game, choice=choice)
+    log.info('Bot picks created for %s bots across %s games', len(bots), len(games))
+
+
 def _game_day_in_filter(game_dt, from_day, to_day, tz_str='UTC'):
     if from_day is None or to_day is None:
         return True
@@ -204,6 +224,7 @@ def do_scrape_and_publish(settings, year=None):
     settings.edit = False
     settings.save()
     log.info('Auto scrape+publish: week %s, %s games added, first kickoff %s', settings.week, added, first_dt)
+    make_bot_picks()
 
     try:
         from .email_utils import send_picks_published_email
