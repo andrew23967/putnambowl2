@@ -597,32 +597,66 @@ def announcements(request):
 
 @staff_member_required
 def accountdash(request):
-    form = forms.AdjustScoreForm(request.POST or None)
-    if form.is_valid():
-        username = form.cleaned_data['username']
-        amount = form.cleaned_data['amount']
-        if username == 'Everyone':
-            for p in User.objects.all():
-                p.profile.score += amount
-                p.save()
-            messages.success(request, f'Added {amount} points to everyone.')
-        else:
-            try:
-                user = User.objects.get(username=username)
-                user.profile.score += amount
-                user.save()
-                messages.success(request, f'Updated {username}: +{amount} points.')
-            except User.DoesNotExist:
-                messages.error(request, f'User "{username}" not found.')
-
+    from main.teams import TEAMS
     players = sorted(
         User.objects.select_related('profile').all(),
         key=lambda u: u.profile.score, reverse=True
     )
     return render(request, 'main/accountdash.html', {
-        'form': forms.AdjustScoreForm(),
         'players': players,
+        'teams': [t[0] for t in TEAMS],
     })
+
+
+@staff_member_required
+@require_POST
+def edit_player(request, user_id):
+    user = get_object_or_404(User, pk=user_id)
+
+    new_username = request.POST.get('username', '').strip()
+    if new_username and new_username != user.username:
+        if User.objects.filter(username=new_username).exclude(pk=user_id).exists():
+            return JsonResponse({'error': f'Username "{new_username}" is already taken.'}, status=400)
+        user.username = new_username
+
+    user.email = request.POST.get('email', user.email).strip()
+    user.is_staff = request.POST.get('is_staff') == 'on'
+    password = request.POST.get('password', '').strip()
+    if password:
+        user.set_password(password)
+    user.save()
+
+    p = user.profile
+    try:
+        p.score = float(request.POST.get('score', p.score))
+    except ValueError:
+        pass
+    p.real_name = request.POST.get('real_name', p.real_name)
+    p.bio = request.POST.get('bio', p.bio)
+    p.theme = request.POST.get('theme', p.theme)
+    p.favorite_team = request.POST.get('favorite_team', p.favorite_team)
+    p.big_loser = request.POST.get('big_loser', p.big_loser)
+    p.nfc_champ = request.POST.get('nfc_champ', p.nfc_champ)
+    p.afc_champ = request.POST.get('afc_champ', p.afc_champ)
+    p.superbowl_winner = request.POST.get('superbowl_winner', p.superbowl_winner)
+    p.is_bot = request.POST.get('is_bot') == 'on'
+    try:
+        p.bot_underdog_pct = int(request.POST.get('bot_underdog_pct', p.bot_underdog_pct))
+    except ValueError:
+        pass
+    p.preseason_submitted = request.POST.get('preseason_submitted') == 'on'
+    p.save()
+
+    return JsonResponse({'ok': True, 'username': user.username})
+
+
+@staff_member_required
+@require_POST
+def delete_player(request, user_id):
+    user = get_object_or_404(User, pk=user_id)
+    username = user.username
+    user.delete()
+    return JsonResponse({'ok': True, 'username': username})
 
 
 @staff_member_required
