@@ -12,7 +12,7 @@ from django.views.decorators.http import require_POST
 from . import models, forms, scrape
 from .models import (
     Game, Pick, SiteSettings, History, WeeklyLeaderboard,
-    Announcement, Bug, SeasonRecord
+    Announcement, SeasonRecord
 )
 from .teams import TEAM_ABBREV, ABBREV_TO_TEAM
 
@@ -559,15 +559,6 @@ def rules(request):
     return render(request, 'main/rules.html', {'rules': rules})
 
 
-@login_required
-def bugreport(request):
-    form = forms.BugForm(request.POST or None)
-    if form.is_valid():
-        Bug.objects.create(finder=request.user, description=form.cleaned_data['description'])
-        messages.success(request, 'Bug reported. Thanks!')
-        return redirect('main:home', week=1)
-    return render(request, 'main/bugreport.html', {'form': form})
-
 
 def seasons(request):
     raw_records = SeasonRecord.objects.all()
@@ -585,14 +576,6 @@ def seasons(request):
         })
     return render(request, 'main/seasons.html', {'season_records': season_records})
 
-
-@staff_member_required
-def buglog(request):
-    if 'resolve' in request.POST:
-        bug_id = request.POST.get('bug_id')
-        Bug.objects.filter(id=bug_id).update(resolved=True)
-    bugs = Bug.objects.all()
-    return render(request, 'main/buglog.html', {'bugs': bugs})
 
 
 @staff_member_required
