@@ -1,0 +1,172 @@
+{% extends 'base.html' %}
+{% block title %}Monte Carlo — PutnamBowl{% endblock %}
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+  <h1 class="text-xl font-bold" style="color:var(--text);">Monte Carlo Simulation</h1>
+  <p style="color:var(--muted2);font-size:.875rem;">Simulate a full NFL season across strategies to find the optimal underdog pick percentage.</p>
+</div>
+
+<!-- Config form -->
+<div class="rounded-2xl p-5 mb-6" style="background:var(--surface);border:1px solid var(--border);">
+  <p class="text-xs font-semibold uppercase tracking-wide mb-4" style="color:var(--muted);">Simulation Config</p>
+  <form method="post">
+    {% csrf_token %}
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+      <div>
+        <label class="block text-xs font-medium mb-1" style="color:var(--muted2);">NFL Season Year</label>
+        <input name="year" type="number" value="{{ config.year }}" min="2000" max="2030"
+               class="w-full px-3 py-2 text-sm rounded-lg outline-none"
+               style="background:var(--surface2);border:1px solid var(--border2);color:var(--text);">
+      </div>
+      <div>
+        <label class="block text-xs font-medium mb-1" style="color:var(--muted2);">Trials per strategy</label>
+        <input name="n_trials" type="number" value="{{ config.n_trials }}" min="100" max="50000"
+               class="w-full px-3 py-2 text-sm rounded-lg outline-none"
+               style="background:var(--surface2);border:1px solid var(--border2);color:var(--text);">
+      </div>
+      <div>
+        <label class="block text-xs font-medium mb-1" style="color:var(--muted2);">Points multiplier</label>
+        <input name="multiplier" type="number" value="{{ config.multiplier }}" min="0.1" step="0.1"
+               class="w-full px-3 py-2 text-sm rounded-lg outline-none"
+               style="background:var(--surface2);border:1px solid var(--border2);color:var(--text);">
+      </div>
+      <div>
+        <label class="block text-xs font-medium mb-1" style="color:var(--muted2);">% step size</label>
+        <select name="pct_step" class="w-full px-3 py-2 text-sm rounded-lg outline-none"
+                style="background:var(--surface2);border:1px solid var(--border2);color:var(--text);">
+          {% for s in "1,2,5,10"|split:"," %}
+          <option value="{{ s }}" {% if s == config.pct_step|stringformat:"d" %}selected{% endif %}>{{ s }}%</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+    <button type="submit" class="px-6 py-2.5 text-sm font-semibold rounded-lg" style="background:var(--accent);color:#fff;">
+      Run Simulation
+    </button>
+  </form>
+</div>
+
+{% if error %}
+<div class="rounded-xl px-4 py-3 mb-6 text-sm" style="background:rgba(239,68,68,.1);color:#ef4444;border:1px solid rgba(239,68,68,.2);">
+  {{ error }}
+</div>
+{% endif %}
+
+{% if results %}
+<!-- Chart -->
+<div class="rounded-2xl p-5 mb-6" style="background:var(--surface);border:1px solid var(--border);">
+  <p class="text-xs font-semibold uppercase tracking-wide mb-4" style="color:var(--muted);">Expected Season Score vs Underdog Pick %</p>
+  <div style="height:320px;">
+    <canvas id="mc-chart"></canvas>
+  </div>
+</div>
+
+<!-- Results table -->
+<div class="rounded-2xl overflow-hidden" style="background:var(--surface);border:1px solid var(--border);">
+  <div class="px-5 py-4" style="border-bottom:1px solid var(--border);">
+    <p class="font-semibold" style="color:var(--text);">Results — {{ config.year }} season · {{ config.n_trials }} trials</p>
+  </div>
+  <div style="overflow-x:auto;">
+    <table style="width:100%;border-collapse:collapse;font-size:.8125rem;">
+      <thead>
+        <tr style="background:var(--surface2);">
+          <th style="padding:10px 16px;text-align:left;font-weight:600;color:var(--muted2);font-size:.72rem;text-transform:uppercase;letter-spacing:.05em;">Underdog %</th>
+          <th style="padding:10px 16px;text-align:right;font-weight:600;color:var(--muted2);font-size:.72rem;text-transform:uppercase;letter-spacing:.05em;">Mean</th>
+          <th style="padding:10px 16px;text-align:right;font-weight:600;color:var(--muted2);font-size:.72rem;text-transform:uppercase;letter-spacing:.05em;">Std Dev</th>
+          <th style="padding:10px 16px;text-align:right;font-weight:600;color:var(--muted2);font-size:.72rem;text-transform:uppercase;letter-spacing:.05em;">P10</th>
+          <th style="padding:10px 16px;text-align:right;font-weight:600;color:var(--muted2);font-size:.72rem;text-transform:uppercase;letter-spacing:.05em;">P90</th>
+          <th style="padding:10px 16px;text-align:right;font-weight:600;color:var(--muted2);font-size:.72rem;text-transform:uppercase;letter-spacing:.05em;">Min</th>
+          <th style="padding:10px 16px;text-align:right;font-weight:600;color:var(--muted2);font-size:.72rem;text-transform:uppercase;letter-spacing:.05em;">Max</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in results %}
+        <tr style="border-top:1px solid var(--border);{% if r.is_best %}background:rgba(var(--accent-rgb),.08);{% endif %}">
+          <td style="padding:10px 16px;color:var(--text);font-weight:{% if r.is_best %}700{% else %}500{% endif %};">
+            {{ r.pct }}%{% if r.is_best %} ★{% endif %}
+          </td>
+          <td style="padding:10px 16px;text-align:right;color:{% if r.is_best %}var(--accent){% else %}var(--text){% endif %};font-weight:{% if r.is_best %}700{% else %}400{% endif %};">{{ r.mean }}</td>
+          <td style="padding:10px 16px;text-align:right;color:var(--muted2);">{{ r.std }}</td>
+          <td style="padding:10px 16px;text-align:right;color:var(--muted2);">{{ r.p10 }}</td>
+          <td style="padding:10px 16px;text-align:right;color:var(--muted2);">{{ r.p90 }}</td>
+          <td style="padding:10px 16px;text-align:right;color:var(--muted2);">{{ r.min }}</td>
+          <td style="padding:10px 16px;text-align:right;color:var(--muted2);">{{ r.max }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+const isLight = document.documentElement.dataset.theme === 'light';
+const gridColor = isLight ? 'rgba(0,0,0,.08)' : 'rgba(255,255,255,.06)';
+const textColor = isLight ? '#555' : '#aaa';
+const accentColor = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#00897b';
+
+const labels = [{% for r in results %}{{ r.pct }},{% endfor %}];
+const means  = [{% for r in results %}{{ r.mean }},{% endfor %}];
+const p10s   = [{% for r in results %}{{ r.p10 }},{% endfor %}];
+const p90s   = [{% for r in results %}{{ r.p90 }},{% endfor %}];
+
+new Chart(document.getElementById('mc-chart'), {
+  type: 'line',
+  data: {
+    labels: labels.map(l => l + '%'),
+    datasets: [
+      {
+        label: 'Mean',
+        data: means,
+        borderColor: accentColor,
+        backgroundColor: 'transparent',
+        borderWidth: 2.5,
+        pointRadius: 3,
+        tension: 0.3,
+      },
+      {
+        label: 'P90',
+        data: p90s,
+        borderColor: 'rgba(99,102,241,.5)',
+        backgroundColor: 'rgba(99,102,241,.07)',
+        borderWidth: 1.5,
+        borderDash: [4,3],
+        pointRadius: 0,
+        fill: '+1',
+        tension: 0.3,
+      },
+      {
+        label: 'P10',
+        data: p10s,
+        borderColor: 'rgba(99,102,241,.5)',
+        backgroundColor: 'transparent',
+        borderWidth: 1.5,
+        borderDash: [4,3],
+        pointRadius: 0,
+        tension: 0.3,
+      },
+    ],
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { labels: { color: textColor, font: { size: 12 } } },
+      tooltip: { mode: 'index', intersect: false },
+    },
+    scales: {
+      x: { ticks: { color: textColor }, grid: { color: gridColor } },
+      y: {
+        ticks: { color: textColor },
+        grid: { color: gridColor },
+        title: { display: true, text: 'Season score (pts)', color: textColor },
+      },
+    },
+  },
+});
+</script>
+{% endif %}
+{% endblock %}

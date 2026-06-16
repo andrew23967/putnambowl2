@@ -21,6 +21,7 @@ urlpatterns = [
     path('dashboard/analytics/', views.secret_analytics, name='secret_analytics'),
     path('dashboard/generate-recap/', views.generate_recap, name='generate_recap'),
     path('dashboard/send-test-email/', views.send_test_email, name='send_test_email'),
+    path('dashboard/montecarlo/', views.montecarlo_view, name='montecarlo'),
     path('dashboard/devtools/', views.devtools, name='devtools'),
     path('dashboard/devtools/sim/', views.sim_control, name='sim_control'),
     path('dashboard/devtools/sim/status/', views.sim_status, name='sim_status'),

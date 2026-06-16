@@ -1070,6 +1070,45 @@ def send_test_email(request):
 
 
 @staff_member_required
+def montecarlo_view(request):
+    results = None
+    error = None
+    config = {'year': 2024, 'n_trials': 2000, 'multiplier': 1.0, 'pct_step': 5}
+
+    if request.method == 'POST':
+        try:
+            config['year'] = int(request.POST.get('year', 2024))
+            config['n_trials'] = int(request.POST.get('n_trials', 2000))
+            config['multiplier'] = float(request.POST.get('multiplier', 1.0))
+            config['pct_step'] = int(request.POST.get('pct_step', 5))
+        except ValueError:
+            pass
+
+        from . import montecarlo as mc
+        games, err = mc.load_season_games(config['year'], config['multiplier'])
+        if err:
+            error = f'Failed to load season data: {err}'
+        elif not games:
+            error = f'No completed games found for {config["year"]}.'
+        else:
+            results = mc.run(
+                games,
+                n_trials=config['n_trials'],
+                pct_step=config['pct_step'],
+                multiplier=config['multiplier'],
+            )
+            best = max(results, key=lambda r: r['mean'])
+            for r in results:
+                r['is_best'] = r['pct'] == best['pct']
+
+    return render(request, 'main/montecarlo.html', {
+        'results': results,
+        'error': error,
+        'config': config,
+    })
+
+
+@staff_member_required
 def devtools(request):
     if request.method == 'POST':
         action = request.POST.get('action')
