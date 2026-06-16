@@ -51,7 +51,7 @@ def _wait(seconds, stop_event):
 
 def _run(lock_delay, grade_delay, advance_delay, year, stop_event):
     try:
-        from .auto import do_scrape_and_publish, do_lock_picks, do_grade, do_advance_week
+        from .auto import do_scrape_and_publish, do_lock_picks, do_grade, do_advance_week, make_bot_picks
         from .models import SiteSettings, Game
 
         while not stop_event.is_set():
@@ -63,6 +63,10 @@ def _run(lock_delay, grade_delay, advance_delay, year, stop_event):
                 _status['step'] = f'Week {settings.week}: scraping & publishing'
                 do_scrape_and_publish(settings, year=year)
                 settings.refresh_from_db()
+
+            # Always ensure bots have picks (idempotent — skips games already picked)
+            _status['step'] = f'Week {settings.week}: bot picks'
+            make_bot_picks()
 
             if stop_event.is_set():
                 break
