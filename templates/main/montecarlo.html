@@ -309,7 +309,7 @@ new Chart(document.getElementById('mc-chart'), {
           <td style="padding:10px 16px;text-align:right;color:var(--muted2);">{{ r.ev_fav }}</td>
           <td style="padding:10px 16px;text-align:right;font-weight:600;color:{% if r.net_ev >= 0 %}#10b981{% else %}#ef4444{% endif %};">
             {% if r.net_ev >= 0 %}+{% endif %}{{ r.net_ev }}{% if r.margin %} <span style="font-weight:400;font-size:.7rem;color:var(--muted2);">±{{ r.margin }}</span>{% endif %}
-            {% if r.bonf_sig %}<span title="Significant after Bonferroni correction" style="color:#f59e0b;margin-left:4px;">★</span>{% endif %}
+            {% if r.bonf_sig %}<span style="display:inline-block;margin-left:6px;padding:1px 6px;border-radius:4px;font-size:.65rem;font-weight:700;background:rgba(245,158,11,.18);color:#f59e0b;letter-spacing:.03em;">BONF</span>{% endif %}
           </td>
           <td style="padding:10px 16px;font-size:.72rem;font-weight:600;color:{% if r.net_ev >= 0 %}#10b981{% else %}#ef4444{% endif %};">
             {% if r.net_ev >= 0 %}UNDERDOG{% else %}FAVORITE{% endif %}
@@ -350,6 +350,7 @@ new Chart(document.getElementById('mc-chart'), {
   const evLabels=[{% for r in ev_results %}'{{ r.label }}',{% endfor %}];
   const netEvs=[{% for r in ev_results %}{{ r.net_ev }},{% endfor %}];
   const margins=[{% for r in ev_results %}{{ r.margin|default:"null" }},{% endfor %}];
+  const bonf=[{% for r in ev_results %}{{ r.bonf_sig|yesno:"true,false" }},{% endfor %}];
   const evErrPlugin={id:'evErr',afterDatasetsDraw(chart){
     const{ctx,chartArea,scales:{x,y}}=chart;
     ctx.save();
@@ -357,7 +358,8 @@ new Chart(document.getElementById('mc-chart'), {
     chart.getDatasetMeta(0).data.forEach((bar,i)=>{
       const m=margins[i]; if(m==null)return;
       const xc=bar.x,yT=y.getPixelForValue(netEvs[i]+m),yB=y.getPixelForValue(netEvs[i]-m),cap=5;
-      ctx.strokeStyle=netEvs[i]>=0?'#10b981':'#ef4444'; ctx.lineWidth=1.5; ctx.beginPath();
+      ctx.strokeStyle=bonf[i]?'#f59e0b':(netEvs[i]>=0?'#10b981':'#ef4444');
+      ctx.lineWidth=bonf[i]?2:1.5; ctx.beginPath();
       ctx.moveTo(xc,yT);ctx.lineTo(xc,yB);ctx.moveTo(xc-cap,yT);ctx.lineTo(xc+cap,yT);ctx.moveTo(xc-cap,yB);ctx.lineTo(xc+cap,yB);
       ctx.stroke();
     });
@@ -366,8 +368,9 @@ new Chart(document.getElementById('mc-chart'), {
   new Chart(document.getElementById('ev-chart'),{
     type:'bar',plugins:[evErrPlugin],
     data:{labels:evLabels,datasets:[{label:'Net EV',data:netEvs,
-      backgroundColor:netEvs.map(v=>v>=0?'rgba(16,185,129,.6)':'rgba(239,68,68,.5)'),
-      borderColor:netEvs.map(v=>v>=0?'#10b981':'#ef4444'),borderWidth:1.5,borderRadius:4}]},
+      backgroundColor:netEvs.map((v,i)=>bonf[i]?(v>=0?'rgba(16,185,129,.85)':'rgba(239,68,68,.75)'):(v>=0?'rgba(16,185,129,.18)':'rgba(239,68,68,.15)')),
+      borderColor:netEvs.map((v,i)=>bonf[i]?(v>=0?'#10b981':'#ef4444'):(v>=0?'rgba(16,185,129,.4)':'rgba(239,68,68,.35)')),
+      borderWidth:netEvs.map((_,i)=>bonf[i]?2:1),borderRadius:4}]},
     options:{responsive:true,maintainAspectRatio:false,
       plugins:{legend:{labels:{color:tc2,font:{size:12}}},
         tooltip:{mode:'index',intersect:false,callbacks:{afterLabel:ctx=>{const m=margins[ctx.dataIndex];return m!=null?`95% CI: ±${m}`:'';}}}},
