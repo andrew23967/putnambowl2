@@ -3,16 +3,15 @@
 {% block extra_head %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <style>
-  .article-body { max-width: 720px; }
-  .article-body p { line-height: 1.7; color: var(--muted2); font-size: .9375rem; margin-bottom: .75rem; }
+  .article-body p { line-height: 1.75; color: var(--muted2); font-size: 1.0625rem; margin-bottom: 1rem; }
   .article-body p strong { color: var(--text); }
   .conclusion {
-    border-left: 3px solid var(--accent);
-    padding: 12px 16px;
-    border-radius: 0 8px 8px 0;
+    border-left: 4px solid var(--accent);
+    padding: 18px 22px;
+    border-radius: 0 10px 10px 0;
     background: color-mix(in srgb, var(--accent) 6%, transparent);
-    font-size: .875rem;
-    line-height: 1.6;
+    font-size: 1.0625rem;
+    line-height: 1.75;
     color: var(--muted2);
   }
   .conclusion strong { color: var(--text); }
@@ -33,12 +32,12 @@
 <div class="article-body mb-10">
   <p class="text-xs font-semibold uppercase tracking-widest mb-3" style="color:var(--accent);">PutnamBowl Analysis</p>
   <h1 class="text-3xl font-bold mb-4" style="color:var(--text);line-height:1.2;">Can a simple strategy<br>beat PutnamBowl?</h1>
-  <p>
+  <p style="font-size:1.125rem;">
     In PutnamBowl, picking the underdog earns more points than picking the favorite — but underdogs win less often.
     The system is designed so that favorites and underdogs are, in theory, roughly equal expected value.
     But in practice, some patterns in real NFL outcomes might tip the scales.
   </p>
-  <p>
+  <p style="font-size:1.125rem;">
     This page tests three simple strategies using historical NFL data going back to 2016:
     <strong>always picking underdogs at a fixed rate</strong>,
     <strong>picking underdogs only above a point threshold</strong>, and
