@@ -1069,7 +1069,6 @@ def send_test_email(request):
     return redirect('main:pickdash')
 
 
-@login_required
 def montecarlo_view(request):
     results = None
     ev_results = []
