@@ -128,13 +128,22 @@ def ev_by_underdog_points(games, step=0.1):
         avg_fav = sum(g['pts_fav'] for g in bucket) / n
         ev_ug = round(avg_ug * win_rate, 3)
         ev_fav = round(avg_fav * (1 - win_rate), 3)
+        # Per-game net payoff: +pts_ug if ug won, -pts_fav if fav won
+        net_payoffs = [g['pts_ug'] if g['ug_won'] else -g['pts_fav'] for g in bucket]
+        mean_net = sum(net_payoffs) / n
+        if n > 1:
+            variance = sum((x - mean_net) ** 2 for x in net_payoffs) / (n - 1)
+            margin = round(1.96 * (variance / n) ** 0.5, 3)
+        else:
+            margin = None
         buckets.append({
             'label': f'{lo_r:.2f}–{hi_r:.2f}',
             'n_games': n,
             'ug_win_pct': round(win_rate * 100, 1),
             'ev_ug': ev_ug,
             'ev_fav': ev_fav,
-            'net_ev': round(ev_ug - ev_fav, 3),
+            'net_ev': round(mean_net, 3),
+            'margin': margin,
         })
 
     return buckets
