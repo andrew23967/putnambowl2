@@ -269,6 +269,7 @@
       <div class="hidden-mobile" style="display:flex;align-items:center;gap:2px;flex:1;">
         <a href="{% url 'main:home' week=settings.week|default:1 %}" class="nav-link">Home</a>
         <a href="{% url 'main:rules' %}" class="nav-link">Rules</a>
+        <a href="{% url 'main:montecarlo' %}" class="nav-link">Simulation</a>
         {% if request.user.is_staff %}
         <div class="nav-group" style="position:relative;">
           <button class="nav-link" style="display:flex;align-items:center;gap:4px;background:none;border:none;cursor:pointer;">
@@ -330,6 +331,7 @@
     <div style="display:flex;flex-direction:column;gap:2px;">
       <a href="{% url 'main:home' week=settings.week|default:1 %}" class="nav-link">Home</a>
       <a href="{% url 'main:rules' %}" class="nav-link">Rules</a>
+      <a href="{% url 'main:montecarlo' %}" class="nav-link">Simulation</a>
       {% if request.user.is_staff %}
       <div style="height:1px;background:var(--border);margin:4px 0;"></div>
       <a href="{% url 'main:pickdash' %}" class="nav-link">Pick Dashboard</a>

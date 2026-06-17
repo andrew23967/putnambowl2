@@ -1069,7 +1069,7 @@ def send_test_email(request):
     return redirect('main:pickdash')
 
 
-@staff_member_required
+@login_required
 def montecarlo_view(request):
     results = None
     ev_results = []
@@ -1083,6 +1083,7 @@ def montecarlo_view(request):
         'pct_step': 5,
         'ev_step': 0.1,
     }
+    s1_summary = s2_summary = s3_summary = None
 
     if request.method == 'POST':
         try:
@@ -1097,20 +1098,42 @@ def montecarlo_view(request):
             errors.append('Select at least one season.')
         else:
             from . import montecarlo as mc
-            games, year_counts, load_errors = mc.load_multi_season(
-                config['years']
-            )
+            games, year_counts, load_errors = mc.load_multi_season(config['years'])
             errors.extend(load_errors)
             if not games:
                 errors.append('No completed games found for the selected seasons.')
             else:
-                results = mc.run(
-                    games,
-                    n_trials=config['n_trials'],
-                    pct_step=config['pct_step'],
-                )
+                results = mc.run(games, n_trials=config['n_trials'], pct_step=config['pct_step'])
                 ev_results = mc.ev_by_underdog_points(games, step=config['ev_step'])
                 team_ev = mc.ev_by_team(games)
+
+                if results:
+                    best = next(r for r in results if r['is_best'])
+                    s1_summary = {
+                        'best_pct': best['pct'],
+                        'best_mean': best['mean'],
+                        'fav_mean': results[0]['mean'],
+                        'ug_mean': results[-1]['mean'],
+                        'range': round(max(r['mean'] for r in results) - min(r['mean'] for r in results), 1),
+                    }
+
+                if ev_results:
+                    bonf_pos = [r for r in ev_results if r.get('bonf_sig') and r['net_ev'] > 0]
+                    bonf_neg = [r for r in ev_results if r.get('bonf_sig') and r['net_ev'] < 0]
+                    s2_summary = {
+                        'n_pos': len([r for r in ev_results if r['net_ev'] > 0]),
+                        'n_total': len(ev_results),
+                        'n_bonf': len([r for r in ev_results if r.get('bonf_sig')]),
+                        'bonf_pos_labels': [r['label'] for r in bonf_pos],
+                        'bonf_neg_labels': [r['label'] for r in bonf_neg],
+                    }
+
+                if team_ev:
+                    bonf_teams = [r for r in team_ev if r.get('bonf_sig')]
+                    s3_summary = {
+                        'n_bonf': len(bonf_teams),
+                        'bonf_teams': [(r['team'], r['net_ev']) for r in bonf_teams],
+                    }
 
     return render(request, 'main/montecarlo.html', {
         'results': results,
@@ -1122,6 +1145,9 @@ def montecarlo_view(request):
         'total_games': sum(year_counts.values()),
         'ev_results': ev_results,
         'team_ev': team_ev,
+        's1_summary': s1_summary,
+        's2_summary': s2_summary,
+        's3_summary': s3_summary,
     })
 
 
