@@ -474,6 +474,7 @@ new Chart(document.getElementById('mc-chart'), {
   const teamLabels=[{% for r in team_ev %}'{{ r.team }}{% if r.bonf_sig %} ★{% endif %}',{% endfor %}];
   const teamNetEvs=[{% for r in team_ev %}{{ r.net_ev }},{% endfor %}];
   const teamMargins=[{% for r in team_ev %}{{ r.margin|default:"null" }},{% endfor %}];
+  const teamBonf=[{% for r in team_ev %}{% if r.bonf_sig %}true{% else %}false{% endif %},{% endfor %}];
   const teamErrPlugin={id:'teamErr',afterDatasetsDraw(chart){
     const{ctx,chartArea,scales:{x,y}}=chart;
     ctx.save();
@@ -481,7 +482,8 @@ new Chart(document.getElementById('mc-chart'), {
     chart.getDatasetMeta(0).data.forEach((bar,i)=>{
       const m=teamMargins[i]; if(m==null)return;
       const yc=bar.y,xR=x.getPixelForValue(teamNetEvs[i]+m),xL=x.getPixelForValue(teamNetEvs[i]-m),cap=4;
-      ctx.strokeStyle=teamNetEvs[i]>=0?'#10b981':'#ef4444'; ctx.lineWidth=1.5; ctx.beginPath();
+      ctx.strokeStyle=teamBonf[i]?'#f59e0b':(teamNetEvs[i]>=0?'#10b981':'#ef4444');
+      ctx.lineWidth=teamBonf[i]?2:1.5; ctx.beginPath();
       ctx.moveTo(xL,yc);ctx.lineTo(xR,yc);ctx.moveTo(xL,yc-cap);ctx.lineTo(xL,yc+cap);ctx.moveTo(xR,yc-cap);ctx.lineTo(xR,yc+cap);
       ctx.stroke();
     });
@@ -492,13 +494,14 @@ new Chart(document.getElementById('mc-chart'), {
   new Chart(document.getElementById('team-ev-chart'),{
     type:'bar',plugins:[teamErrPlugin],
     data:{labels:teamLabels,datasets:[{label:'Net EV per game',data:teamNetEvs,
-      backgroundColor:teamNetEvs.map(v=>v>=0?'rgba(16,185,129,.6)':'rgba(239,68,68,.5)'),
-      borderColor:teamNetEvs.map(v=>v>=0?'#10b981':'#ef4444'),borderWidth:1.5,borderRadius:3}]},
+      backgroundColor:teamNetEvs.map((v,i)=>teamBonf[i]?(v>=0?'rgba(16,185,129,.85)':'rgba(239,68,68,.75)'):(v>=0?'rgba(16,185,129,.18)':'rgba(239,68,68,.15)')),
+      borderColor:teamNetEvs.map((v,i)=>teamBonf[i]?(v>=0?'#10b981':'#ef4444'):(v>=0?'rgba(16,185,129,.4)':'rgba(239,68,68,.35)')),
+      borderWidth:teamNetEvs.map((_,i)=>teamBonf[i]?2:1),borderRadius:3}]},
     options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
       plugins:{legend:{display:false},
         tooltip:{callbacks:{afterLabel:ctx=>{const m=teamMargins[ctx.dataIndex];return m!=null?`95% CI: ±${m}`:'';}}}},
       scales:{x:{ticks:{color:tc3},grid:{color:gc3},title:{display:true,text:'Net EV per game (pts)',color:tc3}},
-        y:{ticks:{color:item=>item.tick.label.includes('★')?'#f59e0b':tc3,font:{size:11}},grid:{color:gc3}}},
+        y:{ticks:{color:item=>teamBonf[item.index]?'#f59e0b':tc3,font:{size:11}},grid:{color:gc3}}},
     },
   });
 })();
