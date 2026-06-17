@@ -23,6 +23,40 @@ def _is_nan(v):
         return True
 
 
+def _norm_ppf(p):
+    """Normal quantile function (Abramowitz & Stegun rational approximation, error < 4.5e-4)."""
+    if p >= 1.0:
+        return float('inf')
+    if p <= 0.5:
+        return -_norm_ppf(1 - p)
+    t = math.sqrt(-2 * math.log(1 - p))
+    num = 2.515517 + 0.802853 * t + 0.010328 * t ** 2
+    den = 1 + 1.432788 * t + 0.189269 * t ** 2 + 0.001308 * t ** 3
+    return t - num / den
+
+
+def _bonferroni_z(n_tests, alpha=0.05):
+    """Two-tailed Bonferroni-corrected z-score for n_tests comparisons."""
+    return _norm_ppf(1 - (alpha / 2) / n_tests)
+
+
+def _add_bonferroni(results, key='net_ev'):
+    """Add bonf_margin and bonf_sig fields to a list of result dicts that have 'se'."""
+    n = len(results)
+    if n < 2:
+        return
+    z = _bonferroni_z(n)
+    for r in results:
+        se = r.get('se')
+        if se is not None:
+            bonf_margin = round(z * se, 3)
+            r['bonf_margin'] = bonf_margin
+            r['bonf_sig'] = abs(r[key]) > bonf_margin
+        else:
+            r['bonf_margin'] = None
+            r['bonf_sig'] = False
+
+
 def load_season_games(year, multiplier=1.0):
     """Load regular-season games for one year with pick points and outcomes."""
     try:
@@ -34,7 +68,6 @@ def load_season_games(year, multiplier=1.0):
     games = []
     no_lines = 0
     for _, row in schedule.iterrows():
-        # Regular season only
         game_type = row.get('game_type', 'REG')
         if str(game_type).upper() not in ('REG', 'NaN', '') and not _is_nan(game_type):
             if str(game_type).upper() != 'REG':
@@ -42,11 +75,11 @@ def load_season_games(year, multiplier=1.0):
 
         result = row.get('result')
         if _is_nan(result) or result is None:
-            continue  # not yet played
+            continue
 
         result = float(result)
         if result == 0:
-            continue  # tie — skip
+            continue  # tie
 
         week = int(row.get('week', 0))
         home_ml = row.get('home_moneyline')
@@ -55,7 +88,6 @@ def load_season_games(year, multiplier=1.0):
 
         if has_lines:
             home_ml, away_ml = float(home_ml), float(away_ml)
-            # More positive moneyline = underdog
             if home_ml >= away_ml:
                 underdog = 'home'
                 pts_ug = _points(home_ml, away_ml, multiplier)
@@ -105,9 +137,8 @@ def load_multi_season(years, multiplier=1.0):
 
 def ev_by_underdog_points(games, step=0.1):
     """
-    For each bucket of underdog point values, compute net EV of picking underdog vs favorite.
-    Only includes games with real moneylines. Skips buckets with fewer than 3 games.
-    Returns list of dicts sorted by underdog point range.
+    Net EV of picking underdog vs favorite, bucketed by underdog point value.
+    Includes Bonferroni correction for the number of buckets tested.
     """
     lined = [g for g in games if g.get('has_lines')]
     if not lined:
@@ -132,12 +163,13 @@ def ev_by_underdog_points(games, step=0.1):
         avg_fav = sum(g['pts_fav'] for g in bucket) / n
         ev_ug = round(avg_ug * win_rate, 3)
         ev_fav = round(avg_fav * (1 - win_rate), 3)
-        # Per-game net payoff: +pts_ug if ug won, -pts_fav if fav won
         net_payoffs = [g['pts_ug'] if g['ug_won'] else -g['pts_fav'] for g in bucket]
         mean_net = sum(net_payoffs) / n
+        se = None
         if n > 1:
             variance = sum((x - mean_net) ** 2 for x in net_payoffs) / (n - 1)
-            margin = round(1.96 * (variance / n) ** 0.5, 3)
+            se = (variance / n) ** 0.5
+            margin = round(1.96 * se, 3)
         else:
             margin = None
         buckets.append({
@@ -148,15 +180,17 @@ def ev_by_underdog_points(games, step=0.1):
             'ev_fav': ev_fav,
             'net_ev': round(mean_net, 3),
             'margin': margin,
+            'se': se,
         })
 
+    _add_bonferroni(buckets)
     return buckets
 
 
 def ev_by_team(games):
     """
-    For each NFL team, compute net EV of picking that team vs picking the opponent,
-    averaged across all their games. Positive = good pick, negative = bad pick.
+    Net EV of picking each team vs their opponent, averaged across all games.
+    Includes Bonferroni correction for the number of teams tested.
     """
     team_payoffs = {}
 
@@ -172,7 +206,6 @@ def ev_by_team(games):
         else:
             pts_home, pts_away = g['pts_fav'], g['pts_ug']
 
-        # Net payoff: earn pts_team if they won, lose pts_opponent if they lost
         home_net = pts_home if home_won else -pts_away
         away_net = pts_away if not home_won else -pts_home
 
@@ -183,9 +216,11 @@ def ev_by_team(games):
     for team, payoffs in team_payoffs.items():
         n = len(payoffs)
         mean_net = sum(payoffs) / n
+        se = None
         if n > 1:
             var = sum((x - mean_net) ** 2 for x in payoffs) / (n - 1)
-            margin = round(1.96 * (var / n) ** 0.5, 3)
+            se = (var / n) ** 0.5
+            margin = round(1.96 * se, 3)
         else:
             margin = None
         results.append({
@@ -193,9 +228,11 @@ def ev_by_team(games):
             'n_games': n,
             'net_ev': round(mean_net, 3),
             'margin': margin,
+            'se': se,
         })
 
     results.sort(key=lambda r: r['net_ev'], reverse=True)
+    _add_bonferroni(results)
     return results
 
 

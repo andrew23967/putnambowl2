@@ -7,15 +7,20 @@
   details.mc-table > summary::-webkit-details-marker { display:none; }
   details.mc-table > summary .chev { display:inline-block; transition:transform .2s; }
   details.mc-table[open] > summary .chev { transform:rotate(180deg); }
-  details.mc-table > summary { border-bottom:none; }
   details.mc-table[open] > summary { border-bottom:1px solid var(--border); }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="mb-6">
-  <h1 class="text-xl font-bold" style="color:var(--text);">Monte Carlo Simulation</h1>
-  <p style="color:var(--muted2);font-size:.875rem;">Sweep underdog pick % across one or more NFL seasons to find the optimal strategy.</p>
+
+<!-- Hero -->
+<div class="mb-8">
+  <h1 class="text-2xl font-bold mb-2" style="color:var(--text);">Can a simple strategy beat PutnamBowl?</h1>
+  <p style="color:var(--muted2);font-size:.9375rem;max-width:680px;line-height:1.6;">
+    In PutnamBowl, picking the underdog pays more points than picking the favorite — but underdogs win less often.
+    The question: is there a simple rule that exploits this tradeoff well enough to beat a random picker?
+    Select seasons below and run the simulation to find out.
+  </p>
 </div>
 
 <!-- Config -->
@@ -24,33 +29,29 @@
     {% csrf_token %}
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
-      <!-- Season selector -->
       <div>
         <p class="text-xs font-semibold uppercase tracking-wide mb-3" style="color:var(--muted);">Seasons</p>
         <div style="display:flex;flex-wrap:wrap;gap:6px;">
           {% for y in available_years %}
           <label style="display:flex;align-items:center;gap:5px;padding:5px 10px;border-radius:8px;cursor:pointer;font-size:.8125rem;font-weight:500;border:1px solid var(--border2);background:var(--surface2);color:var(--text);">
-            <input type="checkbox" name="years" value="{{ y }}"
-                   {% if y in config.years %}checked{% endif %}
-                   style="accent-color:var(--accent);">
+            <input type="checkbox" name="years" value="{{ y }}" {% if y in config.years %}checked{% endif %} style="accent-color:var(--accent);">
             {{ y }}
           </label>
           {% endfor %}
         </div>
       </div>
 
-      <!-- Other options -->
       <div class="space-y-3">
         <p class="text-xs font-semibold uppercase tracking-wide mb-3" style="color:var(--muted);">Options</p>
-        <div class="grid grid-cols-2 gap-3">
+        <div class="grid grid-cols-3 gap-3">
           <div>
-            <label class="block text-xs font-medium mb-1" style="color:var(--muted2);">Trials per strategy</label>
+            <label class="block text-xs font-medium mb-1" style="color:var(--muted2);">Trials</label>
             <input name="n_trials" type="number" value="{{ config.n_trials }}" min="100" max="50000"
                    class="w-full px-3 py-2 text-sm rounded-lg outline-none"
                    style="background:var(--surface2);border:1px solid var(--border2);color:var(--text);">
           </div>
           <div>
-            <label class="block text-xs font-medium mb-1" style="color:var(--muted2);">% step size</label>
+            <label class="block text-xs font-medium mb-1" style="color:var(--muted2);">% step</label>
             <select name="pct_step" class="w-full px-3 py-2 text-sm rounded-lg outline-none"
                     style="background:var(--surface2);border:1px solid var(--border2);color:var(--text);">
               <option value="1" {% if config.pct_step == 1 %}selected{% endif %}>1%</option>
@@ -60,7 +61,7 @@
             </select>
           </div>
           <div>
-            <label class="block text-xs font-medium mb-1" style="color:var(--muted2);">EV bucket size (pts)</label>
+            <label class="block text-xs font-medium mb-1" style="color:var(--muted2);">EV bucket</label>
             <select name="ev_step" class="w-full px-3 py-2 text-sm rounded-lg outline-none"
                     style="background:var(--surface2);border:1px solid var(--border2);color:var(--text);">
               <option value="0.05" {% if config.ev_step == 0.05 %}selected{% endif %}>0.05</option>
@@ -87,7 +88,7 @@
 {% endif %}
 
 {% if year_counts %}
-<div class="rounded-xl px-4 py-3 mb-6 text-sm" style="background:rgba(16,185,129,.08);color:#10b981;border:1px solid rgba(16,185,129,.2);">
+<div class="rounded-xl px-4 py-3 mb-8 text-sm" style="background:rgba(16,185,129,.08);color:#10b981;border:1px solid rgba(16,185,129,.2);">
   Loaded:
   {% for year, count in year_counts.items %}
     <strong>{{ year }}</strong> ({{ count }} games){% if not forloop.last %}, {% endif %}
@@ -96,19 +97,26 @@
 </div>
 {% endif %}
 
+<!-- ── STRATEGY 1 ─────────────────────────────────────────────────── -->
 {% if results %}
-<!-- MC Sweep Chart -->
-<div class="rounded-2xl p-5 mb-4" style="background:var(--surface);border:1px solid var(--border);">
-  <p class="text-xs font-semibold uppercase tracking-wide mb-4" style="color:var(--muted);">Expected Season Score vs Underdog Pick %</p>
-  <div style="height:320px;">
-    <canvas id="mc-chart"></canvas>
-  </div>
+<div class="mb-3">
+  <h2 class="text-lg font-bold mb-1" style="color:var(--text);">Strategy 1 — Pick underdogs X% of the time</h2>
+  <p style="color:var(--muted2);font-size:.8125rem;max-width:660px;line-height:1.55;">
+    The simplest possible rule: for every game, flip a biased coin — pick the underdog with probability X%, otherwise pick the favorite.
+    The chart sweeps X from 0% (always favorite) to 100% (always underdog) and shows expected season score.
+    The shaded band is the P10–P90 range of actual season outcomes; the error bars on the mean show the 95% confidence interval on the estimate itself.
+    If the best strategy's error bars clearly don't overlap with 0% or 100%, there's a real sweet spot.
+  </p>
 </div>
 
-<!-- MC Sweep Table (collapsed) -->
-<details class="mc-table rounded-2xl overflow-hidden mb-6" style="background:var(--surface);border:1px solid var(--border);">
-  <summary class="px-5 py-4 flex items-center justify-between" style="">
-    <p class="font-semibold" style="color:var(--text);">Results — {{ config.years|join:", " }} · {{ config.n_trials }} trials each</p>
+<div class="rounded-2xl p-5 mb-4" style="background:var(--surface);border:1px solid var(--border);">
+  <p class="text-xs font-semibold uppercase tracking-wide mb-4" style="color:var(--muted);">Expected season score vs underdog pick %</p>
+  <div style="height:320px;"><canvas id="mc-chart"></canvas></div>
+</div>
+
+<details class="mc-table rounded-2xl overflow-hidden mb-8" style="background:var(--surface);border:1px solid var(--border);">
+  <summary class="px-5 py-4 flex items-center justify-between">
+    <p class="font-semibold" style="color:var(--text);">Full results — {{ config.years|join:", " }} · {{ config.n_trials }} trials</p>
     <span class="chev text-sm" style="color:var(--muted2);">▾</span>
   </summary>
   <div style="overflow-x:auto;">
@@ -142,83 +150,67 @@ const isLight = document.documentElement.dataset.theme === 'light';
 const gridColor = isLight ? 'rgba(0,0,0,.08)' : 'rgba(255,255,255,.06)';
 const textColor = isLight ? '#555' : '#aaa';
 const accent = '#10b981';
-
-const labels    = [{% for r in results %}'{{ r.pct }}%',{% endfor %}];
-const means     = [{% for r in results %}{{ r.mean }},{% endfor %}];
-const p10s      = [{% for r in results %}{{ r.p10 }},{% endfor %}];
-const p90s      = [{% for r in results %}{{ r.p90 }},{% endfor %}];
+const labels     = [{% for r in results %}'{{ r.pct }}%',{% endfor %}];
+const means      = [{% for r in results %}{{ r.mean }},{% endfor %}];
+const p10s       = [{% for r in results %}{{ r.p10 }},{% endfor %}];
+const p90s       = [{% for r in results %}{{ r.p90 }},{% endfor %}];
 const semMargins = [{% for r in results %}{{ r.sem_margin }},{% endfor %}];
-
-const mcErrorBarPlugin = {
-  id: 'mcErrorBars',
-  afterDatasetsDraw(chart) {
-    const { ctx, scales: { x, y } } = chart;
-    const meta = chart.getDatasetMeta(1);
-    meta.data.forEach((point, i) => {
-      const xc = point.x;
-      const yTop = y.getPixelForValue(means[i] + semMargins[i]);
-      const yBot = y.getPixelForValue(means[i] - semMargins[i]);
-      const capW = 4;
-      ctx.save();
-      ctx.strokeStyle = 'rgba(99,102,241,.7)';
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.moveTo(xc, yTop); ctx.lineTo(xc, yBot);
-      ctx.moveTo(xc - capW, yTop); ctx.lineTo(xc + capW, yTop);
-      ctx.moveTo(xc - capW, yBot); ctx.lineTo(xc + capW, yBot);
-      ctx.stroke();
-      ctx.restore();
+const mcErrPlugin = {
+  id:'mcErr',
+  afterDatasetsDraw(chart){
+    const {ctx,scales:{x,y}}=chart;
+    chart.getDatasetMeta(1).data.forEach((pt,i)=>{
+      const xc=pt.x, yT=y.getPixelForValue(means[i]+semMargins[i]), yB=y.getPixelForValue(means[i]-semMargins[i]), cap=4;
+      ctx.save(); ctx.strokeStyle='rgba(99,102,241,.7)'; ctx.lineWidth=1.5; ctx.beginPath();
+      ctx.moveTo(xc,yT); ctx.lineTo(xc,yB);
+      ctx.moveTo(xc-cap,yT); ctx.lineTo(xc+cap,yT);
+      ctx.moveTo(xc-cap,yB); ctx.lineTo(xc+cap,yB);
+      ctx.stroke(); ctx.restore();
     });
   },
 };
-
-new Chart(document.getElementById('mc-chart'), {
-  type: 'line',
-  plugins: [mcErrorBarPlugin],
-  data: {
-    labels,
-    datasets: [
-      { label: 'P90', data: p90s, borderColor:'rgba(99,102,241,.45)', backgroundColor:'rgba(99,102,241,.07)', borderWidth:1.5, borderDash:[4,3], pointRadius:0, fill:'+1', tension:.3 },
-      { label: 'Mean', data: means, borderColor: accent, backgroundColor:'transparent', borderWidth:2.5, pointRadius:3, tension:.3 },
-      { label: 'P10', data: p10s, borderColor:'rgba(99,102,241,.45)', backgroundColor:'transparent', borderWidth:1.5, borderDash:[4,3], pointRadius:0, tension:.3 },
-    ],
-  },
-  options: {
-    responsive:true, maintainAspectRatio:false,
-    plugins: {
-      legend:{ labels:{ color:textColor, font:{ size:12 } } },
-      tooltip:{
-        mode:'index', intersect:false,
-        callbacks:{ afterBody: items => { const i = items[0]?.dataIndex; return i != null ? [`95% CI on mean: ±${semMargins[i]}`] : []; } },
-      },
+new Chart(document.getElementById('mc-chart'),{
+  type:'line', plugins:[mcErrPlugin],
+  data:{labels,datasets:[
+    {label:'P90',data:p90s,borderColor:'rgba(99,102,241,.45)',backgroundColor:'rgba(99,102,241,.07)',borderWidth:1.5,borderDash:[4,3],pointRadius:0,fill:'+1',tension:.3},
+    {label:'Mean',data:means,borderColor:accent,backgroundColor:'transparent',borderWidth:2.5,pointRadius:3,tension:.3},
+    {label:'P10',data:p10s,borderColor:'rgba(99,102,241,.45)',backgroundColor:'transparent',borderWidth:1.5,borderDash:[4,3],pointRadius:0,tension:.3},
+  ]},
+  options:{responsive:true,maintainAspectRatio:false,
+    plugins:{
+      legend:{labels:{color:textColor,font:{size:12}}},
+      tooltip:{mode:'index',intersect:false,callbacks:{afterBody:items=>{const i=items[0]?.dataIndex;return i!=null?[`95% CI on mean: ±${semMargins[i]}`]:[];}}},
     },
-    scales: {
-      x: { ticks:{ color:textColor }, grid:{ color:gridColor } },
-      y: { ticks:{ color:textColor }, grid:{ color:gridColor }, title:{ display:true, text:'Season score (pts)', color:textColor } },
+    scales:{
+      x:{ticks:{color:textColor},grid:{color:gridColor}},
+      y:{ticks:{color:textColor},grid:{color:gridColor},title:{display:true,text:'Season score (pts)',color:textColor}},
     },
   },
 });
 </script>
 {% endif %}
 
+<!-- ── STRATEGY 2 ─────────────────────────────────────────────────── -->
 {% if ev_results %}
-<!-- EV by Underdog Points Chart -->
-<div class="mt-4 mb-3">
-  <h2 class="text-base font-semibold mb-1" style="color:var(--text);">Expected Value by Underdog Point Range</h2>
-  <p style="color:var(--muted2);font-size:.8125rem;">Net EV = E[pts if pick underdog] − E[pts if pick favorite]. Positive → pick underdog pays off; negative → pick favorite.</p>
+<div class="mb-3">
+  <h2 class="text-lg font-bold mb-1" style="color:var(--text);">Strategy 2 — Only pick underdogs with large enough payouts</h2>
+  <p style="color:var(--muted2);font-size:.8125rem;max-width:660px;line-height:1.55;">
+    A smarter rule: pick the underdog only when the point value is above a threshold.
+    Each bar shows the net expected value of picking the underdog over the favorite for games in that point range.
+    <strong style="color:var(--text);">Green = pick the underdog. Red = pick the favorite.</strong>
+    Error bars are 95% confidence intervals — if a bar doesn't clearly clear zero, the result could be noise.
+    With {{ ev_results|length }} buckets tested, you'd expect roughly {{ ev_results|length }} × 5% ≈ 1 false positive by chance, so look for bars well clear of zero.
+  </p>
 </div>
 
 <div class="rounded-2xl p-5 mb-4" style="background:var(--surface);border:1px solid var(--border);">
-  <p class="text-xs font-semibold uppercase tracking-wide mb-4" style="color:var(--muted);">Net EV per Game (Underdog pts bucket)</p>
-  <div style="height:300px;">
-    <canvas id="ev-chart"></canvas>
-  </div>
+  <p class="text-xs font-semibold uppercase tracking-wide mb-4" style="color:var(--muted);">Net EV per game — pick underdog vs favorite (by underdog point value)</p>
+  <div style="height:300px;"><canvas id="ev-chart"></canvas></div>
 </div>
 
-<!-- EV by Underdog Points Table (collapsed) -->
-<details class="mc-table rounded-2xl overflow-hidden mb-6" style="background:var(--surface);border:1px solid var(--border);">
+<details class="mc-table rounded-2xl overflow-hidden mb-8" style="background:var(--surface);border:1px solid var(--border);">
   <summary class="px-5 py-4 flex items-center justify-between">
-    <p class="font-semibold" style="color:var(--text);">EV Breakdown by Underdog Point Range</p>
+    <p class="font-semibold" style="color:var(--text);">Underdog point range breakdown</p>
     <span class="chev text-sm" style="color:var(--muted2);">▾</span>
   </summary>
   <div style="overflow-x:auto;">
@@ -230,7 +222,7 @@ new Chart(document.getElementById('mc-chart'), {
           <th style="padding:10px 16px;text-align:right;font-weight:600;color:var(--muted2);font-size:.72rem;text-transform:uppercase;letter-spacing:.05em;">Ug win %</th>
           <th style="padding:10px 16px;text-align:right;font-weight:600;color:var(--muted2);font-size:.72rem;text-transform:uppercase;letter-spacing:.05em;">EV pick ug</th>
           <th style="padding:10px 16px;text-align:right;font-weight:600;color:var(--muted2);font-size:.72rem;text-transform:uppercase;letter-spacing:.05em;">EV pick fav</th>
-          <th style="padding:10px 16px;text-align:right;font-weight:600;color:var(--muted2);font-size:.72rem;text-transform:uppercase;letter-spacing:.05em;">Net EV</th>
+          <th style="padding:10px 16px;text-align:right;font-weight:600;color:var(--muted2);font-size:.72rem;text-transform:uppercase;letter-spacing:.05em;">Net EV (95% CI)</th>
           <th style="padding:10px 16px;text-align:left;font-weight:600;color:var(--muted2);font-size:.72rem;text-transform:uppercase;letter-spacing:.05em;">Pick</th>
         </tr>
       </thead>
@@ -244,6 +236,7 @@ new Chart(document.getElementById('mc-chart'), {
           <td style="padding:10px 16px;text-align:right;color:var(--muted2);">{{ r.ev_fav }}</td>
           <td style="padding:10px 16px;text-align:right;font-weight:600;color:{% if r.net_ev >= 0 %}#10b981{% else %}#ef4444{% endif %};">
             {% if r.net_ev >= 0 %}+{% endif %}{{ r.net_ev }}{% if r.margin %} <span style="font-weight:400;font-size:.7rem;color:var(--muted2);">±{{ r.margin }}</span>{% endif %}
+            {% if r.bonf_sig %}<span title="Significant after Bonferroni correction" style="color:#f59e0b;margin-left:4px;">★</span>{% endif %}
           </td>
           <td style="padding:10px 16px;font-size:.72rem;font-weight:600;color:{% if r.net_ev >= 0 %}#10b981{% else %}#ef4444{% endif %};">
             {% if r.net_ev >= 0 %}UNDERDOG{% else %}FAVORITE{% endif %}
@@ -252,70 +245,46 @@ new Chart(document.getElementById('mc-chart'), {
         {% endfor %}
       </tbody>
     </table>
+    <p class="px-5 py-3 text-xs" style="color:var(--muted2);border-top:1px solid var(--border);">★ Significant after Bonferroni correction for {{ ev_results|length }} simultaneous comparisons.</p>
   </div>
 </details>
 
 <script>
-(function() {
-  const isLight2 = document.documentElement.dataset.theme === 'light';
-  const gridColor2 = isLight2 ? 'rgba(0,0,0,.08)' : 'rgba(255,255,255,.06)';
-  const textColor2 = isLight2 ? '#555' : '#aaa';
-
-  const evLabels = [{% for r in ev_results %}'{{ r.label }}',{% endfor %}];
-  const netEvs   = [{% for r in ev_results %}{{ r.net_ev }},{% endfor %}];
-  const margins  = [{% for r in ev_results %}{{ r.margin|default:"null" }},{% endfor %}];
-
-  const errorBarPlugin = {
-    id: 'errorBars',
-    afterDatasetsDraw(chart) {
-      const { ctx, scales: { x, y } } = chart;
-      chart.getDatasetMeta(0).data.forEach((bar, i) => {
-        const m = margins[i];
-        if (m == null) return;
-        const xCenter = bar.x;
-        const yTop = y.getPixelForValue(netEvs[i] + m);
-        const yBot = y.getPixelForValue(netEvs[i] - m);
-        const capW = 5;
-        ctx.save();
-        ctx.strokeStyle = netEvs[i] >= 0 ? '#10b981' : '#ef4444';
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.moveTo(xCenter, yTop); ctx.lineTo(xCenter, yBot);
-        ctx.moveTo(xCenter - capW, yTop); ctx.lineTo(xCenter + capW, yTop);
-        ctx.moveTo(xCenter - capW, yBot); ctx.lineTo(xCenter + capW, yBot);
-        ctx.stroke();
-        ctx.restore();
-      });
-    },
-  };
-
-  new Chart(document.getElementById('ev-chart'), {
-    type: 'bar',
-    plugins: [errorBarPlugin],
-    data: {
-      labels: evLabels,
-      datasets: [{
-        label: 'Net EV (pick ug − pick fav)',
-        data: netEvs,
-        backgroundColor: netEvs.map(v => v >= 0 ? 'rgba(16,185,129,.6)' : 'rgba(239,68,68,.5)'),
-        borderColor:     netEvs.map(v => v >= 0 ? '#10b981' : '#ef4444'),
-        borderWidth: 1.5,
-        borderRadius: 4,
-      }],
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { labels: { color: textColor2, font: { size: 12 } } },
-        tooltip: {
-          mode: 'index', intersect: false,
-          callbacks: { afterLabel: ctx => { const m = margins[ctx.dataIndex]; return m != null ? `95% CI: ±${m}` : ''; } },
-        },
+(function(){
+  const isLight2=document.documentElement.dataset.theme==='light';
+  const gc2=isLight2?'rgba(0,0,0,.08)':'rgba(255,255,255,.06)';
+  const tc2=isLight2?'#555':'#aaa';
+  const evLabels=[{% for r in ev_results %}'{{ r.label }}',{% endfor %}];
+  const netEvs=[{% for r in ev_results %}{{ r.net_ev }},{% endfor %}];
+  const margins=[{% for r in ev_results %}{{ r.margin|default:"null" }},{% endfor %}];
+  const evErrPlugin={id:'evErr',afterDatasetsDraw(chart){
+    const{ctx,scales:{x,y}}=chart;
+    chart.getDatasetMeta(0).data.forEach((bar,i)=>{
+      const m=margins[i]; if(m==null)return;
+      const xc=bar.x,yT=y.getPixelForValue(netEvs[i]+m),yB=y.getPixelForValue(netEvs[i]-m),cap=5;
+      ctx.save(); ctx.strokeStyle=netEvs[i]>=0?'#10b981':'#ef4444'; ctx.lineWidth=1.5; ctx.beginPath();
+      ctx.moveTo(xc,yT);ctx.lineTo(xc,yB);
+      ctx.moveTo(xc-cap,yT);ctx.lineTo(xc+cap,yT);
+      ctx.moveTo(xc-cap,yB);ctx.lineTo(xc+cap,yB);
+      ctx.stroke();ctx.restore();
+    });
+  }};
+  new Chart(document.getElementById('ev-chart'),{
+    type:'bar',plugins:[evErrPlugin],
+    data:{labels:evLabels,datasets:[{
+      label:'Net EV',data:netEvs,
+      backgroundColor:netEvs.map(v=>v>=0?'rgba(16,185,129,.6)':'rgba(239,68,68,.5)'),
+      borderColor:netEvs.map(v=>v>=0?'#10b981':'#ef4444'),
+      borderWidth:1.5,borderRadius:4,
+    }]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{
+        legend:{labels:{color:tc2,font:{size:12}}},
+        tooltip:{mode:'index',intersect:false,callbacks:{afterLabel:ctx=>{const m=margins[ctx.dataIndex];return m!=null?`95% CI: ±${m}`:'';}}}
       },
-      scales: {
-        x: { ticks: { color: textColor2, maxRotation: 45 }, grid: { color: gridColor2 } },
-        y: { ticks: { color: textColor2 }, grid: { color: gridColor2 }, title: { display: true, text: 'Net EV per game (pts)', color: textColor2 } },
+      scales:{
+        x:{ticks:{color:tc2,maxRotation:45},grid:{color:gc2}},
+        y:{ticks:{color:tc2},grid:{color:gc2},title:{display:true,text:'Net EV per game (pts)',color:tc2}},
       },
     },
   });
@@ -323,24 +292,30 @@ new Chart(document.getElementById('mc-chart'), {
 </script>
 {% endif %}
 
+<!-- ── STRATEGY 3 ─────────────────────────────────────────────────── -->
 {% if team_ev %}
-<!-- EV by Team Chart -->
-<div class="mt-4 mb-3">
-  <h2 class="text-base font-semibold mb-1" style="color:var(--text);">Expected Value by Team</h2>
-  <p style="color:var(--muted2);font-size:.8125rem;">Net EV = E[pts if you pick this team] − E[pts if you pick the opponent]. Positive → historically good pick; negative → pick the other team.</p>
+<div class="mb-3">
+  <h2 class="text-lg font-bold mb-1" style="color:var(--text);">Strategy 3 — Always pick certain teams</h2>
+  <p style="color:var(--muted2);font-size:.8125rem;max-width:660px;line-height:1.55;">
+    Are some teams consistently better picks than others?
+    Each bar shows the net expected value of always picking that team over their opponent, across all their games in the selected seasons.
+  </p>
+  <p class="mt-2" style="color:var(--muted2);font-size:.8125rem;max-width:660px;line-height:1.55;">
+    <strong style="color:var(--text);">Important — multiple comparisons problem:</strong>
+    With {{ team_ev|length }} teams tested at 5% significance, you'd expect about {{ team_ev|length }} × 5% ≈ 1–2 teams to appear "significant" purely by chance.
+    The standard ±CI bars account for each team individually. The <strong style="color:#f59e0b;">★ Bonferroni</strong> marker is the stricter threshold — it corrects for all {{ team_ev|length }} simultaneous comparisons, so a team needs a much larger effect to earn it.
+    Only Bonferroni-starred teams are reliably good or bad picks.
+  </p>
 </div>
 
 <div class="rounded-2xl p-5 mb-4" style="background:var(--surface);border:1px solid var(--border);">
-  <p class="text-xs font-semibold uppercase tracking-wide mb-4" style="color:var(--muted);">Net EV per game by team (with 95% CI)</p>
-  <div style="position:relative;">
-    <canvas id="team-ev-chart"></canvas>
-  </div>
+  <p class="text-xs font-semibold uppercase tracking-wide mb-4" style="color:var(--muted);">Net EV per game by team — 95% CI shown (★ = significant after Bonferroni correction)</p>
+  <div style="position:relative;"><canvas id="team-ev-chart"></canvas></div>
 </div>
 
-<!-- Team EV Table (collapsed) -->
 <details class="mc-table rounded-2xl overflow-hidden mb-8" style="background:var(--surface);border:1px solid var(--border);">
   <summary class="px-5 py-4 flex items-center justify-between">
-    <p class="font-semibold" style="color:var(--text);">Team EV Breakdown</p>
+    <p class="font-semibold" style="color:var(--text);">Team EV breakdown</p>
     <span class="chev text-sm" style="color:var(--muted2);">▾</span>
   </summary>
   <div style="overflow-x:auto;">
@@ -350,93 +325,72 @@ new Chart(document.getElementById('mc-chart'), {
           <th style="padding:10px 16px;text-align:left;font-weight:600;color:var(--muted2);font-size:.72rem;text-transform:uppercase;letter-spacing:.05em;">#</th>
           <th style="padding:10px 16px;text-align:left;font-weight:600;color:var(--muted2);font-size:.72rem;text-transform:uppercase;letter-spacing:.05em;">Team</th>
           <th style="padding:10px 16px;text-align:right;font-weight:600;color:var(--muted2);font-size:.72rem;text-transform:uppercase;letter-spacing:.05em;">Games</th>
-          <th style="padding:10px 16px;text-align:right;font-weight:600;color:var(--muted2);font-size:.72rem;text-transform:uppercase;letter-spacing:.05em;">Net EV</th>
-          <th style="padding:10px 16px;text-align:right;font-weight:600;color:var(--muted2);font-size:.72rem;text-transform:uppercase;letter-spacing:.05em;">95% CI</th>
+          <th style="padding:10px 16px;text-align:right;font-weight:600;color:var(--muted2);font-size:.72rem;text-transform:uppercase;letter-spacing:.05em;">Net EV (95% CI)</th>
+          <th style="padding:10px 16px;text-align:left;font-weight:600;color:var(--muted2);font-size:.72rem;text-transform:uppercase;letter-spacing:.05em;">Bonferroni</th>
         </tr>
       </thead>
       <tbody>
         {% for r in team_ev %}
-        <tr style="border-top:1px solid var(--border);{% if r.net_ev >= 0 %}background:rgba(16,185,129,.03);{% else %}background:rgba(239,68,68,.03);{% endif %}">
+        <tr style="border-top:1px solid var(--border);{% if r.bonf_sig %}{% if r.net_ev >= 0 %}background:rgba(16,185,129,.06);{% else %}background:rgba(239,68,68,.06);{% endif %}{% endif %}">
           <td style="padding:10px 16px;color:var(--muted2);">{{ forloop.counter }}</td>
-          <td style="padding:10px 16px;color:var(--text);font-weight:600;">{{ r.team }}</td>
+          <td style="padding:10px 16px;color:var(--text);font-weight:600;">{{ r.team }}{% if r.bonf_sig %} <span style="color:#f59e0b;">★</span>{% endif %}</td>
           <td style="padding:10px 16px;text-align:right;color:var(--muted2);">{{ r.n_games }}</td>
           <td style="padding:10px 16px;text-align:right;font-weight:600;color:{% if r.net_ev >= 0 %}#10b981{% else %}#ef4444{% endif %};">
-            {% if r.net_ev >= 0 %}+{% endif %}{{ r.net_ev }}
+            {% if r.net_ev >= 0 %}+{% endif %}{{ r.net_ev }}{% if r.margin %} <span style="font-weight:400;font-size:.7rem;color:var(--muted2);">±{{ r.margin }}</span>{% endif %}
           </td>
-          <td style="padding:10px 16px;text-align:right;color:var(--muted2);font-size:.7rem;">
-            {% if r.margin %}±{{ r.margin }}{% endif %}
+          <td style="padding:10px 16px;font-size:.75rem;">
+            {% if r.bonf_sig %}
+              <span style="font-weight:600;color:#f59e0b;">★ significant</span>
+            {% else %}
+              <span style="color:var(--muted2);">—</span>
+            {% endif %}
           </td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
+    <p class="px-5 py-3 text-xs" style="color:var(--muted2);border-top:1px solid var(--border);">★ Significant after Bonferroni correction for {{ team_ev|length }} simultaneous comparisons (family-wise error rate 5%).</p>
   </div>
 </details>
 
 <script>
-(function() {
-  const isLight3 = document.documentElement.dataset.theme === 'light';
-  const gridColor3 = isLight3 ? 'rgba(0,0,0,.08)' : 'rgba(255,255,255,.06)';
-  const textColor3 = isLight3 ? '#555' : '#aaa';
-
-  const teamLabels  = [{% for r in team_ev %}'{{ r.team }}',{% endfor %}];
-  const teamNetEvs  = [{% for r in team_ev %}{{ r.net_ev }},{% endfor %}];
-  const teamMargins = [{% for r in team_ev %}{{ r.margin|default:"null" }},{% endfor %}];
-
-  const teamErrPlugin = {
-    id: 'teamErrBars',
-    afterDatasetsDraw(chart) {
-      const { ctx, scales: { x, y } } = chart;
-      chart.getDatasetMeta(0).data.forEach((bar, i) => {
-        const m = teamMargins[i];
-        if (m == null) return;
-        const yc = bar.y;
-        const xRight = x.getPixelForValue(teamNetEvs[i] + m);
-        const xLeft  = x.getPixelForValue(teamNetEvs[i] - m);
-        const capH = 4;
-        ctx.save();
-        ctx.strokeStyle = teamNetEvs[i] >= 0 ? '#10b981' : '#ef4444';
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.moveTo(xLeft, yc); ctx.lineTo(xRight, yc);
-        ctx.moveTo(xLeft, yc - capH); ctx.lineTo(xLeft, yc + capH);
-        ctx.moveTo(xRight, yc - capH); ctx.lineTo(xRight, yc + capH);
-        ctx.stroke();
-        ctx.restore();
-      });
-    },
-  };
-
-  const chartHeight = Math.max(400, teamLabels.length * 24);
-  document.getElementById('team-ev-chart').style.height = chartHeight + 'px';
-
-  new Chart(document.getElementById('team-ev-chart'), {
-    type: 'bar',
-    plugins: [teamErrPlugin],
-    data: {
-      labels: teamLabels,
-      datasets: [{
-        label: 'Net EV per game',
-        data: teamNetEvs,
-        backgroundColor: teamNetEvs.map(v => v >= 0 ? 'rgba(16,185,129,.6)' : 'rgba(239,68,68,.5)'),
-        borderColor:     teamNetEvs.map(v => v >= 0 ? '#10b981' : '#ef4444'),
-        borderWidth: 1.5,
-        borderRadius: 3,
-      }],
-    },
-    options: {
-      indexAxis: 'y',
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          callbacks: { afterLabel: ctx => { const m = teamMargins[ctx.dataIndex]; return m != null ? `95% CI: ±${m}` : ''; } },
-        },
+(function(){
+  const isLight3=document.documentElement.dataset.theme==='light';
+  const gc3=isLight3?'rgba(0,0,0,.08)':'rgba(255,255,255,.06)';
+  const tc3=isLight3?'#555':'#aaa';
+  const teamLabels=[{% for r in team_ev %}'{{ r.team }}{% if r.bonf_sig %} ★{% endif %}',{% endfor %}];
+  const teamNetEvs=[{% for r in team_ev %}{{ r.net_ev }},{% endfor %}];
+  const teamMargins=[{% for r in team_ev %}{{ r.margin|default:"null" }},{% endfor %}];
+  const teamErrPlugin={id:'teamErr',afterDatasetsDraw(chart){
+    const{ctx,scales:{x,y}}=chart;
+    chart.getDatasetMeta(0).data.forEach((bar,i)=>{
+      const m=teamMargins[i]; if(m==null)return;
+      const yc=bar.y,xR=x.getPixelForValue(teamNetEvs[i]+m),xL=x.getPixelForValue(teamNetEvs[i]-m),cap=4;
+      ctx.save(); ctx.strokeStyle=teamNetEvs[i]>=0?'#10b981':'#ef4444'; ctx.lineWidth=1.5; ctx.beginPath();
+      ctx.moveTo(xL,yc);ctx.lineTo(xR,yc);
+      ctx.moveTo(xL,yc-cap);ctx.lineTo(xL,yc+cap);
+      ctx.moveTo(xR,yc-cap);ctx.lineTo(xR,yc+cap);
+      ctx.stroke();ctx.restore();
+    });
+  }};
+  const chartHeight=Math.max(400,teamLabels.length*24);
+  document.getElementById('team-ev-chart').style.height=chartHeight+'px';
+  new Chart(document.getElementById('team-ev-chart'),{
+    type:'bar',plugins:[teamErrPlugin],
+    data:{labels:teamLabels,datasets:[{
+      label:'Net EV per game',data:teamNetEvs,
+      backgroundColor:teamNetEvs.map(v=>v>=0?'rgba(16,185,129,.6)':'rgba(239,68,68,.5)'),
+      borderColor:teamNetEvs.map(v=>v>=0?'#10b981':'#ef4444'),
+      borderWidth:1.5,borderRadius:3,
+    }]},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
+      plugins:{
+        legend:{display:false},
+        tooltip:{callbacks:{afterLabel:ctx=>{const m=teamMargins[ctx.dataIndex];return m!=null?`95% CI: ±${m}`:'';}}}
       },
-      scales: {
-        x: { ticks: { color: textColor3 }, grid: { color: gridColor3 }, title: { display: true, text: 'Net EV per game (pts)', color: textColor3 } },
-        y: { ticks: { color: textColor3, font: { size: 11 } }, grid: { color: gridColor3 } },
+      scales:{
+        x:{ticks:{color:tc3},grid:{color:gc3},title:{display:true,text:'Net EV per game (pts)',color:tc3}},
+        y:{ticks:{color:tc3,font:{size:11}},grid:{color:gc3}},
       },
     },
   });
