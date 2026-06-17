@@ -147,8 +147,36 @@ const means  = [{% for r in results %}{{ r.mean }},{% endfor %}];
 const p10s   = [{% for r in results %}{{ r.p10 }},{% endfor %}];
 const p90s   = [{% for r in results %}{{ r.p90 }},{% endfor %}];
 
+const mcErrorBarPlugin = {
+  id: 'mcErrorBars',
+  afterDatasetsDraw(chart) {
+    const { ctx, scales: { x, y } } = chart;
+    // Mean line is dataset index 1
+    const meta = chart.getDatasetMeta(1);
+    meta.data.forEach((point, i) => {
+      const xc = point.x;
+      const yTop = y.getPixelForValue(p90s[i]);
+      const yBot = y.getPixelForValue(p10s[i]);
+      const capW = 4;
+      ctx.save();
+      ctx.strokeStyle = 'rgba(99,102,241,.7)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(xc, yTop);
+      ctx.lineTo(xc, yBot);
+      ctx.moveTo(xc - capW, yTop);
+      ctx.lineTo(xc + capW, yTop);
+      ctx.moveTo(xc - capW, yBot);
+      ctx.lineTo(xc + capW, yBot);
+      ctx.stroke();
+      ctx.restore();
+    });
+  },
+};
+
 new Chart(document.getElementById('mc-chart'), {
   type: 'line',
+  plugins: [mcErrorBarPlugin],
   data: {
     labels,
     datasets: [
