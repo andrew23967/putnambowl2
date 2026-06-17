@@ -1080,7 +1080,6 @@ def montecarlo_view(request):
     config = {
         'years': [2024],
         'n_trials': 2000,
-        'multiplier': 1.0,
         'pct_step': 5,
         'ev_step': 0.1,
     }
@@ -1089,7 +1088,6 @@ def montecarlo_view(request):
         try:
             config['years'] = [int(y) for y in request.POST.getlist('years') if y]
             config['n_trials'] = int(request.POST.get('n_trials', 2000))
-            config['multiplier'] = float(request.POST.get('multiplier', 1.0))
             config['pct_step'] = int(request.POST.get('pct_step', 5))
             config['ev_step'] = float(request.POST.get('ev_step', 0.1))
         except ValueError:
@@ -1100,7 +1098,7 @@ def montecarlo_view(request):
         else:
             from . import montecarlo as mc
             games, year_counts, load_errors = mc.load_multi_season(
-                config['years'], config['multiplier']
+                config['years']
             )
             errors.extend(load_errors)
             if not games:
