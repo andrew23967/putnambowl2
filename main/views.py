@@ -1076,9 +1076,9 @@ def montecarlo_view(request):
     team_ev = []
     errors = []
     year_counts = {}
-    available_years = list(range(2016, 2025))
+    available_years = list(range(2016, 2026))
     config = {
-        'years': [2024],
+        'years': list(range(2016, 2026)),
         'n_trials': 2000,
         'pct_step': 5,
         'ev_step': 0.1,
