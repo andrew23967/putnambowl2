@@ -57,6 +57,17 @@
               <option value="10" {% if config.pct_step == 10 %}selected{% endif %}>10%</option>
             </select>
           </div>
+          <div>
+            <label class="block text-xs font-medium mb-1" style="color:var(--muted2);">EV bucket size (pts)</label>
+            <select name="ev_step" class="w-full px-3 py-2 text-sm rounded-lg outline-none"
+                    style="background:var(--surface2);border:1px solid var(--border2);color:var(--text);">
+              <option value="0.05" {% if config.ev_step == 0.05 %}selected{% endif %}>0.05</option>
+              <option value="0.1" {% if config.ev_step == 0.1 %}selected{% endif %}>0.10</option>
+              <option value="0.25" {% if config.ev_step == 0.25 %}selected{% endif %}>0.25</option>
+              <option value="0.5" {% if config.ev_step == 0.5 %}selected{% endif %}>0.50</option>
+              <option value="1.0" {% if config.ev_step == 1.0 %}selected{% endif %}>1.00</option>
+            </select>
+          </div>
         </div>
         <button type="submit" class="w-full py-2.5 text-sm font-semibold rounded-lg" style="background:var(--accent);color:#fff;">
           Run Simulation

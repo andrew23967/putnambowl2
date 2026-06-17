@@ -1081,6 +1081,7 @@ def montecarlo_view(request):
         'n_trials': 2000,
         'multiplier': 1.0,
         'pct_step': 5,
+        'ev_step': 0.1,
     }
 
     if request.method == 'POST':
@@ -1089,6 +1090,7 @@ def montecarlo_view(request):
             config['n_trials'] = int(request.POST.get('n_trials', 2000))
             config['multiplier'] = float(request.POST.get('multiplier', 1.0))
             config['pct_step'] = int(request.POST.get('pct_step', 5))
+            config['ev_step'] = float(request.POST.get('ev_step', 0.1))
         except ValueError:
             pass
 
@@ -1108,7 +1110,7 @@ def montecarlo_view(request):
                     n_trials=config['n_trials'],
                     pct_step=config['pct_step'],
                 )
-                ev_results = mc.ev_by_underdog_points(games)
+                ev_results = mc.ev_by_underdog_points(games, step=config['ev_step'])
 
     return render(request, 'main/montecarlo.html', {
         'results': results,
