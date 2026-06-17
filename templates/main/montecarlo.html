@@ -341,4 +341,134 @@ new Chart(document.getElementById('mc-chart'), {
 })();
 </script>
 {% endif %}
+
+{% if team_ev %}
+<div class="mt-8 mb-6">
+  <h2 class="text-base font-semibold mb-1" style="color:var(--text);">Expected Value by Team</h2>
+  <p style="color:var(--muted2);font-size:.8125rem;">Net EV = E[pts if you pick this team] − E[pts if you pick the opponent]. Positive → historically good pick; negative → pick the other team.</p>
+</div>
+
+<div class="rounded-2xl p-5 mb-6" style="background:var(--surface);border:1px solid var(--border);">
+  <p class="text-xs font-semibold uppercase tracking-wide mb-4" style="color:var(--muted);">Net EV per game by team (with 95% CI)</p>
+  <div style="position:relative;">
+    <canvas id="team-ev-chart"></canvas>
+  </div>
+</div>
+
+<div class="rounded-2xl overflow-hidden mb-8" style="background:var(--surface);border:1px solid var(--border);">
+  <div class="px-5 py-4" style="border-bottom:1px solid var(--border);">
+    <p class="font-semibold" style="color:var(--text);">Team EV Breakdown</p>
+  </div>
+  <div style="overflow-x:auto;">
+    <table style="width:100%;border-collapse:collapse;font-size:.8125rem;">
+      <thead>
+        <tr style="background:var(--surface2);">
+          <th style="padding:10px 16px;text-align:left;font-weight:600;color:var(--muted2);font-size:.72rem;text-transform:uppercase;letter-spacing:.05em;">#</th>
+          <th style="padding:10px 16px;text-align:left;font-weight:600;color:var(--muted2);font-size:.72rem;text-transform:uppercase;letter-spacing:.05em;">Team</th>
+          <th style="padding:10px 16px;text-align:right;font-weight:600;color:var(--muted2);font-size:.72rem;text-transform:uppercase;letter-spacing:.05em;">Games</th>
+          <th style="padding:10px 16px;text-align:right;font-weight:600;color:var(--muted2);font-size:.72rem;text-transform:uppercase;letter-spacing:.05em;">Net EV</th>
+          <th style="padding:10px 16px;text-align:right;font-weight:600;color:var(--muted2);font-size:.72rem;text-transform:uppercase;letter-spacing:.05em;">95% CI</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in team_ev %}
+        <tr style="border-top:1px solid var(--border);{% if r.net_ev >= 0 %}background:rgba(16,185,129,.03);{% else %}background:rgba(239,68,68,.03);{% endif %}">
+          <td style="padding:10px 16px;color:var(--muted2);">{{ forloop.counter }}</td>
+          <td style="padding:10px 16px;color:var(--text);font-weight:600;">{{ r.team }}</td>
+          <td style="padding:10px 16px;text-align:right;color:var(--muted2);">{{ r.n_games }}</td>
+          <td style="padding:10px 16px;text-align:right;font-weight:600;color:{% if r.net_ev >= 0 %}#10b981{% else %}#ef4444{% endif %};">
+            {% if r.net_ev >= 0 %}+{% endif %}{{ r.net_ev }}
+          </td>
+          <td style="padding:10px 16px;text-align:right;color:var(--muted2);font-size:.7rem;">
+            {% if r.margin %}±{{ r.margin }}{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+(function() {
+  const isLight3 = document.documentElement.dataset.theme === 'light';
+  const gridColor3 = isLight3 ? 'rgba(0,0,0,.08)' : 'rgba(255,255,255,.06)';
+  const textColor3 = isLight3 ? '#555' : '#aaa';
+
+  const teamLabels  = [{% for r in team_ev %}'{{ r.team }}',{% endfor %}];
+  const teamNetEvs  = [{% for r in team_ev %}{{ r.net_ev }},{% endfor %}];
+  const teamMargins = [{% for r in team_ev %}{{ r.margin|default:"null" }},{% endfor %}];
+
+  const teamErrPlugin = {
+    id: 'teamErrBars',
+    afterDatasetsDraw(chart) {
+      const { ctx, scales: { x, y } } = chart;
+      chart.getDatasetMeta(0).data.forEach((bar, i) => {
+        const m = teamMargins[i];
+        if (m == null) return;
+        const yc = bar.y;
+        const xRight = x.getPixelForValue(teamNetEvs[i] + m);
+        const xLeft  = x.getPixelForValue(teamNetEvs[i] - m);
+        const capH = 4;
+        ctx.save();
+        ctx.strokeStyle = teamNetEvs[i] >= 0 ? '#10b981' : '#ef4444';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(xLeft,  yc);
+        ctx.lineTo(xRight, yc);
+        ctx.moveTo(xLeft, yc - capH);
+        ctx.lineTo(xLeft, yc + capH);
+        ctx.moveTo(xRight, yc - capH);
+        ctx.lineTo(xRight, yc + capH);
+        ctx.stroke();
+        ctx.restore();
+      });
+    },
+  };
+
+  const chartHeight = Math.max(400, teamLabels.length * 24);
+  document.getElementById('team-ev-chart').style.height = chartHeight + 'px';
+
+  new Chart(document.getElementById('team-ev-chart'), {
+    type: 'bar',
+    plugins: [teamErrPlugin],
+    data: {
+      labels: teamLabels,
+      datasets: [{
+        label: 'Net EV per game',
+        data: teamNetEvs,
+        backgroundColor: teamNetEvs.map(v => v >= 0 ? 'rgba(16,185,129,.6)' : 'rgba(239,68,68,.5)'),
+        borderColor:     teamNetEvs.map(v => v >= 0 ? '#10b981' : '#ef4444'),
+        borderWidth: 1.5,
+        borderRadius: 3,
+      }],
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            afterLabel: ctx => {
+              const m = teamMargins[ctx.dataIndex];
+              return m != null ? `95% CI: ±${m}` : '';
+            },
+          },
+        },
+      },
+      scales: {
+        x: {
+          ticks: { color: textColor3 },
+          grid: { color: gridColor3 },
+          title: { display: true, text: 'Net EV per game (pts)', color: textColor3 },
+        },
+        y: { ticks: { color: textColor3, font: { size: 11 } }, grid: { color: gridColor3 } },
+      },
+    },
+  });
+})();
+</script>
+{% endif %}
 {% endblock %}

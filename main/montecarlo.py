@@ -74,6 +74,10 @@ def load_season_games(year, multiplier=1.0):
         games.append({
             'year': year,
             'week': week,
+            'home_team': str(row.get('home_team', '')),
+            'away_team': str(row.get('away_team', '')),
+            'underdog': underdog,
+            'home_won': result > 0,
             'pts_ug': pts_ug,
             'pts_fav': pts_fav,
             'ug_won': ug_won,
@@ -147,6 +151,52 @@ def ev_by_underdog_points(games, step=0.1):
         })
 
     return buckets
+
+
+def ev_by_team(games):
+    """
+    For each NFL team, compute net EV of picking that team vs picking the opponent,
+    averaged across all their games. Positive = good pick, negative = bad pick.
+    """
+    team_payoffs = {}
+
+    for g in games:
+        home = g.get('home_team', '')
+        away = g.get('away_team', '')
+        if not home or not away or home == 'nan' or away == 'nan':
+            continue
+
+        home_won = g['home_won']
+        if g['underdog'] == 'home':
+            pts_home, pts_away = g['pts_ug'], g['pts_fav']
+        else:
+            pts_home, pts_away = g['pts_fav'], g['pts_ug']
+
+        # Net payoff: earn pts_team if they won, lose pts_opponent if they lost
+        home_net = pts_home if home_won else -pts_away
+        away_net = pts_away if not home_won else -pts_home
+
+        team_payoffs.setdefault(home, []).append(home_net)
+        team_payoffs.setdefault(away, []).append(away_net)
+
+    results = []
+    for team, payoffs in team_payoffs.items():
+        n = len(payoffs)
+        mean_net = sum(payoffs) / n
+        if n > 1:
+            var = sum((x - mean_net) ** 2 for x in payoffs) / (n - 1)
+            margin = round(1.96 * (var / n) ** 0.5, 3)
+        else:
+            margin = None
+        results.append({
+            'team': team,
+            'n_games': n,
+            'net_ev': round(mean_net, 3),
+            'margin': margin,
+        })
+
+    results.sort(key=lambda r: r['net_ev'], reverse=True)
+    return results
 
 
 def run(games, n_trials=1000, pct_step=5):
