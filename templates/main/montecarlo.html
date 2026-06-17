@@ -142,10 +142,11 @@ const gridColor = isLight ? 'rgba(0,0,0,.08)' : 'rgba(255,255,255,.06)';
 const textColor = isLight ? '#555' : '#aaa';
 const accent = '#10b981';
 
-const labels = [{% for r in results %}'{{ r.pct }}%',{% endfor %}];
-const means  = [{% for r in results %}{{ r.mean }},{% endfor %}];
-const p10s   = [{% for r in results %}{{ r.p10 }},{% endfor %}];
-const p90s   = [{% for r in results %}{{ r.p90 }},{% endfor %}];
+const labels    = [{% for r in results %}'{{ r.pct }}%',{% endfor %}];
+const means     = [{% for r in results %}{{ r.mean }},{% endfor %}];
+const p10s      = [{% for r in results %}{{ r.p10 }},{% endfor %}];
+const p90s      = [{% for r in results %}{{ r.p90 }},{% endfor %}];
+const semMargins = [{% for r in results %}{{ r.sem_margin }},{% endfor %}];
 
 const mcErrorBarPlugin = {
   id: 'mcErrorBars',
@@ -155,8 +156,8 @@ const mcErrorBarPlugin = {
     const meta = chart.getDatasetMeta(1);
     meta.data.forEach((point, i) => {
       const xc = point.x;
-      const yTop = y.getPixelForValue(p90s[i]);
-      const yBot = y.getPixelForValue(p10s[i]);
+      const yTop = y.getPixelForValue(means[i] + semMargins[i]);
+      const yBot = y.getPixelForValue(means[i] - semMargins[i]);
       const capW = 4;
       ctx.save();
       ctx.strokeStyle = 'rgba(99,102,241,.7)';
@@ -187,7 +188,18 @@ new Chart(document.getElementById('mc-chart'), {
   },
   options: {
     responsive:true, maintainAspectRatio:false,
-    plugins: { legend:{ labels:{ color:textColor, font:{ size:12 } } }, tooltip:{ mode:'index', intersect:false } },
+    plugins: {
+      legend:{ labels:{ color:textColor, font:{ size:12 } } },
+      tooltip:{
+        mode:'index', intersect:false,
+        callbacks:{
+          afterBody: items => {
+            const i = items[0]?.dataIndex;
+            return i != null ? [`95% CI on mean: ±${semMargins[i]}`] : [];
+          },
+        },
+      },
+    },
     scales: {
       x: { ticks:{ color:textColor }, grid:{ color:gridColor } },
       y: { ticks:{ color:textColor }, grid:{ color:gridColor }, title:{ display:true, text:'Season score (pts)', color:textColor } },

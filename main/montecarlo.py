@@ -174,14 +174,18 @@ def run(games, n_trials=1000, pct_step=5):
         )
         scores = pts_earned.sum(axis=1)
 
+        mean = float(scores.mean())
+        std = float(scores.std())
+        sem_margin = round(1.96 * std / n_trials ** 0.5, 2)
         results.append({
             'pct': pct,
-            'mean': round(float(scores.mean()), 1),
-            'std': round(float(scores.std()), 1),
+            'mean': round(mean, 1),
+            'std': round(std, 1),
             'min': round(float(scores.min()), 1),
             'max': round(float(scores.max()), 1),
             'p10': round(float(np.percentile(scores, 10)), 1),
             'p90': round(float(np.percentile(scores, 90)), 1),
+            'sem_margin': sem_margin,
         })
 
     best_pct = max(results, key=lambda r: r['mean'])['pct']
