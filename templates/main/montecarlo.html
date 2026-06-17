@@ -5,15 +5,7 @@
 <style>
   .article-body p { line-height: 1.75; color: var(--muted2); font-size: 1.0625rem; margin-bottom: 1rem; }
   .article-body p strong { color: var(--text); }
-  .conclusion {
-    border-left: 4px solid var(--accent);
-    padding: 18px 22px;
-    border-radius: 0 10px 10px 0;
-    background: color-mix(in srgb, var(--accent) 6%, transparent);
-    font-size: 1.0625rem;
-    line-height: 1.75;
-    color: var(--muted2);
-  }
+  .conclusion { font-size: 1.0625rem; line-height: 1.75; color: var(--muted2); margin-top: .5rem; }
   .conclusion strong { color: var(--text); }
   details.mc-table > summary { list-style: none; cursor: pointer; }
   details.mc-table > summary::-webkit-details-marker { display: none; }
@@ -222,15 +214,19 @@ const p10s       = [{% for r in results %}{{ r.p10 }},{% endfor %}];
 const p90s       = [{% for r in results %}{{ r.p90 }},{% endfor %}];
 const semMargins = [{% for r in results %}{{ r.sem_margin }},{% endfor %}];
 const mcErrPlugin = { id:'mcErr', afterDatasetsDraw(chart) {
-  const {ctx,scales:{x,y}} = chart;
+  const {ctx, chartArea, scales:{x,y}} = chart;
+  ctx.save();
+  ctx.beginPath(); ctx.rect(chartArea.left, chartArea.top, chartArea.right-chartArea.left, chartArea.bottom-chartArea.top); ctx.clip();
+  ctx.strokeStyle='rgba(99,102,241,.7)'; ctx.lineWidth=1.5;
   chart.getDatasetMeta(1).data.forEach((pt,i) => {
     const xc=pt.x, yT=y.getPixelForValue(means[i]+semMargins[i]), yB=y.getPixelForValue(means[i]-semMargins[i]), cap=4;
-    ctx.save(); ctx.strokeStyle='rgba(99,102,241,.7)'; ctx.lineWidth=1.5; ctx.beginPath();
+    ctx.beginPath();
     ctx.moveTo(xc,yT); ctx.lineTo(xc,yB);
     ctx.moveTo(xc-cap,yT); ctx.lineTo(xc+cap,yT);
     ctx.moveTo(xc-cap,yB); ctx.lineTo(xc+cap,yB);
-    ctx.stroke(); ctx.restore();
+    ctx.stroke();
   });
+  ctx.restore();
 }};
 new Chart(document.getElementById('mc-chart'), {
   type:'line', plugins:[mcErrPlugin],
@@ -355,14 +351,17 @@ new Chart(document.getElementById('mc-chart'), {
   const netEvs=[{% for r in ev_results %}{{ r.net_ev }},{% endfor %}];
   const margins=[{% for r in ev_results %}{{ r.margin|default:"null" }},{% endfor %}];
   const evErrPlugin={id:'evErr',afterDatasetsDraw(chart){
-    const{ctx,scales:{x,y}}=chart;
+    const{ctx,chartArea,scales:{x,y}}=chart;
+    ctx.save();
+    ctx.beginPath();ctx.rect(chartArea.left,chartArea.top,chartArea.right-chartArea.left,chartArea.bottom-chartArea.top);ctx.clip();
     chart.getDatasetMeta(0).data.forEach((bar,i)=>{
       const m=margins[i]; if(m==null)return;
       const xc=bar.x,yT=y.getPixelForValue(netEvs[i]+m),yB=y.getPixelForValue(netEvs[i]-m),cap=5;
-      ctx.save(); ctx.strokeStyle=netEvs[i]>=0?'#10b981':'#ef4444'; ctx.lineWidth=1.5; ctx.beginPath();
-      ctx.moveTo(xc,yT);ctx.lineTo(xc,yB); ctx.moveTo(xc-cap,yT);ctx.lineTo(xc+cap,yT); ctx.moveTo(xc-cap,yB);ctx.lineTo(xc+cap,yB);
-      ctx.stroke();ctx.restore();
+      ctx.strokeStyle=netEvs[i]>=0?'#10b981':'#ef4444'; ctx.lineWidth=1.5; ctx.beginPath();
+      ctx.moveTo(xc,yT);ctx.lineTo(xc,yB);ctx.moveTo(xc-cap,yT);ctx.lineTo(xc+cap,yT);ctx.moveTo(xc-cap,yB);ctx.lineTo(xc+cap,yB);
+      ctx.stroke();
     });
+    ctx.restore();
   }};
   new Chart(document.getElementById('ev-chart'),{
     type:'bar',plugins:[evErrPlugin],
@@ -473,14 +472,17 @@ new Chart(document.getElementById('mc-chart'), {
   const teamNetEvs=[{% for r in team_ev %}{{ r.net_ev }},{% endfor %}];
   const teamMargins=[{% for r in team_ev %}{{ r.margin|default:"null" }},{% endfor %}];
   const teamErrPlugin={id:'teamErr',afterDatasetsDraw(chart){
-    const{ctx,scales:{x,y}}=chart;
+    const{ctx,chartArea,scales:{x,y}}=chart;
+    ctx.save();
+    ctx.beginPath();ctx.rect(chartArea.left,chartArea.top,chartArea.right-chartArea.left,chartArea.bottom-chartArea.top);ctx.clip();
     chart.getDatasetMeta(0).data.forEach((bar,i)=>{
       const m=teamMargins[i]; if(m==null)return;
       const yc=bar.y,xR=x.getPixelForValue(teamNetEvs[i]+m),xL=x.getPixelForValue(teamNetEvs[i]-m),cap=4;
-      ctx.save(); ctx.strokeStyle=teamNetEvs[i]>=0?'#10b981':'#ef4444'; ctx.lineWidth=1.5; ctx.beginPath();
-      ctx.moveTo(xL,yc);ctx.lineTo(xR,yc); ctx.moveTo(xL,yc-cap);ctx.lineTo(xL,yc+cap); ctx.moveTo(xR,yc-cap);ctx.lineTo(xR,yc+cap);
-      ctx.stroke();ctx.restore();
+      ctx.strokeStyle=teamNetEvs[i]>=0?'#10b981':'#ef4444'; ctx.lineWidth=1.5; ctx.beginPath();
+      ctx.moveTo(xL,yc);ctx.lineTo(xR,yc);ctx.moveTo(xL,yc-cap);ctx.lineTo(xL,yc+cap);ctx.moveTo(xR,yc-cap);ctx.lineTo(xR,yc+cap);
+      ctx.stroke();
     });
+    ctx.restore();
   }};
   const chartHeight=Math.max(400,teamLabels.length*24);
   document.getElementById('team-ev-chart').style.height=chartHeight+'px';
