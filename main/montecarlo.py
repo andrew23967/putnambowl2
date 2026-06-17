@@ -99,6 +99,47 @@ def load_multi_season(years, multiplier=1.0):
     return all_games, year_counts, errors
 
 
+def ev_by_underdog_points(games, step=0.1):
+    """
+    For each bucket of underdog point values, compute net EV of picking underdog vs favorite.
+    Only includes games with real moneylines. Skips buckets with fewer than 3 games.
+    Returns list of dicts sorted by underdog point range.
+    """
+    lined = [g for g in games if g.get('has_lines')]
+    if not lined:
+        return []
+
+    pts_values = [g['pts_ug'] for g in lined]
+    lo_start = math.floor(min(pts_values) / step) * step
+    hi_end = math.ceil(max(pts_values) / step) * step
+
+    buckets = []
+    lo = lo_start
+    while lo < hi_end - 1e-9:
+        hi = lo + step
+        lo_r, hi_r = round(lo, 2), round(hi, 2)
+        bucket = [g for g in lined if lo_r <= round(g['pts_ug'], 2) < hi_r]
+        lo = hi
+        if len(bucket) < 3:
+            continue
+        n = len(bucket)
+        win_rate = sum(1 for g in bucket if g['ug_won']) / n
+        avg_ug = sum(g['pts_ug'] for g in bucket) / n
+        avg_fav = sum(g['pts_fav'] for g in bucket) / n
+        ev_ug = round(avg_ug * win_rate, 3)
+        ev_fav = round(avg_fav * (1 - win_rate), 3)
+        buckets.append({
+            'label': f'{lo_r:.2f}–{hi_r:.2f}',
+            'n_games': n,
+            'ug_win_pct': round(win_rate * 100, 1),
+            'ev_ug': ev_ug,
+            'ev_fav': ev_fav,
+            'net_ev': round(ev_ug - ev_fav, 3),
+        })
+
+    return buckets
+
+
 def run(games, n_trials=1000, pct_step=5):
     """
     Monte Carlo simulation: sweep underdog pick % from 0 to 100.

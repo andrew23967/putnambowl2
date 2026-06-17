@@ -1072,6 +1072,7 @@ def send_test_email(request):
 @staff_member_required
 def montecarlo_view(request):
     results = None
+    ev_results = []
     errors = []
     year_counts = {}
     available_years = list(range(2016, 2025))
@@ -1107,6 +1108,7 @@ def montecarlo_view(request):
                     n_trials=config['n_trials'],
                     pct_step=config['pct_step'],
                 )
+                ev_results = mc.ev_by_underdog_points(games)
 
     return render(request, 'main/montecarlo.html', {
         'results': results,
@@ -1116,6 +1118,7 @@ def montecarlo_view(request):
         'available_years': available_years,
         'headers': ['Underdog %', 'Mean', 'Std Dev', 'P10', 'P90', 'Min', 'Max'],
         'total_games': sum(year_counts.values()),
+        'ev_results': ev_results,
     })
 
 
