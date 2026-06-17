@@ -178,27 +178,42 @@
 
 {% if s1_summary %}
 <div class="conclusion mb-8">
-  {% if s1_summary.range < 3 %}
-  <strong>Conclusion:</strong> The curve is remarkably flat — the difference between the best and worst strategy is only
-  {{ s1_summary.range }} points. This suggests that the blind underdog/favorite split barely matters for your total score.
-  Picking underdogs {{ s1_summary.best_pct }}% of the time is the estimated optimum (mean: {{ s1_summary.best_mean }} pts),
-  but the error bars likely overlap with every other strategy. <strong>A random underdog bias does not appear to be a meaningful edge.</strong>
-  {% elif s1_summary.best_pct == 0 %}
-  <strong>Conclusion:</strong> Always picking the favorite is the best strategy found, with an expected score of
-  {{ s1_summary.best_mean }} pts versus {{ s1_summary.ug_mean }} pts for always picking the underdog (a difference of
-  {{ s1_summary.range }} pts). If the error bars confirm this gap is real, there may be a systematic bias
-  toward favorites in the scoring system for the selected seasons.
-  {% elif s1_summary.best_pct == 100 %}
-  <strong>Conclusion:</strong> Always picking the underdog is the best strategy found, with an expected score of
-  {{ s1_summary.ug_mean }} pts versus {{ s1_summary.fav_mean }} pts for always picking the favorite (a gap of
-  {{ s1_summary.range }} pts). This is a strong signal — underdogs may be systematically underpriced by the moneylines
-  in the selected seasons, or the point formula rewards them more than their win rate justifies.
+  {% if s1_summary.best_pct == 0 %}
+  <strong>Conclusion:</strong> Always picking the favorite is the estimated best strategy, scoring {{ s1_summary.fav_mean }} pts
+  versus {{ s1_summary.ug_mean }} pts for always picking the underdog — a spread of {{ s1_summary.range }} pts across all
+  {{ s1_summary.n_strategies }} strategies tested.
+  {% if s1_summary.bonf_sig %}
+  After Bonferroni correction for {{ s1_summary.n_strategies }} comparisons, the all-favorites baseline is <strong>significantly
+  better</strong> than alternatives at the family-wise 5% level. There may be a real bias toward favorites in the selected seasons.
   {% else %}
-  <strong>Conclusion:</strong> The optimal strategy is picking underdogs {{ s1_summary.best_pct }}% of the time,
-  with an expected score of {{ s1_summary.best_mean }} pts. Always picking the favorite scores {{ s1_summary.fav_mean }} pts
-  and always picking the underdog scores {{ s1_summary.ug_mean }} pts. The total spread across strategies is
-  {{ s1_summary.range }} pts — check whether the error bars around the optimal are narrow enough to confidently
-  distinguish it from neighboring strategies.
+  However, this difference does <strong>not</strong> survive Bonferroni correction for {{ s1_summary.n_strategies }} strategies
+  — it is plausibly a chance result. <strong>No underdog-pick rate is reliably better or worse than always picking favorites.</strong>
+  {% endif %}
+  {% elif s1_summary.best_pct == 100 %}
+  <strong>Conclusion:</strong> Always picking the underdog is the estimated best strategy, scoring {{ s1_summary.ug_mean }} pts
+  versus {{ s1_summary.fav_mean }} pts for always picking the favorite — a {{ s1_summary.range }}-point gap across
+  {{ s1_summary.n_strategies }} strategies.
+  {% if s1_summary.bonf_sig %}
+  This difference <strong>survives Bonferroni correction</strong> for {{ s1_summary.n_strategies }} comparisons — a meaningful
+  signal that underdogs may be systematically underpriced in the selected seasons.
+  {% else %}
+  However, after Bonferroni correction for {{ s1_summary.n_strategies }} comparisons, this result is <strong>not
+  statistically significant</strong> — the gap may simply reflect the best outcome from a noisy sweep.
+  {% endif %}
+  {% else %}
+  <strong>Conclusion:</strong> The estimated optimum is picking underdogs {{ s1_summary.best_pct }}% of the time
+  (mean: {{ s1_summary.best_mean }} pts), which is {{ s1_summary.diff_vs_fav }} pts above the all-favorites baseline
+  of {{ s1_summary.fav_mean }} pts. The total spread across all {{ s1_summary.n_strategies }} strategies is
+  {{ s1_summary.range }} pts.
+  {% if s1_summary.bonf_sig %}
+  After Bonferroni correction for {{ s1_summary.n_strategies }} simultaneous comparisons, this advantage is
+  <strong>statistically significant</strong> — picking underdogs at {{ s1_summary.best_pct }}% appears to be a real edge
+  over always picking favorites in the selected seasons.
+  {% else %}
+  However, after Bonferroni correction for {{ s1_summary.n_strategies }} simultaneous comparisons, this difference is
+  <strong>not statistically significant</strong>. Scanning {{ s1_summary.n_strategies }} strategies and picking the max
+  is itself a form of overfitting — the apparent optimum is likely noise, not a real edge.
+  {% endif %}
   {% endif %}
 </div>
 {% endif %}

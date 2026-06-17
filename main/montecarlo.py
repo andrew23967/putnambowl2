@@ -281,4 +281,19 @@ def run(games, n_trials=1000, pct_step=5):
     for r in results:
         r['is_best'] = r['pct'] == best_pct
 
+    # Bonferroni correction: is the best strategy significantly better than pct=0%?
+    # We're picking the max from n_strategies candidates, so apply family-wise correction.
+    n_strategies = len(results)
+    r0 = results[0]  # pct=0 (always favorite)
+    sem0 = r0['std'] / n_trials ** 0.5
+    z_bonf = _bonferroni_z(n_strategies)
+    for r in results:
+        sem_r = r['std'] / n_trials ** 0.5
+        se_diff = (sem0 ** 2 + sem_r ** 2) ** 0.5
+        bonf_margin = round(z_bonf * se_diff, 2)
+        diff = round(r['mean'] - r0['mean'], 1)
+        r['bonf_sig_vs_fav'] = (se_diff > 1e-9) and (abs(diff) > bonf_margin)
+        r['bonf_margin_vs_fav'] = bonf_margin
+        r['diff_vs_fav'] = diff
+
     return results

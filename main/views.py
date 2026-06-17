@@ -1115,6 +1115,10 @@ def montecarlo_view(request):
                         'fav_mean': results[0]['mean'],
                         'ug_mean': results[-1]['mean'],
                         'range': round(max(r['mean'] for r in results) - min(r['mean'] for r in results), 1),
+                        'bonf_sig': best.get('bonf_sig_vs_fav', False),
+                        'bonf_margin': best.get('bonf_margin_vs_fav'),
+                        'diff_vs_fav': best.get('diff_vs_fav', 0),
+                        'n_strategies': len(results),
                     }
 
                 if ev_results:
