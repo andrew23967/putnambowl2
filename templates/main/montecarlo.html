@@ -495,7 +495,7 @@ new Chart(document.getElementById('mc-chart'), {
       plugins:{legend:{display:false},
         tooltip:{callbacks:{afterLabel:ctx=>{const m=teamMargins[ctx.dataIndex];return m!=null?`95% CI: ±${m}`:'';}}}},
       scales:{x:{ticks:{color:tc3},grid:{color:gc3},title:{display:true,text:'Net EV per game (pts)',color:tc3}},
-        y:{ticks:{color:tc3,font:{size:11}},grid:{color:gc3}}},
+        y:{ticks:{color:item=>item.tick.label.includes('★')?'#f59e0b':tc3,font:{size:11}},grid:{color:gc3}}},
     },
   });
 })();

@@ -40,15 +40,19 @@ def _bonferroni_z(n_tests, alpha=0.05):
     return _norm_ppf(1 - (alpha / 2) / n_tests)
 
 
-def _add_bonferroni(results, key='net_ev'):
-    """Add bonf_margin and bonf_sig fields to a list of result dicts that have 'se'."""
+def _add_bonferroni(results, key='net_ev', min_n=10):
+    """Add bonf_margin and bonf_sig fields to a list of result dicts that have 'se'.
+    Requires at least min_n games and a non-degenerate SE (> 0) to flag significance.
+    Zero SE occurs when all outcomes are identical (e.g. every underdog loses, so every
+    net payoff is exactly -1.0), which is a data artifact, not a real signal."""
     n = len(results)
     if n < 2:
         return
     z = _bonferroni_z(n)
     for r in results:
         se = r.get('se')
-        if se is not None:
+        n_games = r.get('n_games', 0)
+        if se is not None and se > 1e-9 and n_games >= min_n:
             bonf_margin = round(z * se, 3)
             r['bonf_margin'] = bonf_margin
             r['bonf_sig'] = abs(r[key]) > bonf_margin
