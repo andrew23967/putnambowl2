@@ -231,8 +231,36 @@ new Chart(document.getElementById('mc-chart'), {
   const netEvs   = [{% for r in ev_results %}{{ r.net_ev }},{% endfor %}];
   const margins  = [{% for r in ev_results %}{{ r.margin|default:"null" }},{% endfor %}];
 
+  const errorBarPlugin = {
+    id: 'errorBars',
+    afterDatasetsDraw(chart) {
+      const { ctx, scales: { x, y } } = chart;
+      chart.getDatasetMeta(0).data.forEach((bar, i) => {
+        const m = margins[i];
+        if (m == null) return;
+        const xCenter = bar.x;
+        const yTop = y.getPixelForValue(netEvs[i] + m);
+        const yBot = y.getPixelForValue(netEvs[i] - m);
+        const capW = 5;
+        ctx.save();
+        ctx.strokeStyle = netEvs[i] >= 0 ? '#10b981' : '#ef4444';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(xCenter, yTop);
+        ctx.lineTo(xCenter, yBot);
+        ctx.moveTo(xCenter - capW, yTop);
+        ctx.lineTo(xCenter + capW, yTop);
+        ctx.moveTo(xCenter - capW, yBot);
+        ctx.lineTo(xCenter + capW, yBot);
+        ctx.stroke();
+        ctx.restore();
+      });
+    },
+  };
+
   new Chart(document.getElementById('ev-chart'), {
     type: 'bar',
+    plugins: [errorBarPlugin],
     data: {
       labels: evLabels,
       datasets: [{
