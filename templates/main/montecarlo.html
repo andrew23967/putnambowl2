@@ -350,7 +350,7 @@ new Chart(document.getElementById('mc-chart'), {
   const evLabels=[{% for r in ev_results %}'{{ r.label }}',{% endfor %}];
   const netEvs=[{% for r in ev_results %}{{ r.net_ev }},{% endfor %}];
   const margins=[{% for r in ev_results %}{{ r.margin|default:"null" }},{% endfor %}];
-  const bonf=[{% for r in ev_results %}{{ r.bonf_sig|yesno:"true,false" }},{% endfor %}];
+  const bonf=[{% for r in ev_results %}{% if r.bonf_sig %}true{% else %}false{% endif %},{% endfor %}];
   const evErrPlugin={id:'evErr',afterDatasetsDraw(chart){
     const{ctx,chartArea,scales:{x,y}}=chart;
     ctx.save();
