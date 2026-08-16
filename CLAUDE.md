@@ -78,7 +78,10 @@ without affecting the result. Don't "fix" the argument order expecting a change.
 When `auto_enabled=True`, the `run_auto` worker ticks every 5 min:
 1. **Scrape + publish** on configured weekday + UTC hour
 2. **Lock picks** at `first_game_dt - auto_lock_offset_minutes`
-3. **Grade games** every tick while locked (ESPN API for live scores)
+3. **Grade games** every tick while locked, using whichever source
+   `settings.grade_api` names — **not** always ESPN. Production is set to
+   `nfl_data_py`, which lags 1–3 days, so games do not grade live on Sunday and
+   the week won't advance until nflverse publishes results.
 4. **Advance week** when all graded + it's Mon/Tue/Wed after 6 AM UTC
 5. **Multiplier** is auto-set at scrape time based on week type — no manual action needed for playoffs or Super Bowl.
 
@@ -205,8 +208,21 @@ week, migrates, and asserts game/pick counts and per-week scoring survived.
 
 ## Scraping notes
 
-- `nfl-data-py`: pulls moneylines from nflverse (used for point calculation at scrape time). Data can lag 1-3 days after week ends.
-- ESPN API: public, no key needed, has live scores. Used for live grading in auto-pilot.
+One setting, `SiteSettings.grade_api` (`nfl_data_py` | `espn`), selects the source
+for **both** scraping and grading. `scrape()` and `grade()` in `scrape.py` just
+dispatch on it.
+
+- `nfl-data-py` (nflverse): bulk `import_schedules([year])` download. Finds games
+  from `home_team`/`away_team`/`week`; grades from `result` (home margin).
+  **The only source of moneylines**, so the whole points system depends on it.
+  Lags 1–3 days after games end — no live scores.
+- ESPN API: public, no key needed, **has live scores**. But `scrape_espn()`
+  returns moneylines of 0, so anything scraped through ESPN is worth a flat
+  `multiplier` with no underdog bonus. Fine for grading, lossy for scraping.
+- Ideal combination is scrape with nfl-data-py (for the lines) + grade with ESPN
+  (for live scores). The abbreviation fallback in `do_grade()` already supports
+  the mismatched ids this produces, but there is currently **one** setting
+  driving both, so this is not selectable from the dashboard yet.
 - `get_first_game_dt(week, year)`: hits ESPN to get UTC kickoff time for auto-locking.
 - If scraped with nfl-data-py and graded with ESPN, game IDs may differ — `do_grade()` in `auto.py` has a team-abbreviation fallback match.
 - `get_week_type(week, year, allow_network=True)`: returns `'regular'`, `'playoffs'`, or `'superbowl'` using nfl-data-py's `game_type` field (`REG`/`WC`/`DIV`/`CON`/`SB`). Falls back to week number (assumes 18-week regular season, valid 2021+). **Request handlers must pass `allow_network=False`** — the download took ~1.3s on the player home page. The week-number fallback is accurate for 2021+.
