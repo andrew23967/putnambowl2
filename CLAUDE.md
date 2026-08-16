@@ -112,10 +112,11 @@ python manage.py createsuperuser  # Required to access /dashboard/ routes
 
 Runs against local SQLite. No `.env` needed — defaults are set in `settings.py`.
 
-**Django 6 caches templates even when `DEBUG=True`.** Editing a `.html` file has
-no effect until you restart `runserver` — you will otherwise chase edits that
-appear not to apply. Python edits also need a restart if you launched with
-`--noreload`.
+**Don't use `--noreload`.** Django 6 wraps the template loaders in the cached
+loader even when `DEBUG=True`. Plain `runserver` is fine — the autoreloader
+resets that cache when a template changes — but under `--noreload` nothing
+invalidates it, so `.html` edits silently have no effect and you end up chasing
+changes that appear not to apply. Same for `.py` edits.
 
 ### Tests
 
