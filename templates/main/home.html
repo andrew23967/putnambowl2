@@ -956,9 +956,9 @@ function renderPodium(entries){
   const wrap=document.querySelector('.podium-wrap');
   if(!wrap||entries.length<3)return;
   const cfg=[
-    {cls:'pod-1',bg:'#b45309',nameSize:'.625rem',nameColor:'var(--muted2)',scoreStyle:'font-size:1rem;font-weight:900;color:#fbbf24;margin:0 0 5px;',nameMb:'2',maxW:'72px',crown:false},
-    {cls:'pod-2',bg:'#334155',nameSize:'.625rem',nameColor:'var(--muted2)',scoreStyle:'font-size:.8rem;font-weight:800;color:#94a3b8;margin:0 0 4px;',nameMb:'3',maxW:'64px',crown:false},
-    {cls:'pod-3',bg:'#431407',nameSize:'.625rem',nameColor:'var(--muted2)',scoreStyle:'font-size:.8rem;font-weight:800;color:#fb923c;margin:0 0 4px;',nameMb:'3',maxW:'64px',crown:false},
+    {cls:'pod-1',bg:'#b45309',nameSize:'.625rem',nameColor:'var(--muted2)',scoreStyle:'font-size:1rem;font-weight:900;color:#fbbf24;margin:0 0 5px;',nameMb:'2',maxW:'72px'},
+    {cls:'pod-2',bg:'#334155',nameSize:'.625rem',nameColor:'var(--muted2)',scoreStyle:'font-size:.8rem;font-weight:800;color:#94a3b8;margin:0 0 4px;',nameMb:'3',maxW:'64px'},
+    {cls:'pod-3',bg:'#431407',nameSize:'.625rem',nameColor:'var(--muted2)',scoreStyle:'font-size:.8rem;font-weight:800;color:#fb923c;margin:0 0 4px;',nameMb:'3',maxW:'64px'},
   ];
   const displayOrder=[1,0,2];
   let html='';
@@ -967,7 +967,6 @@ function renderPodium(entries){
     const e=entries[idx];
     const c=cfg[idx];
     html+=`<div class="pod ${c.cls}">
-      ${c.crown?'<div style="font-size:.875rem;margin-bottom:3px;">👑</div>':''}
       <div class="pod-avatar" style="background:${c.bg};">${e.username[0].toUpperCase()}</div>
       <p style="font-size:${c.nameSize};font-weight:600;color:${c.nameColor};margin:0 0 ${c.nameMb}px;max-width:${c.maxW};text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${e.username}</p>
       <p style="${c.scoreStyle}">${e.score}</p>

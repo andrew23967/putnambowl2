@@ -1072,7 +1072,10 @@ def pickdash(request):
             p.profile.save()
         messages.success(request, 'New season started.')
 
-    games = Game.objects.filter(week=settings.week).order_by('graded', 'id')
+    # Kickoff order, matching the player-facing list. Ordering by `graded` put
+    # games in a different place depending on whether they were scored yet,
+    # which shuffled the list while grading.
+    games = Game.objects.filter(week=settings.week).order_by('game_dt', 'id')
     all_graded = all(g.graded for g in games) if games else False
     save_season_form = forms.SaveSeasonForm()
     from datetime import date as _date

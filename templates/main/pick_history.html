@@ -3,129 +3,222 @@
 
 {% block extra_head %}
 <style>
+  /* The grid is the point of this page, so give it the whole viewport and let
+     it scroll inside its own box rather than the page. */
   @media (min-width:641px) {
     main { height:calc(100vh - 53px) !important;display:flex !important;flex-direction:column !important;overflow:hidden !important;box-sizing:border-box !important; }
     html.nav-has-slider main { height:calc(100vh - 86px) !important; }
   }
-  .home-hist-table { border-collapse:collapse;width:100%; }
-  .home-hist-table th, .home-hist-table td { font-size:.72rem;border:1px solid rgba(0,0,0,.6); }
-  .home-hist-table th { font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:rgba(100,116,139,.5);background:var(--bg);text-align:center;position:sticky;top:0;z-index:4;box-shadow:inset 0 -1px 0 rgba(0,0,0,.6),inset 0 1px 0 rgba(0,0,0,.6); }
-  .home-hist-table th:not(.hh-game-col) { padding:0; }
-  .home-hist-table td:not(.hh-game-col) { padding:0;overflow:hidden; }
-  .home-hist-table th.hh-game-col { text-align:left;padding:0 6px;white-space:nowrap;position:sticky;left:0;top:0;z-index:5;background:var(--bg); }
-  .home-hist-table td.hh-game-col { padding:0 6px;white-space:nowrap;position:sticky;left:0;z-index:2;background:var(--bg); }
-  .home-hist-table .hh-name { writing-mode:vertical-rl;transform:rotate(180deg);white-space:nowrap;padding:0;vertical-align:bottom;display:block; }
+
+  .ph-head { display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:12px;flex-shrink:0; }
+  .ph-title { font-size:1.05rem;font-weight:800;color:var(--text);margin:0;letter-spacing:-.02em; }
+  .ph-sub { font-size:.75rem;color:var(--muted);margin:0; }
+  .ph-legend { display:flex;align-items:center;gap:14px;margin-left:auto;flex-wrap:wrap; }
+  .ph-key { display:flex;align-items:center;gap:5px;font-size:.6875rem;color:var(--muted);white-space:nowrap; }
+  .ph-swatch { width:11px;height:11px;border-radius:3px;flex-shrink:0;border:1px solid var(--border2);background:var(--fill-1); }
+  .ph-swatch-correct { background:var(--good-fill);border-color:color-mix(in srgb,var(--good) 45%,transparent); }
+  .ph-swatch-wrong { background:var(--bad-fill);border-color:color-mix(in srgb,var(--bad) 45%,transparent); }
+  .ph-swatch-pending { background:var(--fill-2); }
+  .ph-swatch-none { background:transparent;border-style:dashed; }
+
+  .ph-scroll { flex:1;min-height:0;overflow:auto;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface); }
+
+  .ph-table { border-collapse:separate;border-spacing:0;font-variant-numeric:tabular-nums; }
+  .ph-table th, .ph-table td { border-right:1px solid var(--border);border-bottom:1px solid var(--border); }
+
+  /* Header: matchup stacked over its point values. Readable horizontally —
+     the old build rotated these vertically and clipped them. */
+  .ph-table thead th {
+    position:sticky;top:0;z-index:3;background:var(--surface2);
+    padding:7px 6px;text-align:center;vertical-align:bottom;white-space:nowrap;
+  }
+  .ph-matchup { display:block;font-size:.6875rem;font-weight:800;letter-spacing:-.01em;line-height:1.35; }
+  .ph-pts { display:block;font-size:.5625rem;font-weight:600;color:var(--muted);line-height:1.3;margin-top:1px; }
+  .ph-win { color:var(--good); }
+  .ph-lose { color:var(--muted); }
+  .ph-open { color:var(--muted2); }
+
+  /* Player column pinned left; stat columns pinned right. */
+  .ph-name {
+    position:sticky;left:0;z-index:2;background:var(--surface);
+    text-align:left;padding:0 10px;font-size:.75rem;font-weight:600;color:var(--text);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:130px;
+    border-right:1px solid var(--border2);
+  }
+  thead .ph-name { z-index:5;background:var(--surface2); }
+  .ph-rec { font-size:.625rem;font-weight:600;color:var(--muted);margin-left:5px; }
+  .ph-me { background:color-mix(in srgb,var(--accent) 11%,var(--surface)) !important; }
+
+  .ph-cell { padding:0;text-align:center;font-size:.6875rem;font-weight:700;height:30px; }
+  .ph-pick { display:flex;align-items:center;justify-content:center;height:100%;letter-spacing:-.01em; }
+  .ph-correct { background:var(--good-fill);color:var(--good); }
+  .ph-wrong   { background:var(--bad-fill);color:var(--bad); }
+  .ph-pending { background:var(--fill-2);color:var(--muted2); }
+  .ph-none    { background:transparent;color:var(--muted);opacity:.45; }
+
+  /* Stats sit at the end of the row and scroll with it. Pinning them right
+     needs per-column pixel offsets that break the moment a value changes
+     width, which is exactly what went wrong before. */
+  .ph-stat {
+    text-align:center;font-size:.75rem;font-weight:700;padding:0 10px;white-space:nowrap;
+    background:var(--surface);
+  }
+  .ph-stat-first { border-left:1px solid var(--border2); }
+  thead .ph-stat { background:var(--surface2);font-size:.5625rem;font-weight:700;
+                   text-transform:uppercase;letter-spacing:.07em;color:var(--muted); }
+  .ph-up { color:var(--good); }
+  .ph-down { color:var(--bad); }
+  .ph-flat { color:var(--muted); }
+
+  /* Consensus footer: how the league split on each game. */
+  .ph-table tfoot td {
+    position:sticky;bottom:0;z-index:3;background:var(--surface2);
+    text-align:center;font-size:.5625rem;font-weight:700;color:var(--muted);
+    padding:5px 4px;white-space:nowrap;
+  }
+  tfoot .ph-name { z-index:5;background:var(--surface2);font-size:.5625rem;
+                   text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:700; }
+
+  .ph-empty { flex:1;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:.875rem; }
+
+  @media (max-width:640px) {
+    .ph-legend { margin-left:0;width:100%; }
+    .ph-name { max-width:88px;font-size:.6875rem; }
+  }
 </style>
 {% endblock %}
 
 {% block content %}
 {% if completed_weeks %}
-
-<div id="picks-content" style="flex:1;min-height:0;overflow:auto;"></div>
-
-{% else %}
-<div style="flex:1;display:flex;align-items:center;justify-content:center;">
-  <p style="color:var(--muted);font-size:.875rem;">No history yet. Complete week 1 to see picks here.</p>
+<div class="ph-head">
+  <h1 class="ph-title" id="ph-week-title">Week {{ completed_weeks|last }}</h1>
+  <p class="ph-sub" id="ph-week-sub"></p>
+  <div class="ph-legend">
+    <span class="ph-key"><span class="ph-swatch ph-swatch-correct"></span>Correct</span>
+    <span class="ph-key"><span class="ph-swatch ph-swatch-wrong"></span>Wrong</span>
+    <span class="ph-key"><span class="ph-swatch ph-swatch-pending"></span>Not graded</span>
+    <span class="ph-key"><span class="ph-swatch ph-swatch-none"></span>No pick</span>
+  </div>
 </div>
+<div class="ph-scroll" id="picks-content"></div>
+{% else %}
+<div class="ph-empty">Nothing here yet. Pick history appears once week 1 is graded.</div>
 {% endif %}
 {% endblock %}
 
 {% block extra_js %}
 <script>
 const HIST_URL = '{% url "main:ajax_history" %}';
+const ME = '{{ request.user.username|escapejs }}';
 var currentWeek = {{ completed_weeks|last|default:1 }};
 
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c => (
+    {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]
+  ));
+}
+
 function loadPicks(week) {
-  const content = document.getElementById('picks-content');
-  if (!content) return;
-  content.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted);font-size:.875rem;">Loading…</div>';
+  const box = document.getElementById('picks-content');
+  if (!box) return;
+  box.innerHTML = '<div class="ph-empty">Loading…</div>';
+
   fetch(HIST_URL + '?week=' + week)
     .then(r => r.json())
     .then(data => {
       if (data.error || !data.games || !data.games.length) {
-        content.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted);font-size:.875rem;">No data for this week.</div>';
+        box.innerHTML = '<div class="ph-empty">No games recorded for week ' + week + '.</div>';
         return;
       }
-      const players = [...data.players].sort(() => Math.random() - 0.5);
-      const nGames = data.games.length;
-      const nPlayers = players.length;
-      const HEADER_H = 64;
-      const LEFT_W = 80;
-      const STAT_W = 52;
-      const N_STATS = 4;
 
-      const navH = document.querySelector('nav.topnav').offsetHeight;
-      const availH = window.innerHeight - navH - HEADER_H;
-      const availW = window.innerWidth - LEFT_W - (N_STATS * STAT_W);
-      const maxW = Math.max(Math.floor(availW / nGames), 12);
-      const maxH = Math.max(Math.floor(availH / nPlayers), 12);
-      const cs = Math.max(Math.min(maxW, maxH), 60);
-      const fs = Math.max(Math.floor(cs * 0.28), 8);
+      // Best week first. The old build shuffled players randomly on every load,
+      // which made the table impossible to read twice. Points earned this week
+      // leads; correct picks break ties, which is what actually separates
+      // people before a week's scores have been applied.
+      const players = [...data.players].sort((a, b) =>
+        (b.week_gained ?? 0) - (a.week_gained ?? 0) ||
+        (b.correct ?? 0) - (a.correct ?? 0) ||
+        (b.week_total ?? 0) - (a.week_total ?? 0) ||
+        a.username.localeCompare(b.username));
 
-      const tableW = LEFT_W + nGames * cs + N_STATS * STAT_W;
-      let html = `<table class="home-hist-table" style="width:${tableW}px;border-collapse:collapse;table-layout:fixed;">`;
-      html += `<colgroup><col style="width:${LEFT_W}px;">`;
-      for (let i = 0; i < nGames; i++) html += `<col style="width:${cs}px;">`;
-      for (let i = 0; i < N_STATS; i++) html += `<col style="width:${STAT_W}px;">`;
-      html += `</colgroup>`;
+      const games = data.games;
+      const graded = games.filter(g => g.winner === 'team1' || g.winner === 'team2').length;
 
-      // Header row: game matchups + stat labels (all vertical)
-      html += `<thead><tr style="height:${HEADER_H}px;"><th class="hh-game-col"></th>`;
-      for (const g of data.games) {
-        const graded = g.winner==='team1'||g.winner==='team2';
-        const t1c = graded ? (g.winner==='team1'?'#4ade80':'#f87171') : '#60a5fa';
-        const t2c = graded ? (g.winner==='team2'?'#4ade80':'#f87171') : '#f87171';
-        const p1 = g.points1!=null ? g.points1.toFixed(1) : '?';
-        const p2 = g.points2!=null ? g.points2.toFixed(1) : '?';
-        html += `<th style="padding:2px 2px 4px;overflow:hidden;vertical-align:bottom;text-align:center;line-height:1.25;"><span style="display:block;font-size:.72rem;font-weight:700;white-space:nowrap;"><span style="color:${t1c};">${g.team1_abbrev}</span><span style="color:var(--muted);">v</span><span style="color:${t2c};">${g.team2_abbrev}</span></span><span style="display:block;font-size:.58rem;font-weight:500;white-space:nowrap;"><span style="color:${t1c};">${p1}</span><span style="color:var(--muted);">·</span><span style="color:${t2c};">${p2}</span></span></th>`;
+      document.getElementById('ph-week-title').textContent = 'Week ' + week;
+      document.getElementById('ph-week-sub').textContent =
+        players.length + ' players · ' + games.length + ' games · ' +
+        (graded === games.length ? 'final' : graded + ' of ' + games.length + ' graded');
+
+      let h = '<table class="ph-table"><thead><tr>';
+      h += '<th class="ph-name">Player</th>';
+      for (const g of games) {
+        const t1w = g.winner === 'team1', t2w = g.winner === 'team2';
+        const isGraded = t1w || t2w;
+        const c1 = isGraded ? (t1w ? 'ph-win' : 'ph-lose') : 'ph-open';
+        const c2 = isGraded ? (t2w ? 'ph-win' : 'ph-lose') : 'ph-open';
+        h += '<th><span class="ph-matchup">' +
+             '<span class="' + c1 + '">' + esc(g.team1_abbrev) + '</span>' +
+             '<span style="color:var(--muted);font-weight:500;"> · </span>' +
+             '<span class="' + c2 + '">' + esc(g.team2_abbrev) + '</span></span>' +
+             '<span class="ph-pts">' + (g.points1 ?? 0).toFixed(1) + ' · ' + (g.points2 ?? 0).toFixed(1) + '</span></th>';
       }
-      const statLabels = ['pts','+pts','rnk','±rnk'];
-      for (let si = 0; si < statLabels.length; si++) {
-        html += `<th style="padding:0;overflow:hidden;vertical-align:bottom;text-align:center;"><div style="writing-mode:vertical-rl;transform:rotate(180deg);white-space:nowrap;padding-bottom:3px;font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:rgba(100,116,139,.5);">${statLabels[si]}</div></th>`;
-      }
-      html += `</tr></thead><tbody>`;
+      h += '<th class="ph-stat ph-stat-first">Rank</th>';
+      h += '<th class="ph-stat">Pts</th>';
+      h += '<th class="ph-stat">Gained</th>';
+      h += '</tr></thead><tbody>';
 
-      // Player rows
-      for (let pi = 0; pi < nPlayers; pi++) {
-        const p = players[pi];
-        html += `<tr style="height:${cs}px;"><td class="hh-game-col" style="font-size:.82rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;">${p.username.slice(0,9)}</td>`;
+      for (const p of players) {
+        const isMe = p.username === ME;
+        h += '<tr>';
+        h += '<td class="ph-name' + (isMe ? ' ph-me' : '') + '">' + esc(p.username) +
+             '<span class="ph-rec">' + p.correct + '/' + p.total + '</span></td>';
 
-        for (const g of data.games) {
+        for (const g of games) {
           const pick = p.picks[String(g.id)];
-          let bg, abbrev = '';
-          if (!data.picks_locked || !pick) {
-            bg = 'rgba(100,116,139,0.10)';
-          } else {
-            abbrev = pick.choice==='team1' ? g.team1_abbrev : g.team2_abbrev;
-            if (pick.correct !== null) {
-              bg = pick.correct ? 'rgba(34,197,94,0.45)' : 'rgba(239,68,68,0.40)';
-            } else {
-              bg = pick.choice==='team1' ? 'rgba(59,130,246,0.45)' : 'rgba(239,68,68,0.40)';
-            }
+          if (!pick || !data.picks_locked) {
+            h += '<td class="ph-cell"><span class="ph-pick ph-none">–</span></td>';
+            continue;
           }
-          html += `<td style="padding:0;overflow:hidden;"><div style="width:${cs}px;height:${cs}px;background:${bg};display:flex;align-items:center;justify-content:center;overflow:hidden;"><span style="font-size:${fs}px;font-weight:800;color:rgba(255,255,255,.82);letter-spacing:-.02em;line-height:1;">${abbrev}</span></div></td>`;
+          const abbrev = pick.choice === 'team1' ? g.team1_abbrev : g.team2_abbrev;
+          let cls = 'ph-pending';
+          if (pick.correct === true) cls = 'ph-correct';
+          else if (pick.correct === false) cls = 'ph-wrong';
+          h += '<td class="ph-cell"><span class="ph-pick ' + cls + '">' + esc(abbrev) + '</span></td>';
         }
 
-        // Stat columns
-        const wg = p.week_gained;
-        const rc = p.rank_change;
-        const stats = [
-          { v: p.week_total!=null ? p.week_total.toFixed(1) : '—',                        c: 'var(--text)' },
-          { v: wg!=null ? (wg>=0?'+':'')+wg.toFixed(1) : '—',                             c: wg>0?'#34d399':wg<0?'#f87171':'var(--muted)' },
-          { v: p.rank ? '#'+p.rank : '—',                                                   c: 'var(--text)' },
-          { v: rc>0?'▲'+rc:rc<0?'▼'+Math.abs(rc):'—',                                     c: rc>0?'#34d399':rc<0?'#f87171':'var(--muted)' },
-        ];
-        for (const s of stats) {
-          html += `<td style="text-align:center;font-size:.9rem;font-weight:700;color:${s.c};vertical-align:middle;">${s.v}</td>`;
-        }
-        html += `</tr>`;
+        const wg = p.week_gained, rc = p.rank_change;
+        const wgCls = wg > 0 ? 'ph-up' : wg < 0 ? 'ph-down' : 'ph-flat';
+        const rcTxt = rc > 0 ? '▲' + rc : rc < 0 ? '▼' + Math.abs(rc) : '–';
+        const rcCls = rc > 0 ? 'ph-up' : rc < 0 ? 'ph-down' : 'ph-flat';
+        const me = isMe ? ' ph-me' : '';
+        h += '<td class="ph-stat ph-stat-first' + me + '">' +
+             (p.rank ? '#' + p.rank : '–') +
+             ' <span class="' + rcCls + '" style="font-size:.625rem;">' + rcTxt + '</span></td>';
+        h += '<td class="ph-stat' + me + '">' +
+             (p.week_total != null ? p.week_total.toFixed(1) : '–') + '</td>';
+        h += '<td class="ph-stat ' + wgCls + me + '">' +
+             (wg != null ? (wg >= 0 ? '+' : '') + wg.toFixed(1) : '–') + '</td>';
+        h += '</tr>';
       }
 
-      html += `</tbody></table>`;
-      content.innerHTML = html;
+      // Consensus row: what share of the league took each side.
+      h += '</tbody><tfoot><tr><td class="ph-name">League</td>';
+      for (const g of games) {
+        let t1 = 0, t2 = 0;
+        for (const p of players) {
+          const pk = p.picks[String(g.id)];
+          if (!pk) continue;
+          pk.choice === 'team1' ? t1++ : t2++;
+        }
+        const tot = t1 + t2;
+        h += '<td>' + (tot ? Math.round(t1 / tot * 100) + '/' + Math.round(t2 / tot * 100) : '–') + '</td>';
+      }
+      h += '<td></td><td></td><td></td></tr></tfoot></table>';
+
+      box.innerHTML = h;
     })
     .catch(() => {
-      content.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted);font-size:.875rem;">Failed to load.</div>';
+      box.innerHTML = '<div class="ph-empty">Could not load week ' + week + '. Try again.</div>';
     });
 }
 
@@ -134,10 +227,9 @@ initNavSlider({
   min: 1,
   max: {{ completed_weeks|last }},
   value: {{ completed_weeks|last }},
-  onChange: function(w) { currentWeek = w; loadPicks(w); }
+  onChange: function (w) { currentWeek = w; loadPicks(w); }
 });
-{% endif %}
-
 loadPicks(currentWeek);
+{% endif %}
 </script>
 {% endblock %}

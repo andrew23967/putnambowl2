@@ -116,49 +116,37 @@
     padding: 9px 16px;
     border-bottom: 1px solid var(--border);
   }
-  /* Three-way grade toggle */
-  .grade-toggle {
-    position: relative;
-    display: flex;
-    background: var(--surface2);
-    border: 1px solid var(--border2);
-    border-radius: 999px;
-    padding: 2px;
-    cursor: pointer;
-    flex: 1;
+  /* ── Result selector ──
+     Three segments backed by radios: home win, tie, away win. Selection lives
+     in :checked rather than a JS-positioned knob, which is what used to drift
+     out of step with the saved result. Clicking the active segment clears it
+     back to ungraded. */
+  .grade-3up { display:grid;grid-template-columns:1fr auto 1fr;gap:5px;flex:1;min-width:0; }
+  .grade-radio { position:absolute;width:1px;height:1px;opacity:0;pointer-events:none; }
+  .grade-seg {
+    display:flex;align-items:baseline;justify-content:center;gap:5px;
+    padding:7px 8px;border-radius:var(--radius-sm);
+    border:1px solid var(--border);background:var(--fill-1);
+    cursor:pointer;user-select:none;min-width:0;
+    transition:background .14s ease,border-color .14s ease;
   }
-  .grade-knob {
-    position: absolute;
-    top: 2px; bottom: 2px; left: 0;
-    width: 33.333%;
-    background: rgba(255,255,255,.1);
-    border: 1px solid rgba(255,255,255,.18);
-    border-radius: 999px;
-    box-shadow: 0 1px 5px rgba(0,0,0,.28);
-    transition: left .18s cubic-bezier(.4,0,.2,1), opacity .15s, background .18s;
-    pointer-events: none;
+  .grade-seg:hover { background:var(--fill-2);border-color:var(--border2); }
+  .grade-name { font-size:.6875rem;font-weight:700;color:var(--muted2);line-height:1;letter-spacing:-.01em; }
+  .grade-pts  { font-size:.5625rem;font-weight:600;color:var(--muted);line-height:1;font-variant-numeric:tabular-nums; }
+  .grade-seg-tie { padding-left:12px;padding-right:12px; }
+
+  /* Winner is green; a tie is neutral. Both read the same in either theme. */
+  .grade-radio:checked + .grade-seg {
+    background:var(--good-fill);
+    border-color:color-mix(in srgb,var(--good) 55%,transparent);
   }
-  [data-theme="light"] .grade-knob {
-    background: rgba(0,0,0,.05);
-    border-color: rgba(0,0,0,.1);
+  .grade-radio:checked + .grade-seg .grade-name { color:var(--good); }
+  .grade-radio:checked + .grade-seg .grade-pts  { color:var(--good);opacity:.75; }
+  .grade-radio[value="tie"]:checked + .grade-seg {
+    background:var(--fill-3);border-color:var(--border2);
   }
-  .grade-opt {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 3px;
-    padding: 5px 4px;
-    border-radius: 999px;
-    position: relative;
-    z-index: 1;
-    color: var(--muted);
-    transition: color .15s;
-  }
-  .grade-opt.active { color: var(--text); }
-  .grade-name { font-size:.68rem;font-weight:700;line-height:1; }
-  .grade-pts  { font-size:.5rem;font-weight:600;color:var(--muted);line-height:1;transition:color .15s; }
-  .grade-opt.active .grade-pts { color:var(--muted2); }
+  .grade-radio[value="tie"]:checked + .grade-seg .grade-name { color:var(--text); }
+  .grade-radio:focus-visible + .grade-seg { outline:2px solid var(--accent);outline-offset:2px; }
 </style>
 {% endblock %}
 
@@ -467,11 +455,23 @@
       {% for game in games %}
       <div class="game-row" id="game-row-{{ game.id }}" data-graded="{% if game.graded %}1{% else %}0{% endif %}">
         <div style="display:flex;align-items:center;gap:8px;">
-          <div class="grade-toggle" data-game-id="{{ game.id }}" data-winner="{{ game.winner }}">
-            <div class="grade-knob"></div>
-            <div class="grade-opt" data-val="team1"><span class="grade-name">{{ game.team1_abbrev }}</span><span class="grade-pts">{{ game.points1 }}</span></div>
-            <div class="grade-opt" data-val="tie"><span class="grade-name">TIE</span></div>
-            <div class="grade-opt" data-val="team2"><span class="grade-name">{{ game.team2_abbrev }}</span><span class="grade-pts">{{ game.points2 }}</span></div>
+          <div class="grade-3up" data-game-id="{{ game.id }}" data-winner="{{ game.winner }}"
+               role="radiogroup" aria-label="Result: {{ game.team1_abbrev }} versus {{ game.team2_abbrev }}">
+            <input class="grade-radio" type="radio" name="w{{ game.id }}" id="w{{ game.id }}-t1"
+                   value="team1"{% if game.winner == 'team1' %} checked{% endif %}>
+            <label class="grade-seg" for="w{{ game.id }}-t1">
+              <span class="grade-name">{{ game.team1_abbrev }}</span><span class="grade-pts">{{ game.points1 }}</span>
+            </label>
+            <input class="grade-radio" type="radio" name="w{{ game.id }}" id="w{{ game.id }}-tie"
+                   value="tie"{% if game.winner == 'tie' %} checked{% endif %}>
+            <label class="grade-seg grade-seg-tie" for="w{{ game.id }}-tie">
+              <span class="grade-name">TIE</span>
+            </label>
+            <input class="grade-radio" type="radio" name="w{{ game.id }}" id="w{{ game.id }}-t2"
+                   value="team2"{% if game.winner == 'team2' %} checked{% endif %}>
+            <label class="grade-seg" for="w{{ game.id }}-t2">
+              <span class="grade-name">{{ game.team2_abbrev }}</span><span class="grade-pts">{{ game.points2 }}</span>
+            </label>
           </div>
           <button type="button" class="danger-btn" style="width:auto;padding:2px 8px;font-size:.7rem;" onclick="deleteGame('{{ game.id }}', this)">✕</button>
         </div>
@@ -589,160 +589,56 @@ function generateRecap() {
     });
 }
 
-// FLIP animation
-function flipToBottom(el, container) {
-  if (!el || !container) return;
-  var children = Array.from(container.children);
-  var before = children.map(function(c) { return c.getBoundingClientRect().top; });
-  container.appendChild(el);
-  Array.from(container.children).forEach(function(child) {
-    var oldIdx = children.indexOf(child);
-    var dy = (oldIdx === -1 ? before[before.length - 1] : before[oldIdx]) - child.getBoundingClientRect().top;
-    if (Math.abs(dy) < 1) return;
-    child.style.transition = 'none';
-    child.style.transform = 'translateY(' + dy + 'px)';
-    requestAnimationFrame(function() { requestAnimationFrame(function() {
-      child.style.transition = 'transform .4s cubic-bezier(.25,0,.2,1)';
-      child.style.transform = '';
-    }); });
-  });
-}
-
 // Grade toggle
 var WINNER_URL = "{% url 'main:ajax_set_winner' %}";
 var CSRF = "{{ csrf_token }}";
-var VALS3       = ['team1', 'tie', 'team2'];
-var INDICES     = {team1: 0, tie: 1, team2: 2};
-var KNOB_COLORS = {team1: '#3b82f6', tie: '', team2: '#ef4444'};
-
-function applyKnob(toggle, winner) {
-  var knob = toggle.querySelector('.grade-knob');
-  var opts = toggle.querySelectorAll('.grade-opt');
-  var w = toggle.offsetWidth;
-  if (winner && INDICES[winner] !== undefined) {
-    var idx = INDICES[winner];
-    var color = KNOB_COLORS[winner];
-    knob.style.opacity = '1';
-    if (w) knob.style.left = (idx * w / 3) + 'px';
-    knob.style.background = color || '';
-    opts.forEach(function(o, i) {
-      var isActive = i === idx;
-      o.classList.toggle('active', isActive);
-      o.style.color = (isActive && color) ? '#fff' : '';
-      var pts = o.querySelector('.grade-pts');
-      if (pts) pts.style.color = (isActive && color) ? 'rgba(255,255,255,.6)' : '';
-    });
-  } else {
-    knob.style.opacity = '0';
-    knob.style.background = '';
-    opts.forEach(function(o) {
-      o.classList.remove('active');
-      o.style.color = '';
-      var pts = o.querySelector('.grade-pts');
-      if (pts) pts.style.color = '';
-    });
-  }
+// Reflect a result onto the radios. data-winner stays the single source of
+// truth so "click the active segment to clear" keeps working — a plain radio
+// cannot be unchecked by clicking it.
+function applyWinner(group, winner) {
+  group.dataset.winner = winner || '';
+  group.querySelectorAll('.grade-radio').forEach(function (r) {
+    r.checked = (r.value === winner);
+  });
+  var row = group.closest('.game-row');
+  if (row) row.dataset.graded = winner ? '1' : '0';
 }
 
-function commitWinner(toggle, prev, next) {
-  toggle.dataset.winner = next;
+function commitWinner(group, prev, next) {
+  applyWinner(group, next);
   fetch(WINNER_URL, {
     method: 'POST',
     headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': CSRF},
-    body: 'game_id=' + encodeURIComponent(toggle.dataset.gameId) + '&winner=' + encodeURIComponent(next)
+    body: 'game_id=' + encodeURIComponent(group.dataset.gameId) + '&winner=' + encodeURIComponent(next)
   })
-  .then(function(r) { return r.json(); })
-  .then(function(d) {
-    if (!d.ok) { toggle.dataset.winner = prev; applyKnob(toggle, prev); return; }
-    var row = toggle.closest('.game-row');
-    var list = row && row.parentElement;
-    if (!list) return;
-    if (!prev && next) {
-      row.dataset.graded = '1'; flipToBottom(row, list);
-    } else if (prev && !next) {
-      var firstGraded = list.querySelector('.game-row[data-graded="1"]');
-      row.dataset.graded = '0';
-      if (firstGraded) list.insertBefore(row, firstGraded); else list.prepend(row);
-    }
-  })
-  .catch(function() { toggle.dataset.winner = prev; applyKnob(toggle, prev); });
+  .then(function (r) { return r.json(); })
+  .then(function (d) { if (!d.ok) applyWinner(group, prev); })
+  .catch(function () { applyWinner(group, prev); });
 }
 
-function initGradeToggle(toggle) {
-  var knob = toggle.querySelector('.grade-knob');
-  knob.style.transition = 'none';
-  applyKnob(toggle, toggle.dataset.winner);
-  void knob.offsetHeight;
-  knob.style.transition = '';
+// Graded rows deliberately stay in place. They used to animate to the bottom of
+// the list, which moved every other game while you were still grading.
+document.addEventListener('click', function (e) {
+  var seg = e.target.closest('.grade-seg');
+  if (!seg) return;
+  var group = seg.closest('.grade-3up');
+  if (!group) return;
+  e.preventDefault();   // we set the radio ourselves, including the clear case
+  var radio = document.getElementById(seg.getAttribute('for'));
+  if (!radio) return;
+  var prev = group.dataset.winner || '';
+  var next = (prev === radio.value) ? '' : radio.value;
+  commitWinner(group, prev, next);
+});
 
-  var startX, moved;
-  function pt(e) { return e.touches ? e.touches[0] : e; }
-
-  function onStart(e) {
-    startX = pt(e).clientX;
-    moved = false;
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onEnd);
-    document.addEventListener('touchmove', onMove, {passive: false});
-    document.addEventListener('touchend', onEnd);
-  }
-
-  function onMove(e) {
-    var cx = pt(e).clientX;
-    if (Math.abs(cx - startX) > 3) moved = true;
-    if (!moved) return;
-    if (e.cancelable) e.preventDefault();
-    var rect = toggle.getBoundingClientRect();
-    var slotW = rect.width / 3;
-    var newLeft = Math.max(0, Math.min(cx - rect.left - slotW / 2, 2 * slotW));
-    knob.style.opacity = '1';
-    knob.style.transition = 'none';
-    knob.style.left = newLeft + 'px';
-    var hi = newLeft < slotW * 0.5 ? 0 : newLeft < slotW * 1.5 ? 1 : 2;
-    toggle.querySelectorAll('.grade-opt').forEach(function(o, i) {
-      o.classList.toggle('active', i === hi);
-    });
-  }
-
-  function onEnd(e) {
-    document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onEnd);
-    document.removeEventListener('touchmove', onMove); document.removeEventListener('touchend', onEnd);
-
-    var ex = (e.changedTouches ? e.changedTouches[0] : e).clientX;
-    var rect = toggle.getBoundingClientRect();
-    var slotW = rect.width / 3;
-    var kl = parseFloat(knob.style.left) || 0;
-    var targetIdx = moved
-      ? (kl < slotW * 0.5 ? 0 : kl < slotW * 1.5 ? 1 : 2)
-      : (function() { var f = Math.max(0, Math.min((ex - rect.left) / rect.width, 0.9999)); return f < 1/3 ? 0 : f < 2/3 ? 1 : 2; }());
-
-    var targetVal = VALS3[targetIdx];
-    var prev = toggle.dataset.winner;
-    var next = (!moved && targetVal === prev) ? '' : targetVal;
-    var cw = toggle.offsetWidth;
-
-    // Re-enable CSS transition so snap animates
-    knob.style.transition = '';
-    void knob.offsetHeight;
-
-    // Coming from no selection: pre-position so left doesn't animate from 0
-    if (!prev && next && cw) {
-      knob.style.transition = 'none';
-      knob.style.left = (INDICES[next] * cw / 3) + 'px';
-      void knob.offsetHeight;
-      knob.style.transition = '';
-    }
-
-    toggle.dataset.winner = next;
-    applyKnob(toggle, next);
-    commitWinner(toggle, prev, next);
-  }
-
-  toggle.addEventListener('mousedown', onStart);
-  toggle.addEventListener('touchstart', onStart, {passive: true});
-}
-
-document.querySelectorAll('.grade-toggle').forEach(function(t) { initGradeToggle(t); });
+// Keyboard: arrow keys move between segments and fire change.
+document.addEventListener('change', function (e) {
+  var radio = e.target.closest('.grade-radio');
+  if (!radio) return;
+  var group = radio.closest('.grade-3up');
+  if (!group || group.dataset.winner === radio.value) return;
+  commitWinner(group, group.dataset.winner || '', radio.value);
+});
 
 // Shared state for game counter
 var gameCount = {{ games|length }};
@@ -826,11 +722,14 @@ document.addEventListener('click', function(e) {
     row.dataset.graded = '0';
     row.innerHTML =
       '<div style="display:flex;align-items:center;gap:8px;">' +
-        '<div class="grade-toggle" data-game-id="' + g.id + '" data-winner="">' +
-          '<div class="grade-knob"></div>' +
-          '<div class="grade-opt" data-val="team1"><span class="grade-name">' + esc(g.team1_abbrev) + '</span><span class="grade-pts">' + esc(g.points1) + '</span></div>' +
-          '<div class="grade-opt" data-val="tie"><span class="grade-name">TIE</span></div>' +
-          '<div class="grade-opt" data-val="team2"><span class="grade-name">' + esc(g.team2_abbrev) + '</span><span class="grade-pts">' + esc(g.points2) + '</span></div>' +
+        '<div class="grade-3up" data-game-id="' + g.id + '" data-winner="" role="radiogroup" ' +
+             'aria-label="Result: ' + esc(g.team1_abbrev) + ' versus ' + esc(g.team2_abbrev) + '">' +
+          '<input class="grade-radio" type="radio" name="w' + g.id + '" id="w' + g.id + '-t1" value="team1">' +
+          '<label class="grade-seg" for="w' + g.id + '-t1"><span class="grade-name">' + esc(g.team1_abbrev) + '</span><span class="grade-pts">' + esc(g.points1) + '</span></label>' +
+          '<input class="grade-radio" type="radio" name="w' + g.id + '" id="w' + g.id + '-tie" value="tie">' +
+          '<label class="grade-seg grade-seg-tie" for="w' + g.id + '-tie"><span class="grade-name">TIE</span></label>' +
+          '<input class="grade-radio" type="radio" name="w' + g.id + '" id="w' + g.id + '-t2" value="team2">' +
+          '<label class="grade-seg" for="w' + g.id + '-t2"><span class="grade-name">' + esc(g.team2_abbrev) + '</span><span class="grade-pts">' + esc(g.points2) + '</span></label>' +
         '</div>' +
         '<button type="button" class="danger-btn" style="width:auto;padding:2px 8px;font-size:.7rem;" onclick="deleteGame(\'' + g.id + '\', this)">&#x2715;</button>' +
       '</div>' +
@@ -889,11 +788,9 @@ document.addEventListener('click', function(e) {
         var noMsg = gameList.querySelector('.no-games-msg');
         if (noMsg) noMsg.remove();
 
+        // Delegated listeners already cover the new row — nothing to wire up.
         var row = makeGameRow(d.game);
-        var firstGraded = gameList.querySelector('.game-row[data-graded="1"]');
-        if (firstGraded) gameList.insertBefore(row, firstGraded);
-        else gameList.appendChild(row);
-        initGradeToggle(row.querySelector('.grade-toggle'));
+        gameList.appendChild(row);
         if (window.initUtcDates) initUtcDates(row);
         gameCount++;
         updateGameCounter();
