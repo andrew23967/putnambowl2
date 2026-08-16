@@ -2,6 +2,8 @@ import environ
 import dj_database_url
 from pathlib import Path
 
+from django.core.exceptions import ImproperlyConfigured
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 env = environ.Env(DEBUG=(bool, True))
@@ -11,6 +13,29 @@ SECRET_KEY = env('SECRET_KEY', default='dev-only-insecure-key-change-in-producti
 DEBUG = env('DEBUG')
 ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=['*'])
 CSRF_TRUSTED_ORIGINS = env.list('CSRF_TRUSTED_ORIGINS', default=[])
+
+# ── Security (production only) ──────────────────────────────────────────────
+# Applied whenever DEBUG is off, so local development is unaffected.
+if not DEBUG:
+    # Railway terminates TLS at its edge and forwards X-Forwarded-Proto. Without
+    # this Django thinks every request is plain HTTP, which breaks is_secure()
+    # and would make SECURE_SSL_REDIRECT loop forever.
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SECURE_SSL_REDIRECT = True
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    X_FRAME_OPTIONS = 'DENY'
+    # HSTS is deliberately not enabled here. It is sticky in browsers for the
+    # full max-age and cannot be called back, so it should be a separate,
+    # considered decision rather than a side effect of turning DEBUG off.
+
+    if SECRET_KEY.startswith('dev-only-'):
+        raise ImproperlyConfigured(
+            'SECRET_KEY is still the public development default while DEBUG is '
+            'off. Anyone with the repository could forge session cookies. Set a '
+            'real SECRET_KEY environment variable.'
+        )
 
 INSTALLED_APPS = [
     'django.contrib.admin',
