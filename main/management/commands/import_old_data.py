@@ -9,7 +9,8 @@ import json
 from django.core.management.base import BaseCommand
 from django.contrib.auth.models import User
 from accounts.models import Profile
-from main.models import History, WeeklyLeaderboard, SeasonRecord, Announcement
+from main.models import Game, Pick, WeeklyLeaderboard, SeasonRecord, Announcement
+from main.history_import import normalise_game
 
 
 class Command(BaseCommand):
@@ -69,20 +70,42 @@ class Command(BaseCommand):
             except User.DoesNotExist:
                 pass
 
-        # Import history
+        # Import history as real Game/Pick rows (the History model is gone —
+        # see migration 0010). Kickoff times, ESPN ids and home/away are not in
+        # the archive, so those stay at their defaults.
+        user_ids = dict(User.objects.values_list('username', 'pk'))
         cur.execute("SELECT * FROM main_history ORDER BY week")
         histories = cur.fetchall()
         for row in histories:
+            week = row['week']
+            if Game.objects.filter(week=week).exists():
+                self.stdout.write(f'  Week {week} already has games, skipping.')
+                continue
             try:
                 games_data = json.loads(row['games_data']) if row['games_data'] else []
-                players_list = json.loads(row['players_list']) if row['players_list'] else []
-                History.objects.update_or_create(
-                    week=row['week'],
-                    defaults={'games_data': games_data, 'players_list': players_list}
+            except (TypeError, ValueError) as e:
+                self.stdout.write(f'  Error reading history week {week}: {e}')
+                continue
+
+            new_picks = []
+            for g in games_data:
+                if not isinstance(g, dict):
+                    continue
+                team1, team2, points1, points2, winner, picks = normalise_game(g)
+                if not team1 or not team2:
+                    continue
+                game = Game.objects.create(
+                    team1=team1, team2=team2,
+                    points1=points1, points2=points2,
+                    winner=winner, graded=bool(winner),
+                    week=week,
                 )
-                self.stdout.write(f'  Imported history week {row["week"]}')
-            except Exception as e:
-                self.stdout.write(f'  Error importing history week {row["week"]}: {e}')
+                for username, choice in picks.items():
+                    uid = user_ids.get(username)
+                    if uid is not None:
+                        new_picks.append(Pick(user_id=uid, game_id=game.pk, choice=choice))
+            Pick.objects.bulk_create(new_picks, batch_size=500)
+            self.stdout.write(f'  Imported history week {week} ({len(new_picks)} picks)')
 
         # Import leaderboards
         cur.execute("SELECT * FROM main_leaderboard")

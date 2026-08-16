@@ -1,0 +1,339 @@
+{% extends 'base.html' %}
+{% block title %}Analytics — PutnamBowl{% endblock %}
+
+{% block extra_head %}
+<style>
+  /* Carousel */
+  .slide { display:none; }
+  .slide.active { display:block; }
+  .slide-chart-area { position:relative;flex:1;min-height:0; }
+
+  /* Nav arrows */
+  .carousel-arrow {
+    background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:8px;
+    color:var(--muted2);cursor:pointer;font-size:1rem;line-height:1;padding:5px 10px;
+    transition:background .12s,color .12s;flex-shrink:0;
+  }
+  .carousel-arrow:hover { background:rgba(255,255,255,.12);color:var(--text); }
+  .carousel-arrow:disabled { opacity:.25;cursor:default; }
+  [data-theme="light"] .carousel-arrow { background:rgba(0,0,0,.05); }
+  [data-theme="light"] .carousel-arrow:hover { background:rgba(0,0,0,.1); }
+
+  /* Dots */
+  .slide-dot {
+    width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.15);
+    cursor:pointer;transition:background .18s,transform .18s;flex-shrink:0;
+  }
+  .slide-dot.active { background:var(--accent);transform:scale(1.3); }
+  [data-theme="light"] .slide-dot { background:rgba(0,0,0,.15); }
+
+  /* Fade transition */
+  @keyframes slideFadeIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+  .slide.active { display:flex;flex-direction:column;flex:1;min-height:0;animation:slideFadeIn .22s ease both; }
+
+  /* No data */
+  .no-data-msg { display:none;position:absolute;inset:0;align-items:center;justify-content:center;color:var(--muted);font-size:.875rem; }
+  .no-data-msg.show { display:flex; }
+
+  /* Viewport fill */
+  @media (min-width:641px) {
+    main { height:calc(100vh - 53px) !important;display:flex !important;flex-direction:column !important;overflow:hidden !important;box-sizing:border-box !important; }
+    html.nav-has-slider main { height:calc(100vh - 86px) !important; }
+  }
+
+  /* Pill toggle light mode */
+  [data-theme="light"] #chart-toggle,
+  [data-theme="light"] #analytics-toggle { border-color:rgba(0,0,0,.12)!important; }
+  [data-theme="light"] #toggle-pill,
+  [data-theme="light"] #analytics-pill { background:#edf0f3!important;border-color:rgba(0,0,0,.1)!important; }
+</style>
+{% endblock %}
+
+{% block content %}
+{% if completed_weeks %}
+
+<!-- Carousel card -->
+<div class="card animate-fade-up" style="padding:20px 24px 24px;flex:1;display:flex;flex-direction:column;min-height:0;">
+
+  <!-- Carousel header -->
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+
+    <!-- Left: slide title + optional toggles -->
+    <div style="flex:1;min-width:0;display:flex;align-items:center;gap:10px;">
+      <span id="slide-title" style="font-size:.75rem;font-weight:700;color:var(--text);white-space:nowrap;"></span>
+
+      <!-- Score / Rank toggle -->
+      <div id="chart-toggle" style="display:none;position:relative;display:none;align-items:center;width:118px;height:22px;background:transparent;border:1px solid rgba(255,255,255,.07);border-radius:100px;padding:2px;cursor:grab;user-select:none;touch-action:none;">
+        <div id="toggle-pill" style="position:absolute;left:2px;width:calc(50% - 2px);height:calc(100% - 4px);background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:100px;transition:left .22s cubic-bezier(.4,0,.2,1);pointer-events:none;"></div>
+        <span id="tog-score" style="position:relative;flex:1;text-align:center;font-size:.625rem;font-weight:500;color:var(--text);z-index:1;pointer-events:none;">Score</span>
+        <span id="tog-rank"  style="position:relative;flex:1;text-align:center;font-size:.625rem;font-weight:500;color:var(--muted);z-index:1;pointer-events:none;">Rank</span>
+      </div>
+
+      <!-- Win Rate / Efficiency toggle -->
+      <div id="analytics-toggle" style="display:none;position:relative;align-items:center;width:138px;height:22px;background:transparent;border:1px solid rgba(255,255,255,.07);border-radius:100px;padding:2px;cursor:grab;user-select:none;touch-action:none;">
+        <div id="analytics-pill" style="position:absolute;left:2px;width:calc(50% - 2px);height:calc(100% - 4px);background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:100px;transition:left .22s cubic-bezier(.4,0,.2,1);pointer-events:none;"></div>
+        <span id="tog-wr"  style="position:relative;flex:1;text-align:center;font-size:.625rem;font-weight:500;color:var(--text);z-index:1;pointer-events:none;">Win Rate</span>
+        <span id="tog-eff" style="position:relative;flex:1;text-align:center;font-size:.625rem;font-weight:500;color:var(--muted);z-index:1;pointer-events:none;">Efficiency</span>
+      </div>
+
+      <p id="slide-label" style="font-size:.55rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin:0;"></p>
+    </div>
+
+    <!-- Right: dots + arrows -->
+    <div style="display:flex;align-items:center;gap:8px;">
+      <div id="slide-dots" style="display:flex;align-items:center;gap:5px;"></div>
+      <button class="carousel-arrow" id="prev-btn" onclick="goSlide(-1)">‹</button>
+      <button class="carousel-arrow" id="next-btn" onclick="goSlide(1)">›</button>
+    </div>
+  </div>
+
+  {% if points_chart %}
+  <!-- Slide 0: Score / Rank -->
+  <div class="slide" id="slide-0">
+    <div class="slide-chart-area">
+      <canvas id="mainChart"></canvas>
+      <div class="no-data-msg" id="mainChart-nodata">No data yet</div>
+    </div>
+  </div>
+
+  {% if win_rate_chart %}
+  <!-- Slide 1: Win Rate / Efficiency -->
+  <div class="slide" id="slide-1">
+    <div class="slide-chart-area">
+      <canvas id="analyticsChart"></canvas>
+      <div class="no-data-msg" id="analyticsChart-nodata">No data yet</div>
+    </div>
+  </div>
+
+  <!-- Slide 2: Std. Deviation -->
+  <div class="slide" id="slide-2">
+    <div class="slide-chart-area">
+      <canvas id="varianceChart"></canvas>
+      <div class="no-data-msg" id="varianceChart-nodata">No data yet</div>
+    </div>
+  </div>
+  {% endif %}
+  {% endif %}
+
+</div>
+
+{% else %}
+<div class="card" style="padding:48px;text-align:center;flex:1;display:flex;align-items:center;justify-content:center;">
+  <p style="color:var(--muted);font-size:.875rem;">No data yet. Complete week 1 to see analytics here.</p>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const PALETTE = ['#6366f1','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#f97316','#ec4899'];
+var chartWeek = {{ completed_weeks|last|default:1 }};
+
+const pointsData   = {{ points_chart|safe }};
+const positionData = {{ position_chart|safe }};
+const wrData       = {{ win_rate_chart|safe }};
+const effData      = {{ efficiency_chart|safe }};
+
+function filteredByWeek(data, week) {
+  if (!data || data.length < 2) return data;
+  return [data[0], ...data.slice(1).filter(r => r[0] <= week)];
+}
+function destroyChart(id) { const c = Chart.getChart(id); if (c) c.destroy(); }
+function showNoData(id) { const el = document.getElementById(id+'-nodata'); if (el) el.classList.add('show'); }
+function hideNoData(id) { const el = document.getElementById(id+'-nodata'); if (el) el.classList.remove('show'); }
+
+const TIP = {backgroundColor:'#0e1422',titleColor:'#f1f5f9',bodyColor:'#64748b',padding:10,cornerRadius:8,borderColor:'rgba(255,255,255,.1)',borderWidth:1};
+const SX  = {grid:{display:false},border:{display:false},ticks:{font:{size:10},color:'#475569'}};
+const SY  = (e={}) => ({grid:{color:'rgba(255,255,255,.04)',drawTicks:false},border:{display:false},ticks:{font:{size:10},color:'#475569',padding:6},...e});
+const LEG = {position:'bottom',labels:{boxWidth:8,padding:14,font:{size:10},color:'#64748b'}};
+
+function lineDS(data, fill, ctx, h) {
+  return data[0].slice(1).map((p,i) => {
+    const c = PALETTE[i%PALETTE.length];
+    let bg = 'transparent';
+    if (fill && ctx) { const g=ctx.createLinearGradient(0,0,0,h); g.addColorStop(0,c+'28'); g.addColorStop(1,c+'00'); bg=g; }
+    return {label:p, data:data.slice(1).map(r=>r[i+1]), borderColor:c, backgroundColor:bg,
+      pointBackgroundColor:c, pointBorderColor:'rgba(7,11,20,.9)', pointBorderWidth:1.5,
+      pointRadius:3, pointHoverRadius:6, tension:0.4, fill, borderWidth:2};
+  });
+}
+
+// ── slide definitions ──────────────────────────────
+// id, title, label text, which toggle to show ('chart'|'analytics'|null), canvas id (null for picks)
+const SLIDES = [
+  { id:'main',      title:'Score',               label:'Cumulative Score',           toggle:'chart',     canvasId:'mainChart' },
+  {% if win_rate_chart %}
+  { id:'analytics', title:'Win Rate',            label:'% Correct Picks Per Week',   toggle:'analytics', canvasId:'analyticsChart' },
+  { id:'variance',  title:'Efficiency Variance', label:'Std. deviation per player',  toggle:null,        canvasId:'varianceChart' },
+  {% endif %}
+];
+
+let currentSlide = 0;
+let activeChart = null;
+let currentMode = 'score';
+let analyticsMode = 'wr';
+
+// Build dots
+const dotsEl = document.getElementById('slide-dots');
+SLIDES.forEach((s, i) => {
+  const d = document.createElement('div');
+  d.className = 'slide-dot' + (i===0?' active':'');
+  d.addEventListener('click', () => goToSlide(i));
+  dotsEl.appendChild(d);
+});
+
+function goSlide(dir) { goToSlide(currentSlide + dir); }
+
+function goToSlide(idx) {
+  if (idx < 0 || idx >= SLIDES.length) return;
+
+  // Deactivate old slide
+  const oldSlide = document.getElementById('slide-' + currentSlide);
+  if (oldSlide) oldSlide.classList.remove('active');
+
+  // Destroy active chart if leaving a chart slide
+  if (activeChart) { activeChart.destroy(); activeChart = null; }
+
+  currentSlide = idx;
+  const s = SLIDES[idx];
+
+  // Activate new slide
+  const newSlide = document.getElementById('slide-' + currentSlide);
+  if (newSlide) newSlide.classList.add('active');
+
+  // Update header
+  document.getElementById('slide-title').textContent = s.title;
+  document.getElementById('slide-label').textContent = s.label;
+
+  // Show/hide toggles
+  const chartToggle = document.getElementById('chart-toggle');
+  const analyticsToggle = document.getElementById('analytics-toggle');
+  chartToggle.style.display = s.toggle === 'chart' ? 'flex' : 'none';
+  analyticsToggle.style.display = s.toggle === 'analytics' ? 'flex' : 'none';
+
+  // Update dots
+  dotsEl.querySelectorAll('.slide-dot').forEach((d, i) => d.classList.toggle('active', i===idx));
+
+  // Update arrows
+  document.getElementById('prev-btn').disabled = idx === 0;
+  document.getElementById('next-btn').disabled = idx === SLIDES.length - 1;
+
+  // Build chart for this slide
+  if (s.canvasId) {
+    if (s.id === 'main')      { activeChart = buildMainOn(s.canvasId, currentMode);  if (!activeChart) showNoData(s.canvasId); }
+    if (s.id === 'analytics') { activeChart = buildAnalyticsOn(s.canvasId, analyticsMode); if (!activeChart) showNoData(s.canvasId); }
+    if (s.id === 'variance')  { activeChart = buildVarianceOn(s.canvasId, false, true); if (!activeChart) showNoData(s.canvasId); }
+  }
+}
+
+// Initialise
+goToSlide(0);
+
+// ── Score / Rank chart ─────────────────────────────
+function buildMainOn(cid, mode, showLegend=false) {
+  const el=document.getElementById(cid); if (!el) return null;
+  hideNoData(cid);
+  const ctx=el.getContext('2d'), data=filteredByWeek(mode==='score'?pointsData:positionData,chartWeek), rev=mode==='rank';
+  if (!data || data.length < 2) return null;
+  const h=el.parentElement.offsetHeight||240;
+  return new Chart(ctx, {type:'line',
+    data:{labels:data.slice(1).map(r=>'Wk '+r[0]), datasets:lineDS(data,false,ctx,h)},
+    options:{responsive:true, maintainAspectRatio:false, interaction:{mode:'index',intersect:false},
+      plugins:{legend:{...LEG,display:showLegend}, tooltip:{...TIP,callbacks:{label:c=>` ${c.dataset.label}: ${c.parsed.y}${rev?'':' pts'}`}}},
+      scales:{y:SY({reverse:rev}), x:SX}, animation:{duration:600,easing:'easeInOutQuart'}}});
+}
+
+// ── Win Rate / Efficiency chart ────────────────────
+function buildAnalyticsOn(cid, mode, showLegend=false) {
+  const el=document.getElementById(cid); if (!el) return null;
+  hideNoData(cid);
+  const data=filteredByWeek(mode==='wr'?wrData:effData,chartWeek); if (!data||data.length<2) return null;
+  return new Chart(el.getContext('2d'), {type:'line',
+    data:{labels:data.slice(1).map(r=>'Wk '+r[0]), datasets:lineDS(data,false,null,0)},
+    options:{responsive:true, maintainAspectRatio:false, interaction:{mode:'index',intersect:false},
+      plugins:{legend:{...LEG,display:showLegend}, tooltip:{...TIP,callbacks:{label:c=>` ${c.dataset.label}: ${c.parsed.y}%`}}},
+      scales:{y:SY({min:0,max:100,ticks:{font:{size:10},color:'#475569',padding:6,callback:v=>v+'%'}}), x:SX},
+      animation:{duration:600,easing:'easeInOutQuart'}}});
+}
+
+// ── Variance chart ─────────────────────────────────
+function buildVarianceOn(cid, showLegend=false, showNames=false) {
+  const el=document.getElementById(cid); if (!el) return null;
+  hideNoData(cid);
+  const fd=filteredByWeek(effData,chartWeek); if (!fd||fd.length<2) return null;
+  const players=fd[0].slice(1), rows=fd.slice(1);
+  const v=players.map((_,pi)=>{const sc=rows.map(r=>r[pi+1]),m=sc.reduce((a,b)=>a+b,0)/sc.length; return parseFloat(Math.sqrt(sc.reduce((a,b)=>a+(b-m)**2,0)/sc.length).toFixed(2));});
+  const xAxis={...SX,ticks:{...SX.ticks,display:showNames}};
+  return new Chart(el.getContext('2d'), {type:'bar',
+    data:{labels:players, datasets:[{label:'Std. Deviation', data:v,
+      backgroundColor:players.map((_,i)=>PALETTE[i%PALETTE.length]+'bb'),
+      borderColor:players.map((_,i)=>PALETTE[i%PALETTE.length]), borderWidth:1, borderRadius:4}]},
+    options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{display:showLegend},
+      tooltip:{...TIP,callbacks:{label:c=>` ${c.label}: ${c.parsed.y}`}}},
+      scales:{x:xAxis,y:SY()}, animation:{duration:700,easing:'easeInOutQuart'}}});
+}
+
+// ── Pill toggles ───────────────────────────────────
+function setupPillDrag(trackId, pillId, labelIds, modes, switchFn) {
+  function movePill(mode, animate) {
+    const tr=document.getElementById(trackId), pl=document.getElementById(pillId);
+    if (!tr||!pl) return;
+    const half=(tr.offsetWidth-4)/2;
+    pl.style.transition=animate?'left .22s cubic-bezier(.4,0,.2,1)':'none';
+    pl.style.left=mode===modes[0]?'2px':(2+half)+'px';
+    document.getElementById(labelIds[0]).style.color=mode===modes[0]?'var(--text)':'var(--muted)';
+    document.getElementById(labelIds[1]).style.color=mode===modes[1]?'var(--text)':'var(--muted)';
+  }
+  const track=document.getElementById(trackId);
+  if (!track) return movePill;
+  let startX=null;
+  function pt(e) { return e.touches?e.touches[0]:e; }
+  function onStart(e) { startX=pt(e).clientX; track.style.cursor='grabbing'; document.addEventListener('mousemove',onMove); document.addEventListener('mouseup',onEnd); document.addEventListener('touchmove',onMove,{passive:false}); document.addEventListener('touchend',onEnd); }
+  function onMove(e) { if(e.cancelable)e.preventDefault(); const rect=track.getBoundingClientRect(),half=(rect.width-4)/2,pl=document.getElementById(pillId); pl.style.transition='none'; pl.style.left=Math.max(2,Math.min(pt(e).clientX-rect.left-half/2-2,2+half))+'px'; const right=pt(e).clientX>=rect.left+rect.width/2; document.getElementById(labelIds[0]).style.color=right?'var(--muted)':'var(--text)'; document.getElementById(labelIds[1]).style.color=right?'var(--text)':'var(--muted)'; }
+  function onEnd(e) { track.style.cursor='grab'; document.removeEventListener('mousemove',onMove); document.removeEventListener('mouseup',onEnd); document.removeEventListener('touchmove',onMove); document.removeEventListener('touchend',onEnd); const rect=track.getBoundingClientRect(),ex=(e.changedTouches?e.changedTouches[0]:e).clientX; switchFn(ex>=rect.left+rect.width/2?modes[1]:modes[0]); }
+  track.addEventListener('mousedown',onStart);
+  track.addEventListener('touchstart',onStart,{passive:true});
+  return movePill;
+}
+
+let movePillMain = setupPillDrag('chart-toggle','toggle-pill',['tog-score','tog-rank'],['score','rank'], mode => {
+  if (mode === currentMode) return;
+  currentMode = mode;
+  document.getElementById('slide-label').textContent = mode==='score'?'Cumulative Score':'Rank Over Time';
+  if (activeChart) { activeChart.destroy(); activeChart=null; }
+  activeChart = buildMainOn('mainChart', mode);
+  if (!activeChart) showNoData('mainChart');
+  movePillMain(mode, true);
+});
+
+let movePillAnalytics = setupPillDrag('analytics-toggle','analytics-pill',['tog-wr','tog-eff'],['wr','eff'], mode => {
+  if (mode === analyticsMode) return;
+  analyticsMode = mode;
+  document.getElementById('slide-label').textContent = mode==='wr'?'% Correct Picks Per Week':'% of Max Available Points Captured';
+  if (activeChart) { activeChart.destroy(); activeChart=null; }
+  activeChart = buildAnalyticsOn('analyticsChart', mode);
+  if (!activeChart) showNoData('analyticsChart');
+  movePillAnalytics(mode, true);
+});
+
+// Global nav slider
+{% if completed_weeks %}
+initNavSlider({
+  min: 1,
+  max: {{ completed_weeks|last }},
+  value: {{ completed_weeks|last }},
+  onChange: function(w) {
+    chartWeek = w;
+    if (activeChart) { activeChart.destroy(); activeChart=null; }
+    const s = SLIDES[currentSlide];
+    if (s.canvasId) {
+      if (s.id==='main')      { activeChart=buildMainOn(s.canvasId,currentMode);      if(!activeChart)showNoData(s.canvasId); }
+      if (s.id==='analytics') { activeChart=buildAnalyticsOn(s.canvasId,analyticsMode); if(!activeChart)showNoData(s.canvasId); }
+      if (s.id==='variance')  { activeChart=buildVarianceOn(s.canvasId,false,true);   if(!activeChart)showNoData(s.canvasId); }
+    }
+  }
+});
+{% endif %}
+</script>
+{% endblock %}

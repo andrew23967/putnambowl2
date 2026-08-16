@@ -1,14 +1,14 @@
 """
 python manage.py seed_demo
 
-Creates 6 fake players and 8 weeks of graded history to demo the UI.
-Safe to run multiple times — skips existing users/weeks.
+Creates 6 fake players and 8 completed weeks to demo the UI.
+Safe to run multiple times — skips weeks that already have games.
 """
 import random
 from django.core.management.base import BaseCommand
 from django.contrib.auth.models import User
 from main.models import (
-    SiteSettings, Game, Pick, History, WeeklyLeaderboard, SeasonRecord, Announcement
+    SiteSettings, Game, Pick, WeeklyLeaderboard, SeasonRecord, Announcement
 )
 from main.teams import TEAMS
 
@@ -35,10 +35,11 @@ MATCHUPS_BY_WEEK = [
 ]
 
 TEAM_VALUES = [t[0] for t in TEAMS]
+CURRENT_WEEK = len(MATCHUPS_BY_WEEK) + 1
 
 
 class Command(BaseCommand):
-    help = 'Seed demo data: 6 players + 8 weeks of history'
+    help = 'Seed demo data: 6 players + 8 completed weeks'
 
     def handle(self, *args, **options):
         self.stdout.write('Seeding demo data...')
@@ -56,6 +57,7 @@ class Command(BaseCommand):
             p.real_name = real_name
             p.theme = theme
             p.score = 0
+            p.preseason_submitted = True
             p.save()
             users.append(user)
 
@@ -64,84 +66,71 @@ class Command(BaseCommand):
 
         for week_idx, matchups in enumerate(MATCHUPS_BY_WEEK):
             week = week_idx + 1
-            if History.objects.filter(week=week).exists():
+
+            # WeeklyLeaderboard(week=N) holds the scores as they stood BEFORE
+            # week N was scored, so snapshot before adding this week's points.
+            WeeklyLeaderboard.objects.update_or_create(
+                week=week,
+                defaults={'entries': sorted(
+                    [{'username': k, 'score': v} for k, v in cumulative.items()],
+                    key=lambda x: x['score'], reverse=True
+                )},
+            )
+
+            if Game.objects.filter(week=week).exists():
                 self.stdout.write(f'  Week {week} already exists, skipping.')
-                # Still rebuild cumulative from stored data
-                try:
-                    lb = WeeklyLeaderboard.objects.get(week=week)
-                    for entry in lb.entries:
-                        cumulative[entry['username']] = entry['score']
-                except WeeklyLeaderboard.DoesNotExist:
-                    pass
+                # Replay the stored picks so cumulative stays accurate.
+                for pick in Pick.objects.filter(game__week=week).select_related('game', 'user'):
+                    if pick.user.username in cumulative and pick.is_correct:
+                        cumulative[pick.user.username] = round(
+                            cumulative[pick.user.username] + pick.points_earned, 2
+                        )
                 continue
 
-            week_games = []
             for t1i, t2i, dog_ml, fav_ml, dog_pts, fav_pts, winner in matchups:
-                team1 = TEAM_VALUES[t1i % len(TEAM_VALUES)]
-                team2 = TEAM_VALUES[t2i % len(TEAM_VALUES)]
-                game_data = {
-                    'team1': team1, 'team2': team2,
-                    'points1': dog_pts, 'points2': fav_pts,
-                    'winner': winner, 'graded': True,
-                    'player_picks': {},
-                }
+                game = Game.objects.create(
+                    team1=TEAM_VALUES[t1i % len(TEAM_VALUES)],
+                    team2=TEAM_VALUES[t2i % len(TEAM_VALUES)],
+                    points1=dog_pts, points2=fav_pts,
+                    winner=winner, graded=True,
+                    week=week,
+                )
                 for user in users:
                     # Simulate realistic pick tendencies
                     bias = 0.55 if random.random() > 0.5 else 0.45
                     choice = 'team1' if random.random() < bias else 'team2'
-                    correct = (choice == winner)
-                    pts = (dog_pts if choice == 'team1' else fav_pts) if correct else 0
-                    game_data['player_picks'][user.username] = {
-                        'choice': choice, 'correct': correct,
-                        'points': round(pts, 2),
-                        'team_picked': team1.split()[-1] if choice == 'team1' else team2.split()[-1],
-                    }
-                    cumulative[user.username] = round(cumulative[user.username] + pts, 2)
-                week_games.append(game_data)
+                    Pick.objects.create(user=user, game=game, choice=choice)
+                    if choice == winner:
+                        pts = dog_pts if choice == 'team1' else fav_pts
+                        cumulative[user.username] = round(cumulative[user.username] + pts, 2)
 
-            # Build players_list with cumulative scores
-            players_list = sorted(
-                [{'username': k, 'score': v} for k, v in cumulative.items()],
-                key=lambda x: x['score'], reverse=True
-            )
+            self.stdout.write(f'  Created week {week}')
 
-            History.objects.create(
-                week=week,
-                games_data=week_games,
-                players_list=[p['username'] for p in players_list],
-            )
-            WeeklyLeaderboard.objects.update_or_create(
-                week=week,
-                defaults={'entries': players_list}
-            )
-            self.stdout.write(f'  Created week {week} history')
-
-        # Set site to week 9 (current week, not yet graded)
+        # Site sits on the week after the last completed one, picks locked.
         settings = SiteSettings.get()
-        settings.week = 9
+        settings.week = CURRENT_WEEK
+        settings.scrape_week = CURRENT_WEEK
         settings.publish = True
         settings.edit = False
         settings.lock_picks = True
         settings.save()
 
-        # Update player scores to match end of week 8
+        # Update player scores to match end of the last completed week
         for user in users:
             user.profile.score = cumulative[user.username]
             user.profile.save()
             self.stdout.write(f'  {user.username}: {cumulative[user.username]} pts')
 
-        # Add a couple of current week games (ungraded)
-        if not Game.objects.exists():
+        # Add a few current-week games (ungraded)
+        if not Game.objects.filter(week=CURRENT_WEEK).exists():
             for t1i, t2i, dog_ml, fav_ml, dog_pts, fav_pts, _ in MATCHUPS_BY_WEEK[0][:3]:
-                team1 = TEAM_VALUES[t1i % len(TEAM_VALUES)]
-                team2 = TEAM_VALUES[t2i % len(TEAM_VALUES)]
                 game = Game.objects.create(
-                    team1=team1, team2=team2,
+                    team1=TEAM_VALUES[t1i % len(TEAM_VALUES)],
+                    team2=TEAM_VALUES[t2i % len(TEAM_VALUES)],
                     points1=dog_pts, points2=fav_pts,
                     graded=False, winner='',
-                    date='Sun 4:25 PM',
+                    week=CURRENT_WEEK,
                 )
-                # Give each user a pick
                 for user in users:
                     choice = 'team1' if random.random() < 0.5 else 'team2'
                     Pick.objects.get_or_create(user=user, game=game, defaults={'choice': choice})
@@ -160,7 +149,9 @@ class Command(BaseCommand):
         )
 
         # Announcement
-        Announcement.objects.get_or_create(message='Welcome to PutnamBowl Week 9! Picks are locked. Good luck!')
+        Announcement.objects.get_or_create(
+            message=f'Welcome to PutnamBowl Week {CURRENT_WEEK}! Picks are locked. Good luck!'
+        )
 
         self.stdout.write(self.style.SUCCESS('\nDemo data seeded! Login with any username and password "password123".'))
         self.stdout.write('Users: ' + ', '.join(p[0] for p in PLAYERS))

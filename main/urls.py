@@ -4,11 +4,13 @@ from . import views
 app_name = 'main'
 
 urlpatterns = [
-    path('home/<int:week>/', views.home, name='home'),
+    path('home/', views.home, name='home'),
+    path('site-state/', views.site_state, name='site_state'),
+    path('home/leaderboard/', views.ajax_leaderboard, name='ajax_leaderboard'),
     path('picks/', views.pickform, name='pickform'),
     path('picks/save/', views.ajax_save_pick, name='ajax_save_pick'),
     path('allpicks/', views.allpicks, name='allpicks'),
-    path('history/', views.pickhistory, name='pickhistory'),
+    path('history/data/', views.ajax_history, name='ajax_history'),
     path('preseason/', views.preseason, name='preseason'),
     path('standings/', views.standings_view, name='standings'),
     path('rules/', views.rules, name='rules'),
@@ -18,6 +20,8 @@ urlpatterns = [
     path('dashboard/accounts/edit/<int:user_id>/', views.edit_player, name='edit_player'),
     path('dashboard/accounts/delete/<int:user_id>/', views.delete_player, name='delete_player'),
     path('dashboard/announcements/', views.announcements, name='announcements'),
+    path('analytics/', views.analytics, name='analytics'),
+    path('pick-history/', views.pick_history, name='pick_history'),
     path('dashboard/analytics/', views.secret_analytics, name='secret_analytics'),
     path('dashboard/generate-recap/', views.generate_recap, name='generate_recap'),
     path('dashboard/send-test-email/', views.send_test_email, name='send_test_email'),

@@ -31,22 +31,6 @@
     color: var(--muted);
     margin: 0 0 8px;
   }
-  .mode-tab {
-    flex: 1;
-    padding: 11px 14px;
-    font-size: .8125rem;
-    font-weight: 600;
-    cursor: pointer;
-    border: none;
-    border-bottom: 2px solid transparent;
-    background: transparent;
-    color: var(--muted2);
-    transition: color .15s, border-color .15s;
-  }
-  .mode-tab.active {
-    color: var(--text);
-    border-bottom-color: var(--accent);
-  }
   .ctrl-btn {
     padding: 9px 16px;
     font-size: .8125rem;
@@ -64,6 +48,8 @@
   .ctrl-btn.on-amber { background: rgba(245,158,11,.18); border-color: rgba(245,158,11,.5); color: #fbbf24; }
   .ctrl-btn.on-red   { background: rgba(239,68,68,.18);  border-color: rgba(239,68,68,.5);  color: #f87171; }
   .ctrl-btn.on-violet{ background: rgba(139,92,246,.22); border-color: rgba(139,92,246,.6); color: #a78bfa; }
+  .mode-tab { flex:1;padding:11px 14px;font-size:.8125rem;font-weight:600;cursor:pointer;border:none;border-bottom:2px solid transparent;background:transparent;color:var(--muted2);transition:color .15s,border-color .15s; }
+  .mode-tab.active { color:var(--text);border-bottom-color:var(--accent); }
   .next-card {
     background: var(--surface2);
     border: 1px solid var(--border);
@@ -268,6 +254,9 @@
       <button disabled class="ctrl-btn" style="width:100%;opacity:.35;cursor:not-allowed;">Next Week →</button>
       {% endif %}
 
+      <button id="recap-btn" class="ctrl-btn" style="width:100%;margin-top:8px;" onclick="generateRecap()">Regenerate Recap</button>
+      <p id="recap-status" style="font-size:.7rem;color:var(--muted);margin:4px 0 0;display:none;"></p>
+
       <hr class="dash-hr">
 
       <!-- Developer Tools -->
@@ -461,7 +450,7 @@
 
   <!-- RIGHT: games (sticky, scrollable) -->
   <div class="dash-right">
-      <p style="font-size:.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;padding:10px 16px 6px;margin:0;">Week {{ settings.week }} · <span id="game-counter">{{ games|length }} game{{ games|length|pluralize }}</span>{% if all_graded and games %} · all graded{% endif %}</p>
+      <p style="font-size:.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;padding:10px 16px 6px;margin:0;">Week {{ settings.week }} · <span id="game-counter">{{ games|length }} game{{ games|length|pluralize }}</span>{% if all_graded and games %} · all graded{% endif %} · <span style="color:{% if week_type == 'superbowl' %}#fbbf24{% elif week_type == 'playoffs' %}#f59e0b{% else %}var(--muted){% endif %};">{% if week_type == 'superbowl' %}Super Bowl{% elif week_type == 'playoffs' %}Playoffs{% else %}Regular Season{% endif %}</span></p>
       <div id="game-list-inner">
       {% if games %}
       {% for game in games %}
@@ -553,12 +542,41 @@ function setMode(mode) {
   manual.style.pointerEvents = isAuto ? 'none' : '';
   auto.style.opacity         = isAuto ? '1' : '0';
   auto.style.pointerEvents   = isAuto ? '' : 'none';
-  document.getElementById('btn-auto').classList.toggle('active', isAuto);
   document.getElementById('btn-manual').classList.toggle('active', !isAuto);
+  document.getElementById('btn-auto').classList.toggle('active', isAuto);
   localStorage.setItem('dashMode', mode);
 }
 var saved = localStorage.getItem('dashMode');
 setMode(saved || ({{ settings.auto_enabled|yesno:"true,false" }} ? 'auto' : 'manual'));
+
+function generateRecap() {
+  var btn = document.getElementById('recap-btn');
+  var status = document.getElementById('recap-status');
+  btn.disabled = true;
+  btn.textContent = 'Generating…';
+  status.style.display = 'none';
+  fetch('{% url "main:generate_recap" %}', {method:'POST', headers:{'X-CSRFToken':'{{ csrf_token }}'}})
+    .then(r => r.json())
+    .then(data => {
+      btn.disabled = false;
+      btn.textContent = 'Regenerate Recap';
+      status.style.display = 'block';
+      if (data.recap) {
+        status.style.color = 'var(--accent)';
+        status.textContent = 'Recap updated.';
+      } else {
+        status.style.color = '#f87171';
+        status.textContent = data.error || 'Failed.';
+      }
+    })
+    .catch(() => {
+      btn.disabled = false;
+      btn.textContent = 'Regenerate Recap';
+      status.style.display = 'block';
+      status.style.color = '#f87171';
+      status.textContent = 'Request failed.';
+    });
+}
 
 // FLIP animation
 function flipToBottom(el, container) {
@@ -582,18 +600,19 @@ function flipToBottom(el, container) {
 // Grade toggle
 var WINNER_URL = "{% url 'main:ajax_set_winner' %}";
 var CSRF = "{{ csrf_token }}";
-var POSITIONS   = {team1: '0%', tie: '33.333%', team2: '66.666%'};
+var VALS3       = ['team1', 'tie', 'team2'];
 var INDICES     = {team1: 0, tie: 1, team2: 2};
 var KNOB_COLORS = {team1: '#3b82f6', tie: '', team2: '#ef4444'};
 
 function applyKnob(toggle, winner) {
   var knob = toggle.querySelector('.grade-knob');
   var opts = toggle.querySelectorAll('.grade-opt');
-  if (winner && POSITIONS[winner] !== undefined) {
+  var w = toggle.offsetWidth;
+  if (winner && INDICES[winner] !== undefined) {
     var idx = INDICES[winner];
     var color = KNOB_COLORS[winner];
     knob.style.opacity = '1';
-    knob.style.left = POSITIONS[winner];
+    if (w) knob.style.left = (idx * w / 3) + 'px';
     knob.style.background = color || '';
     opts.forEach(function(o, i) {
       var isActive = i === idx;
@@ -614,40 +633,102 @@ function applyKnob(toggle, winner) {
   }
 }
 
+function commitWinner(toggle, prev, next) {
+  toggle.dataset.winner = next;
+  fetch(WINNER_URL, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': CSRF},
+    body: 'game_id=' + encodeURIComponent(toggle.dataset.gameId) + '&winner=' + encodeURIComponent(next)
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(d) {
+    if (!d.ok) { toggle.dataset.winner = prev; applyKnob(toggle, prev); return; }
+    var row = toggle.closest('.game-row');
+    var list = row && row.parentElement;
+    if (!list) return;
+    if (!prev && next) {
+      row.dataset.graded = '1'; flipToBottom(row, list);
+    } else if (prev && !next) {
+      var firstGraded = list.querySelector('.game-row[data-graded="1"]');
+      row.dataset.graded = '0';
+      if (firstGraded) list.insertBefore(row, firstGraded); else list.prepend(row);
+    }
+  })
+  .catch(function() { toggle.dataset.winner = prev; applyKnob(toggle, prev); });
+}
+
 function initGradeToggle(toggle) {
+  var knob = toggle.querySelector('.grade-knob');
+  knob.style.transition = 'none';
   applyKnob(toggle, toggle.dataset.winner);
-  toggle.querySelectorAll('.grade-opt').forEach(function(opt) {
-    opt.addEventListener('click', function() {
-      var gameId = toggle.dataset.gameId;
-      var prev   = toggle.dataset.winner;
-      var val    = opt.dataset.val;
-      var next   = (val === prev) ? '' : val;
-      toggle.dataset.winner = next;
-      applyKnob(toggle, next);
-      fetch(WINNER_URL, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': CSRF},
-        body: 'game_id=' + encodeURIComponent(gameId) + '&winner=' + encodeURIComponent(next)
-      })
-      .then(function(r) { return r.json(); })
-      .then(function(d) {
-        if (!d.ok) { toggle.dataset.winner = prev; applyKnob(toggle, prev); return; }
-        var row = toggle.closest('.game-row');
-        var list = row && row.parentElement;
-        if (!list) return;
-        if (!prev && next) {
-          row.dataset.graded = '1';
-          flipToBottom(row, list);
-        } else if (prev && !next) {
-          var firstGraded = list.querySelector('.game-row[data-graded="1"]');
-          row.dataset.graded = '0';
-          if (firstGraded) list.insertBefore(row, firstGraded);
-          else list.prepend(row);
-        }
-      })
-      .catch(function() { toggle.dataset.winner = prev; applyKnob(toggle, prev); });
+  void knob.offsetHeight;
+  knob.style.transition = '';
+
+  var startX, moved;
+  function pt(e) { return e.touches ? e.touches[0] : e; }
+
+  function onStart(e) {
+    startX = pt(e).clientX;
+    moved = false;
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onEnd);
+    document.addEventListener('touchmove', onMove, {passive: false});
+    document.addEventListener('touchend', onEnd);
+  }
+
+  function onMove(e) {
+    var cx = pt(e).clientX;
+    if (Math.abs(cx - startX) > 3) moved = true;
+    if (!moved) return;
+    if (e.cancelable) e.preventDefault();
+    var rect = toggle.getBoundingClientRect();
+    var slotW = rect.width / 3;
+    var newLeft = Math.max(0, Math.min(cx - rect.left - slotW / 2, 2 * slotW));
+    knob.style.opacity = '1';
+    knob.style.transition = 'none';
+    knob.style.left = newLeft + 'px';
+    var hi = newLeft < slotW * 0.5 ? 0 : newLeft < slotW * 1.5 ? 1 : 2;
+    toggle.querySelectorAll('.grade-opt').forEach(function(o, i) {
+      o.classList.toggle('active', i === hi);
     });
-  });
+  }
+
+  function onEnd(e) {
+    document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onEnd);
+    document.removeEventListener('touchmove', onMove); document.removeEventListener('touchend', onEnd);
+
+    var ex = (e.changedTouches ? e.changedTouches[0] : e).clientX;
+    var rect = toggle.getBoundingClientRect();
+    var slotW = rect.width / 3;
+    var kl = parseFloat(knob.style.left) || 0;
+    var targetIdx = moved
+      ? (kl < slotW * 0.5 ? 0 : kl < slotW * 1.5 ? 1 : 2)
+      : (function() { var f = Math.max(0, Math.min((ex - rect.left) / rect.width, 0.9999)); return f < 1/3 ? 0 : f < 2/3 ? 1 : 2; }());
+
+    var targetVal = VALS3[targetIdx];
+    var prev = toggle.dataset.winner;
+    var next = (!moved && targetVal === prev) ? '' : targetVal;
+    var cw = toggle.offsetWidth;
+
+    // Re-enable CSS transition so snap animates
+    knob.style.transition = '';
+    void knob.offsetHeight;
+
+    // Coming from no selection: pre-position so left doesn't animate from 0
+    if (!prev && next && cw) {
+      knob.style.transition = 'none';
+      knob.style.left = (INDICES[next] * cw / 3) + 'px';
+      void knob.offsetHeight;
+      knob.style.transition = '';
+    }
+
+    toggle.dataset.winner = next;
+    applyKnob(toggle, next);
+    commitWinner(toggle, prev, next);
+  }
+
+  toggle.addEventListener('mousedown', onStart);
+  toggle.addEventListener('touchstart', onStart, {passive: true});
 }
 
 document.querySelectorAll('.grade-toggle').forEach(function(t) { initGradeToggle(t); });

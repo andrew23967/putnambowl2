@@ -6,4 +6,11 @@ staticfiles/
 .venv/
 venv/
 *.log
+*.err
 .DS_Store
+.playwright-mcp/
+# throwaway artifacts from scripts/verify_history_migration.py
+scripts/testmig.sqlite3
+scripts/seed.json
+scripts/seed_run.py
+scripts/verify.py

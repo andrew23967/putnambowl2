@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 {% load main_tags %}
-{% block title %}Week {{ viewing_week }} — PutnamBowl{% endblock %}
+{% block title %}Week {{ settings.week }} — PutnamBowl{% endblock %}
 
 {% block extra_head %}
 <style>
@@ -10,16 +10,16 @@
   .stat-label { font-size:.6875rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:10px;display:flex;align-items:center;gap:6px; }
 
   /* ── Podium ── */
-  .podium-wrap { display:flex;align-items:flex-end;justify-content:center;gap:8px;padding:24px 0 0; }
+  .podium-wrap { display:flex;align-items:flex-end;justify-content:center;gap:8px;padding:8px 0 0; }
   .pod { display:flex;flex-direction:column;align-items:center; }
   .pod-block { border-radius:10px 10px 0 0;display:flex;align-items:center;justify-content:center;font-weight:900;color:rgba(255,255,255,.5); }
-  .pod-1 .pod-block { background:linear-gradient(160deg,rgba(245,158,11,.2),rgba(217,119,6,.1));border-top:1px solid rgba(245,158,11,.25);border-left:1px solid rgba(245,158,11,.15);border-right:1px solid rgba(245,158,11,.15);width:100px;height:80px;font-size:1.5rem; }
-  .pod-2 .pod-block { background:rgba(255,255,255,.04);border-top:1px solid rgba(255,255,255,.08);border-left:1px solid rgba(255,255,255,.06);border-right:1px solid rgba(255,255,255,.06);width:86px;height:56px;font-size:1.1rem; }
-  .pod-3 .pod-block { background:rgba(255,255,255,.025);border-top:1px solid rgba(255,255,255,.05);border-left:1px solid rgba(255,255,255,.04);border-right:1px solid rgba(255,255,255,.04);width:80px;height:40px;font-size:.9rem; }
+  .pod-1 .pod-block { background:linear-gradient(160deg,rgba(245,158,11,.2),rgba(217,119,6,.1));border-top:1px solid rgba(245,158,11,.25);border-left:1px solid rgba(245,158,11,.15);border-right:1px solid rgba(245,158,11,.15);width:100px;height:44px;font-size:1.2rem; }
+  .pod-2 .pod-block { background:rgba(255,255,255,.04);border-top:1px solid rgba(255,255,255,.08);border-left:1px solid rgba(255,255,255,.06);border-right:1px solid rgba(255,255,255,.06);width:86px;height:28px;font-size:.95rem; }
+  .pod-3 .pod-block { background:rgba(255,255,255,.025);border-top:1px solid rgba(255,255,255,.05);border-left:1px solid rgba(255,255,255,.04);border-right:1px solid rgba(255,255,255,.04);width:80px;height:16px;font-size:.8rem; }
   .pod-4 .pod-block { background:rgba(255,255,255,.015);border-top:1px solid rgba(255,255,255,.04);border-left:1px solid rgba(255,255,255,.03);border-right:1px solid rgba(255,255,255,.03);width:72px;height:26px;font-size:.8rem; }
   .pod-5 .pod-block { background:rgba(255,255,255,.01);border-top:1px solid rgba(255,255,255,.03);border-left:1px solid rgba(255,255,255,.02);border-right:1px solid rgba(255,255,255,.02);width:66px;height:16px;font-size:.75rem; }
-  .pod-avatar { width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:1rem;color:#fff;margin-bottom:6px; }
-  .pod-1 .pod-avatar { width:50px;height:50px;font-size:1.2rem; }
+  .pod-avatar { width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.8rem;color:#fff;margin-bottom:4px; }
+  .pod-1 .pod-avatar { width:36px;height:36px;font-size:.95rem; }
   .pod-4 .pod-avatar,.pod-5 .pod-avatar { width:34px;height:34px;font-size:.8rem; }
 
   @keyframes podRise { from{transform:translateY(20px);opacity:0} to{transform:translateY(0);opacity:1} }
@@ -41,17 +41,17 @@
   .rank-flat { color:var(--muted);font-size:.6875rem; }
 
   /* ── Game rows ── */
-  .game-row { display:flex;align-items:center;padding:5px 0 1px;gap:12px;transition:opacity .12s; }
+  .game-row { display:flex;align-items:center;padding:10px 12px;gap:12px;transition:opacity .12s;break-inside:avoid;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.055);border-radius:0;margin-bottom:8px; }
   .game-row:hover { opacity:.85; }
   .game-sep { display:flex;align-items:center;gap:8px;margin-bottom:1px; }
   .game-sep-text { font-size:.5rem;color:var(--muted);white-space:nowrap;opacity:.6; }
   .game-sep-line { flex:1;height:1px;background:rgba(255,255,255,.05); }
-  .team-name { font-weight:700;font-size:.75rem;color:var(--text); }
+  .team-name { font-weight:700;font-size:1rem;color:var(--text); }
   .team-name.winner { color:#34d399; }
   .pts-tag { font-size:.625rem;font-weight:600;padding:1px 5px;border-radius:5px;background:rgba(255,255,255,.06);color:var(--muted2);white-space:nowrap; }
   .pts-tag.won { background:rgba(16,185,129,.15);color:#34d399; }
   .pts-tag.fav { background:rgba(99,102,241,.1);color:#a5b4fc; }
-  .vs-sep { color:var(--muted);font-size:.6rem;font-weight:800;flex-shrink:0; }
+  .vs-sep { color:var(--muted);font-size:.8rem;font-weight:800;flex-shrink:0; }
   .pick-chip { font-size:.6rem;font-weight:700;padding:2px 7px;border-radius:99px;white-space:nowrap; }
   .pick-correct { background:rgba(16,185,129,.2);color:#34d399; }
   .pick-wrong   { background:rgba(239,68,68,.15);color:#f87171; }
@@ -62,16 +62,33 @@
   .dist-t1 { height:100%;background:#6366f1;width:0;transition:width 1s cubic-bezier(.2,.8,.2,1); }
   .dist-t2 { height:100%;background:#f59e0b;flex:1; }
 
-  /* Week slider */
-  #week-slider { -webkit-appearance:none;appearance:none;width:100%;height:3px;border-radius:2px;outline:none;cursor:pointer;background:rgba(255,255,255,0.07); }
-  #week-slider::-webkit-slider-thumb { -webkit-appearance:none;width:12px;height:12px;border-radius:50%;background:rgba(255,255,255,0.45);border:1px solid rgba(255,255,255,0.2);cursor:pointer; }
-  #week-slider::-moz-range-thumb { width:12px;height:12px;border-radius:50%;background:rgba(255,255,255,0.45);border:1px solid rgba(255,255,255,0.2);cursor:pointer;box-sizing:border-box; }
-  #week-slider::-moz-range-track { background:rgba(255,255,255,0.07);height:3px;border-radius:2px; }
-  #week-slider::-moz-range-progress { background:rgba(255,255,255,0.18);height:3px;border-radius:2px; }
-
   /* Countdown */
   @keyframes cdPulse { 0%,100%{opacity:1} 50%{opacity:.45} }
-  .cd-digit { background:var(--surface2);border-radius:6px;padding:6px 10px;min-width:40px;text-align:center;font-weight:800;font-size:1.25rem;color:var(--text);font-variant-numeric:tabular-nums;line-height:1;animation:cdPulse 2s ease-in-out infinite; }
+  .cd-digit { background:var(--surface2);border-radius:6px;padding:10px 14px;width:100%;box-sizing:border-box;text-align:center;font-weight:800;font-size:2rem;color:var(--text);font-variant-numeric:tabular-nums;line-height:1;animation:cdPulse 2s ease-in-out infinite; }
+  .cd-digit.static { animation:none; }
+  /* Shared timer layout */
+  .timer-wrap { margin-bottom:12px; }
+  .timer-label { font-size:.5625rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.12em;margin:0 0 10px; }
+  .hms-wrap { display:flex;align-items:center;gap:6px;width:100%; }
+  .hms-col { display:flex;flex-direction:column;align-items:center;gap:4px;flex:1; }
+  .hms-sep { color:var(--muted);font-weight:700;font-size:1.5rem;margin-bottom:16px;flex-shrink:0; }
+  .hms-unit { font-size:.5rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em; }
+  /* Shared status indicator */
+  .stat-indicator { margin-bottom:14px;display:flex;align-items:center;gap:6px; }
+  .stat-dot { width:7px;height:7px;border-radius:50%;flex-shrink:0; }
+  .stat-check { font-size:.8rem;line-height:1;flex-shrink:0; }
+  .stat-val { font-size:.75rem;font-weight:600; }
+  /* Shared locked/past game card content */
+  .game-teams-row { display:flex;align-items:center;justify-content:space-between;gap:4px; }
+  .game-team-side { display:flex;align-items:center;gap:4px; }
+  .game-pts { font-size:.75rem;color:var(--muted); }
+  .game-bottom-row { display:flex;align-items:center;justify-content:space-between;margin-top:2px; }
+  .game-dist-row { display:flex;align-items:center;gap:5px; }
+  .dist-pct-t1 { font-size:.7rem;font-weight:700;color:#3b82f6;white-space:nowrap; }
+  .dist-pct-t2 { font-size:.7rem;font-weight:700;color:#ef4444;white-space:nowrap; }
+  .game-pie { width:22px;height:22px;border-radius:50%;flex-shrink:0;position:relative; }
+  .game-pie-hole { width:13px;height:13px;border-radius:50%;background:var(--bg);position:absolute;top:50%;left:50%;transform:translate(-50%,-50%); }
+  .game-check { font-size:.95rem; }
 
   /* Inline pick slider toggle */
   .pick-toggle {
@@ -95,71 +112,10 @@
     transition:left .32s cubic-bezier(.25,0,.2,1),background-color .22s ease,border-color .22s ease;pointer-events:none;
   }
 
-  /* Games expand modal */
-  #games-expand-modal { display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);backdrop-filter:blur(6px);z-index:100;align-items:flex-start;justify-content:center;overflow-y:auto;padding:24px 16px; }
-  #games-expand-box { width:100%;max-width:1400px;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:24px 28px;position:relative; }
-  #games-expand-grid { display:grid;gap:20px;margin-top:16px; }
-  .exp-date-col { display:flex;flex-direction:column;gap:6px; }
-  .exp-date-label { font-size:.5625rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin:0 0 8px;padding-bottom:8px;border-bottom:1px solid var(--border); }
-  .exp-game-card { padding:6px 0; }
-  #games-expand-grid .pick-opt { padding:11px 14px; }
-  #games-expand-grid .pick-team { font-size:.9375rem; }
-  #games-expand-grid .pick-pts { font-size:.625rem; }
+  .col-left, .col-right { display:flex;flex-direction:column; }
 
-  /* Podium expand modal */
-  #podium-expand-modal { display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);backdrop-filter:blur(10px);z-index:100;flex-direction:column;overflow:hidden; }
-  #podium-expand-box { display:flex;flex-direction:column;width:100%;height:100%;padding:20px 20px 0;box-sizing:border-box;position:relative; }
-  #podium-expand-box::before { content:'';position:absolute;top:8%;left:50%;transform:translateX(-50%);width:min(520px,55vw);height:60%;background:radial-gradient(ellipse at 50% 22%,rgba(245,158,11,.13) 0%,rgba(245,158,11,.05) 42%,transparent 68%);pointer-events:none;z-index:0;animation:glow-breathe 4s ease-in-out 2.3s infinite; }
-  @keyframes glow-breathe { 0%,100%{opacity:.7;} 50%{opacity:1;} }
-  #pod-expand-header { display:flex;align-items:center;justify-content:space-between;flex-shrink:0;margin-bottom:8px;position:relative;z-index:2; }
-  #pod-expand-stage { display:flex;align-items:flex-end;justify-content:center;gap:4px;flex:1;overflow-x:auto;overflow-y:hidden;padding:0 4px;position:relative;z-index:2; }
-  /* Bar & person */
-  .pod-person { display:flex;flex-direction:column;align-items:center;gap:2px;min-width:48px; }
-  .pod-exp-bar { width:100%;border-radius:8px 8px 0 0;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:1rem;color:rgba(255,255,255,.22);letter-spacing:-.01em;transform-origin:bottom center;will-change:transform;animation:pod-rise 1.8s ease-out backwards; }
-  .pod-gold-bar { overflow:hidden;position:relative;animation:pod-rise 1.8s cubic-bezier(.22,1,.36,1) .5s backwards,pod-glow 4s ease-in-out 2.3s infinite; }
-  .pod-gold-avatar { animation:pod-float 3.2s ease-in-out 2.3s infinite; }
-  .pod-exp-avatar { border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;color:#fff;flex-shrink:0; }
-  .pod-exp-name { font-size:.6rem;font-weight:600;color:var(--muted2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:100%;text-align:center;padding:0 2px;box-sizing:border-box; }
-  .pod-person-me .pod-exp-name { color:var(--accent) !important; }
-  .pod-exp-score { font-weight:900;color:var(--muted2);line-height:1; }
-  .podium-wrap { cursor:pointer; }
-  @keyframes pod-rise { from{transform:scaleY(0);} to{transform:scaleY(1);} }
-  @keyframes pod-person-rise { 0%{transform:translateY(100vh) translateX(0);} 25%{transform:translateY(30vh) translateX(-3px);} 45%{transform:translateY(8vh) translateX(3px);} 60%{transform:translateY(2vh) translateX(-2px);} 73%{transform:translateY(0) translateX(2px);} 83%{transform:translateY(0) translateX(-1px);} 92%{transform:translateY(0) translateX(0.5px);} 100%{transform:translateY(0) translateX(0);} }
-  @keyframes pod-glow { 0%,100%{box-shadow:0 -6px 28px rgba(245,158,11,.4),0 0 60px rgba(245,158,11,.1);} 50%{box-shadow:0 -8px 48px rgba(245,158,11,.75),0 0 120px rgba(245,158,11,.25);} }
-  @keyframes pod-float { 0%,100%{transform:translateY(0);} 50%{transform:translateY(-9px);} }
-
-  /* Chart no-data */
-  .no-data-msg { display:none;position:absolute;inset:0;align-items:center;justify-content:center;font-size:.75rem;color:var(--muted);pointer-events:none;border:1px solid var(--border);border-radius:8px; }
-  .no-data-msg.show { display:flex; }
-
-  /* Chart expand */
-  .chart-wrap { position:relative;cursor:pointer; }
-  .chart-wrap .expand-hint {
-    position:absolute;top:6px;right:6px;z-index:2;
-    display:inline-flex;align-items:center;gap:4px;
-    font-size:.6875rem;font-weight:600;letter-spacing:.02em;
-    color:var(--muted2);
-    background:rgba(14,20,34,.72);
-    border:1px solid rgba(255,255,255,.12);
-    border-radius:6px;padding:3px 8px;
-    opacity:.65;transition:opacity .2s,background .2s;
-    pointer-events:none;user-select:none;backdrop-filter:blur(4px);
-  }
-  .chart-wrap:hover .expand-hint { opacity:1;background:rgba(14,20,34,.88); }
-  .chart-wrap:hover canvas { opacity:.9; }
-  [data-theme="light"] .chart-wrap .expand-hint {
-    background:rgba(255,255,255,.82);
-    border-color:rgba(0,0,0,.12);
-    color:var(--muted);
-  }
-  [data-theme="light"] .chart-wrap:hover .expand-hint { background:rgba(255,255,255,.96); }
-
-  /* Modal */
-  #chart-modal { display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);backdrop-filter:blur(4px);z-index:9999;align-items:center;justify-content:center; }
-  #chart-modal-box { background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:28px;width:92vw;max-width:960px;position:relative; }
-
-  .col-left, .col-center, .col-right { display:flex;flex-direction:column;height:1200px; }
-  .col-center { justify-content:space-between; }
+  /* Games grid — two columns on wide screens, one on phones. */
+  .games-columns { column-count:2;column-gap:16px; }
 
   /* ── Light mode overrides ── */
   [data-theme="light"] .pick-toggle { border-color: rgba(0,0,0,.1); }
@@ -167,10 +123,6 @@
   [data-theme="light"] .pick-pts { color: rgba(0,0,0,.3); }
   [data-theme="light"] .pick-opt[data-selected="true"] .pick-pts { color: rgba(0,0,0,.5); }
   [data-theme="light"] .pts-tag { background: rgba(0,0,0,.06); }
-  [data-theme="light"] #chart-toggle,
-  [data-theme="light"] #analytics-toggle { border-color: rgba(0,0,0,.12) !important; background: rgba(0,0,0,.012) !important; }
-  [data-theme="light"] #toggle-pill,
-  [data-theme="light"] #analytics-pill { background: #edf0f3 !important; border-color: rgba(0,0,0,.1) !important; }
   [data-theme="light"] .vs-sep { color: var(--muted); }
   [data-theme="light"] #week-slider { background: rgba(0,0,0,.15); }
   [data-theme="light"] #week-slider::-webkit-slider-thumb { background: rgba(0,0,0,.5); border-color: rgba(0,0,0,.2); }
@@ -178,6 +130,7 @@
   [data-theme="light"] #week-slider::-moz-range-track { background: rgba(0,0,0,.15); }
   [data-theme="light"] #week-slider::-moz-range-progress { background: rgba(0,0,0,.3); }
   [data-theme="light"] .game-sep-line { background: rgba(0,0,0,.07); }
+  [data-theme="light"] .game-row { background:rgba(0,0,0,.03);border-color:rgba(0,0,0,.07); }
   [data-theme="light"] .dist-bar { background: rgba(0,0,0,.07); }
   [data-theme="light"] #games-track, [data-theme="light"] #lb-track { background: rgba(0,0,0,.07); }
   [data-theme="light"] .pod-block { color: rgba(0,0,0,.45); }
@@ -187,10 +140,31 @@
   [data-theme="light"] .pod-5 .pod-block { background: rgba(0,0,0,.01); border-color: rgba(0,0,0,.03); }
   [data-theme="light"] .rank-n { background: rgba(0,0,0,.04); }
   [data-theme="light"] .exp-date-label { border-bottom-color: var(--border); }
-  [data-theme="light"] #games-expand-modal { background: rgba(0,0,0,.45); }
   [data-theme="light"] .pod-exp-bar { color: rgba(0,0,0,.2); }
 
   .no-scrollbar::-webkit-scrollbar { display:none; }
+
+  /* ── Viewport-fill layout (tablet + desktop) ── */
+  @media (min-width:641px) {
+    main {
+      height: calc(100vh - 53px) !important;
+      display: flex !important;
+      flex-direction: column !important;
+      overflow: hidden !important;
+      box-sizing: border-box !important;
+    }
+    html.nav-has-slider main {
+      height: calc(100vh - 86px) !important;
+    }
+    .main-grid {
+      flex: 1 !important;
+      min-height: 0 !important;
+    }
+  }
+
+  /* Info tooltip */
+  .info-icon-wrap:hover .info-tooltip { display:block !important; }
+  .info-icon-wrap:hover span { opacity:1 !important; }
 
   /* Leaderboard custom scrollbar */
   .lb-scroll { scrollbar-width:none; }
@@ -208,15 +182,12 @@
   /* Mobile / tablet responsive */
   .col-tabs { display:none; }
   @media (max-width:1024px) and (min-width:641px) {
-    /* main fills exactly viewport height minus navbar; grid stretches to fill the rest */
-    main { height:calc(100svh - 52px) !important;box-sizing:border-box !important;display:flex !important;flex-direction:column !important;overflow:hidden !important;padding:clamp(12px,2.4vw,24px) !important; }
-    #email-section { flex-shrink:0 !important;margin-bottom:clamp(12px,2vw,20px) !important;padding-bottom:clamp(10px,1.5vw,16px) !important; }
-    .main-grid { flex:1 !important;min-height:0 !important;gap:clamp(8px,1.4vw,14px) !important;align-items:stretch !important; }
-    .col-left, .col-center, .col-right { height:100% !important;min-width:0;overflow:hidden; }
-    /* Charts */
-    .chart-canvas-wrap { height:clamp(110px,14vw,140px) !important; }
+    main { padding:clamp(12px,2.4vw,24px) !important; }
+    #email-section { margin-bottom:clamp(12px,2vw,20px) !important;padding-bottom:clamp(10px,1.5vw,16px) !important; }
+    .main-grid { gap:clamp(8px,1.4vw,14px) !important; }
+    /* Charts — flex-fill, no fixed heights */
     /* Game rows */
-    .game-row { padding:clamp(4px,.7vw,7px) 0 clamp(2px,.3vw,3px); }
+    .game-row { padding:clamp(8px,1.1vw,12px) clamp(8px,1.1vw,12px); }
     .game-sep { margin-bottom:clamp(2px,.3vw,3px); }
     /* Leaderboard rows */
     .lb-row { padding:clamp(2px,.4vw,3px) 8px clamp(2px,.4vw,3px) 0; }
@@ -229,13 +200,8 @@
     .pod-avatar { width:clamp(26px,3.5vw,32px);height:clamp(26px,3.5vw,32px);font-size:clamp(.68rem,.85vw,.8rem); }
     .pod-1 .pod-avatar { width:clamp(32px,4.5vw,40px);height:clamp(32px,4.5vw,40px);font-size:clamp(.82rem,1.1vw,1rem); }
     /* Timer — scale digits to fit the 1.2fr games column */
-    #cd-hms-wrap .cd-digit { font-size:clamp(1.25rem,3.2vw,2rem) !important;min-width:clamp(38px,5.5vw,56px) !important;padding:clamp(6px,1vw,10px) clamp(8px,1.4vw,14px) !important; }
-    #cd-hms-wrap > span { font-size:clamp(.9rem,1.5vw,1.5rem) !important; }
-    /* Chart toggles — shrink to fit narrow analytics column */
-    #chart-toggle { width:clamp(90px,12vw,130px) !important;height:20px !important; }
-    #analytics-toggle { width:clamp(100px,13vw,140px) !important;height:20px !important; }
-    #chart-toggle span, #analytics-toggle span { font-size:clamp(.45rem,.65vw,.6875rem) !important; }
-    #chart-label, #analytics-label { font-size:clamp(.4rem,.6vw,.625rem) !important; }
+    .hms-wrap .cd-digit { font-size:clamp(1.25rem,3.2vw,2rem) !important;padding:clamp(6px,1vw,10px) clamp(8px,1.4vw,14px) !important; }
+    .hms-sep { font-size:clamp(.9rem,1.5vw,1.5rem); }
   }
   @media (max-width:640px) {
     /* Full-page scroll, single column */
@@ -243,6 +209,12 @@
     .main-grid { display:flex !important;flex-direction:column !important;gap:28px !important; }
     .col-left, .col-right { height:auto !important;overflow:visible !important; }
     .col-center, .col-tabs { display:none !important; }
+    /* Games are what you act on — put them above the leaderboard. */
+    .col-right { order:-1 !important; }
+    /* One column, or the cards overflow the viewport and text collides. */
+    .games-columns { column-count:1 !important; }
+    /* Kickoff time and pick split need their own lines at this width. */
+    .game-bottom-row { flex-wrap:wrap !important;gap:4px 10px !important; }
     /* Leaderboard — simple table, no podium or score bars */
     .podium-label, .podium-wrap { display:none !important; }
     #lb-track, #lb-thumb { display:none !important; }
@@ -252,7 +224,7 @@
     /* Games — simple list, no scrollbar or pick-distribution bars */
     #games-track, #games-thumb { display:none !important; }
     #games-scroll { position:static !important;overflow:visible !important; }
-    .game-row { padding:10px 0 !important; }
+    .game-row { padding:10px 12px !important; }
     .pick-opt { padding:9px 10px !important; }
     .pick-team { font-size:.8125rem !important; }
     .pick-pts { font-size:.5625rem !important; }
@@ -265,7 +237,7 @@
 
 <!-- ── EMAIL DISPLAY ── -->
 {% if announcements %}
-<div id="email-section" style="margin-bottom:32px;border-bottom:1px solid var(--border);padding-bottom:20px;" class="anim-up">
+<div id="email-section" style="margin-bottom:32px;border-bottom:1px solid var(--border);padding-bottom:20px;flex-shrink:0;" class="anim-up">
   <!-- Header row -->
   <div style="display:flex;align-items:center;gap:10px;">
     <div style="width:26px;height:26px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.7rem;color:#fff;flex-shrink:0;">C</div>
@@ -296,72 +268,44 @@
 {% endif %}
 
 <!-- ── MAIN DASHBOARD: leaderboard | chart | games ── -->
-<div class="main-grid anim-up" style="display:grid;grid-template-columns:1.2fr 1.2fr 1.6fr;gap:40px;align-items:stretch;">
+<div class="main-grid anim-up" style="display:grid;grid-template-columns:1fr 2fr;gap:40px;align-items:stretch;">
 
   <!-- LEFT: Podium + Leaderboard -->
   <div class="col-left">
-    <p style="font-size:.5625rem;font-weight:700;color:rgba(100,116,139,.5);text-transform:uppercase;letter-spacing:.14em;margin:0 0 14px;">Leaderboard</p>
-    {% if leaderboard|length >= 3 %}
-    <div class="podium-wrap" onclick="openPodiumExpand()" style="margin-bottom:24px;">
-      {% if leaderboard|length >= 5 %}{% with p5=leaderboard.4 %}
-      <div class="pod pod-5">
-        <div class="pod-avatar" style="background:#1e293b;">{{ p5.username|first|upper }}</div>
-        <p style="font-size:.575rem;font-weight:600;color:var(--muted);margin:0 0 2px;max-width:56px;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ p5.username }}</p>
-        <p style="font-size:.7rem;font-weight:700;color:var(--muted);margin:0 0 2px;">{{ p5.score }}</p>
-        <div class="pod-block">5</div>
+    <!-- Podium -->
+    <div id="home-podium-view">
+      {% if leaderboard|length >= 3 %}
+      <div class="podium-wrap" style="margin-bottom:12px;">
+        {% with p2=leaderboard.1 %}
+        <div class="pod pod-2">
+          <div class="pod-avatar" style="background:#334155;">{{ p2.username|first|upper }}</div>
+          <p style="font-size:.625rem;font-weight:600;color:var(--muted2);margin:0 0 3px;max-width:64px;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ p2.username }}</p>
+          <p style="font-size:.8rem;font-weight:800;color:#94a3b8;margin:0 0 4px;">{{ p2.score }}</p>
+          <div class="pod-block">2</div>
+        </div>
+        {% endwith %}
+        {% with p1=leaderboard.0 %}
+        <div class="pod pod-1">
+          <div style="font-size:.875rem;margin-bottom:3px;">👑</div>
+          <div class="pod-avatar" style="background:#b45309;">{{ p1.username|first|upper }}</div>
+          <p style="font-size:.625rem;font-weight:600;color:var(--muted2);margin:0 0 2px;max-width:72px;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ p1.username }}</p>
+          <p style="font-size:1rem;font-weight:900;color:#fbbf24;margin:0 0 5px;">{{ p1.score }}</p>
+          <div class="pod-block">1</div>
+        </div>
+        {% endwith %}
+        {% with p3=leaderboard.2 %}
+        <div class="pod pod-3">
+          <div class="pod-avatar" style="background:#431407;">{{ p3.username|first|upper }}</div>
+          <p style="font-size:.625rem;font-weight:600;color:var(--muted2);margin:0 0 3px;max-width:64px;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ p3.username }}</p>
+          <p style="font-size:.8rem;font-weight:800;color:#fb923c;margin:0 0 4px;">{{ p3.score }}</p>
+          <div class="pod-block">3</div>
+        </div>
+        {% endwith %}
       </div>
-      {% endwith %}{% endif %}
-      {% with p2=leaderboard.1 %}
-      <div class="pod pod-2">
-        <div class="pod-avatar" style="background:#334155;">{{ p2.username|first|upper }}</div>
-        <p style="font-size:.625rem;font-weight:600;color:var(--muted2);margin:0 0 3px;max-width:64px;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ p2.username }}</p>
-        <p style="font-size:.8rem;font-weight:800;color:#94a3b8;margin:0 0 4px;">{{ p2.score }}</p>
-        <div class="pod-block">2</div>
-      </div>
-      {% endwith %}
-      {% with p1=leaderboard.0 %}
-      <div class="pod pod-1">
-        <div style="font-size:.875rem;margin-bottom:3px;">👑</div>
-        <div class="pod-avatar" style="background:#b45309;">{{ p1.username|first|upper }}</div>
-        <p style="font-size:.625rem;font-weight:600;color:var(--muted2);margin:0 0 2px;max-width:72px;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ p1.username }}</p>
-        <p style="font-size:1rem;font-weight:900;color:#fbbf24;margin:0 0 5px;">{{ p1.score }}</p>
-        <div class="pod-block">1</div>
-      </div>
-      {% endwith %}
-      {% with p3=leaderboard.2 %}
-      <div class="pod pod-3">
-        <div class="pod-avatar" style="background:#431407;">{{ p3.username|first|upper }}</div>
-        <p style="font-size:.625rem;font-weight:600;color:var(--muted2);margin:0 0 3px;max-width:64px;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ p3.username }}</p>
-        <p style="font-size:.8rem;font-weight:800;color:#fb923c;margin:0 0 4px;">{{ p3.score }}</p>
-        <div class="pod-block">3</div>
-      </div>
-      {% endwith %}
-      {% if leaderboard|length >= 4 %}{% with p4=leaderboard.3 %}
-      <div class="pod pod-4">
-        <div class="pod-avatar" style="background:#1e293b;">{{ p4.username|first|upper }}</div>
-        <p style="font-size:.575rem;font-weight:600;color:var(--muted);margin:0 0 2px;max-width:56px;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ p4.username }}</p>
-        <p style="font-size:.7rem;font-weight:700;color:var(--muted);margin:0 0 2px;">{{ p4.score }}</p>
-        <div class="pod-block">4</div>
-      </div>
-      {% endwith %}{% endif %}
-    </div>
-    {% endif %}
+      {% endif %}
+    </div><!-- end home-podium-view -->
 
-    <div class="sec-head">
-      <p class="sec-title">Standings</p>
-      {% if week_links %}<span id="wk-label" style="font-size:.6875rem;font-weight:700;color:var(--accent);">W{{ viewing_week }}</span>{% endif %}
-    </div>
-    {% if week_links %}
-    <div style="padding:6px 0 4px;">
-      <input type="range" id="week-slider" list="week-ticks"
-        min="{{ week_links.0 }}" max="{{ week_links|last }}" value="{{ viewing_week }}"
-        style="display:block;">
-      <datalist id="week-ticks">{% for w in week_links %}<option value="{{ w }}"></option>{% endfor %}</datalist>
-      <div style="display:flex;justify-content:space-between;margin-top:7px;padding:0 6px;">
-        {% for w in week_links %}<span style="font-size:.5rem;color:var(--muted);">{{ w }}</span>{% endfor %}
-      </div>
-    </div>
-    {% endif %}
+    <!-- Leaderboard always visible -->
     <div style="flex:1;min-height:0;position:relative;">
       <div id="lb-track"><div id="lb-thumb"></div></div>
       <div id="lb-scroll" class="lb-scroll" style="position:absolute;left:8px;right:0;top:0;bottom:0;overflow-y:scroll;">
@@ -397,13 +341,11 @@
 
   <!-- CENTER: Picks + Games -->
   <div class="col-right">
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
-    <p style="font-size:.5625rem;font-weight:700;color:rgba(100,116,139,.5);text-transform:uppercase;letter-spacing:.14em;margin:0;">Games</p>
-    {% if settings.publish and not settings.lock_picks %}<button onclick="openGamesExpand()" style="background:rgba(255,255,255,.07);border:1px solid var(--border);color:var(--muted2);cursor:pointer;font-size:.55rem;padding:4px 10px;border-radius:6px;letter-spacing:.06em;text-transform:uppercase;font-weight:700;transition:background .15s,color .15s;" onmouseover="this.style.background='rgba(255,255,255,.13)';this.style.color='var(--text)'" onmouseout="this.style.background='rgba(255,255,255,.07)';this.style.color='var(--muted2)'">⛶ Expand</button>{% endif %}
-  </div>
+  <!-- Past week games panel (always in DOM, shown when slider on past week) -->
+  <div id="past-week-games" style="display:none;flex:1;min-height:0;overflow-y:auto;"></div>
+  <div id="current-week-content" style="display:contents;">
   {% if not settings.publish %}
   <!-- ── STATE: Not published ── -->
-  <p style="font-size:.625rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin:0 0 16px;">Week {{ settings.week }}</p>
   <p style="font-size:.9375rem;font-weight:700;color:var(--text);margin:0 0 6px;">Picks aren't open yet</p>
   <p style="font-size:.8125rem;color:var(--muted);line-height:1.65;margin:0 0 28px;">The commissioner is still setting up this week's games. Sit tight.</p>
   {% if settings.weekly_recap %}
@@ -418,62 +360,53 @@
 
   {% if settings.lock_picks %}
   {% if next_game %}
-  <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:10px;">
-    <span style="font-size:.9375rem;font-weight:800;color:var(--text);letter-spacing:-.01em;">{{ next_game.team1_abbrev }} <span style="color:var(--muted);font-weight:400;font-size:.75rem;">vs</span> {{ next_game.team2_abbrev }}</span>
-    <span style="font-size:.5625rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.12em;">Kickoff in:</span>
-  </div>
-  <div style="margin-bottom:16px;">
-    <div id="cd-hms-wrap" style="display:flex;align-items:center;gap:6px;">
-      <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
-        <div class="cd-digit" id="cd-h" style="font-size:2rem;padding:10px 14px;min-width:56px;">--</div>
-        <span style="font-size:.5rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;">hrs</span>
-      </div>
-      <span style="color:var(--muted);font-weight:700;font-size:1.5rem;margin-bottom:16px;">:</span>
-      <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
-        <div class="cd-digit" id="cd-m" style="font-size:2rem;padding:10px 14px;min-width:56px;">--</div>
-        <span style="font-size:.5rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;">min</span>
-      </div>
-      <span style="color:var(--muted);font-weight:700;font-size:1.5rem;margin-bottom:16px;">:</span>
-      <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
-        <div class="cd-digit" id="cd-s" style="font-size:2rem;padding:10px 14px;min-width:56px;">--</div>
-        <span style="font-size:.5rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;">sec</span>
-      </div>
+  <div class="timer-wrap">
+    <p class="timer-label" id="cd-label"
+       data-expired-label="{{ next_game.team1_abbrev }} vs {{ next_game.team2_abbrev }} · Underway">{{ next_game.team1_abbrev }} vs {{ next_game.team2_abbrev }} · Kickoff in:</p>
+    <div class="hms-wrap" id="cd-hms">
+      <div class="hms-col"><div class="cd-digit" id="cd-h">--</div><span class="hms-unit">hrs</span></div>
+      <span class="hms-sep">:</span>
+      <div class="hms-col"><div class="cd-digit" id="cd-m">--</div><span class="hms-unit">min</span></div>
+      <span class="hms-sep">:</span>
+      <div class="hms-col"><div class="cd-digit" id="cd-s">--</div><span class="hms-unit">sec</span></div>
     </div>
   </div>
-  {% else %}
-  <p style="font-size:.8125rem;color:var(--muted);margin:0 0 20px;padding-bottom:16px;border-bottom:1px solid var(--border);">All games complete. Good luck!</p>
   {% endif %}
+  <div class="stat-indicator">
+    {% if graded_count == games|length and games|length > 0 %}
+    <span class="stat-check" style="color:#34d399;">&#10003;</span>
+    <span class="stat-val" style="color:#34d399;">{{ graded_count }} / {{ games|length }} games</span>
+    {% elif graded_count > 0 %}
+    <span class="stat-dot pulse" style="background:#fbbf24;"></span>
+    <span class="stat-val" style="color:#fbbf24;">{{ graded_count }} / {{ games|length }} games</span>
+    {% else %}
+    <span class="stat-dot" style="background:var(--muted);opacity:.4;"></span>
+    <span class="stat-val" style="color:var(--muted);">0 / {{ games|length }} games</span>
+    {% endif %}
+  </div>
   {% else %}
   <!-- Open: big countdown -->
-  <div style="margin-bottom:16px;">
-    <p style="font-size:.5625rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.12em;margin:0 0 10px;">Picks lock in:</p>
-    <div id="cd-hms-wrap" style="display:flex;align-items:center;gap:6px;">
-      <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
-        <div class="cd-digit" id="cd-h" style="font-size:2rem;padding:10px 14px;min-width:56px;">--</div>
-        <span style="font-size:.5rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;">hrs</span>
-      </div>
-      <span style="color:var(--muted);font-weight:700;font-size:1.5rem;margin-bottom:16px;">:</span>
-      <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
-        <div class="cd-digit" id="cd-m" style="font-size:2rem;padding:10px 14px;min-width:56px;">--</div>
-        <span style="font-size:.5rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;">min</span>
-      </div>
-      <span style="color:var(--muted);font-weight:700;font-size:1.5rem;margin-bottom:16px;">:</span>
-      <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
-        <div class="cd-digit" id="cd-s" style="font-size:2rem;padding:10px 14px;min-width:56px;">--</div>
-        <span style="font-size:.5rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;">sec</span>
-      </div>
+  <div class="timer-wrap">
+    <p class="timer-label" id="cd-label" data-expired-label="Picks are locking now">Picks lock in:</p>
+    <div class="hms-wrap" id="cd-hms">
+      <div class="hms-col"><div class="cd-digit" id="cd-h">--</div><span class="hms-unit">hrs</span></div>
+      <span class="hms-sep">:</span>
+      <div class="hms-col"><div class="cd-digit" id="cd-m">--</div><span class="hms-unit">min</span></div>
+      <span class="hms-sep">:</span>
+      <div class="hms-col"><div class="cd-digit" id="cd-s">--</div><span class="hms-unit">sec</span></div>
     </div>
   </div>
+  <div id="pick-status" class="stat-indicator"></div>
   {% endif %}
 
   <!-- Games list -->
-  <div style="flex:1;min-height:0;position:relative;">
+  <div id="current-week-games-wrap" style="flex:1;min-height:0;position:relative;">
   <div id="games-track"><div id="games-thumb"></div></div>
   <div id="games-scroll" class="games-scroll" style="position:absolute;left:0;right:8px;top:0;bottom:0;overflow-y:scroll;">
   {% if not games %}
   <p style="color:var(--muted);font-size:.8125rem;padding:16px 0;">No games this week.</p>
   {% else %}
-  <div style="min-height:100%;display:flex;flex-direction:column;justify-content:space-between;">
+  <div class="games-columns">
   {% for game in games %}
   {% with pick=picks_map|get_item:game.id game_id_str=game.id|stringformat:"s" %}
   {% with dist=pick_dist|get_item:game_id_str %}
@@ -500,35 +433,35 @@
       </div>
       {% else %}
       <!-- Locked / graded display -->
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:4px;">
-        <div style="display:flex;align-items:center;gap:4px;">
-          <span class="team-name {% if game.graded and game.winner == 'team1' %}winner{% endif %}" style="font-size:.875rem;{% if pick and pick.choice == 'team1' %}text-decoration:underline;text-underline-offset:3px;text-decoration-thickness:1.5px;{% endif %}">{{ game.team1_abbrev }}</span>
-          <span style="font-size:.65rem;color:var(--muted);">{{ game.points1 }}</span>
+      <div class="game-teams-row">
+        <div class="game-team-side">
+          <span class="team-name" style="{% if pick and pick.choice == 'team1' %}text-decoration:underline;text-underline-offset:3px;text-decoration-thickness:1.5px;{% endif %}{% if game.winner == 'team1' %}color:#34d399;{% elif game.winner == 'team2' %}color:#f87171;{% endif %}">{{ game.team1_abbrev }}</span>
+          <span class="game-pts">{{ game.points1 }}</span>
         </div>
-        <span class="vs-sep">{% if game.graded %}{% if game.winner == 'team1' %}◀{% elif game.winner == 'team2' %}▶{% else %}T{% endif %}{% else %}vs{% endif %}</span>
-        <div style="display:flex;align-items:center;gap:4px;">
-          <span style="font-size:.65rem;color:var(--muted);">{{ game.points2 }}</span>
-          <span class="team-name {% if game.graded and game.winner == 'team2' %}winner{% endif %}" style="font-size:.875rem;{% if pick and pick.choice == 'team2' %}text-decoration:underline;text-underline-offset:3px;text-decoration-thickness:1.5px;{% endif %}">{{ game.team2_abbrev }}</span>
+        <span class="vs-sep">{% if game.winner == 'team1' %}◀{% elif game.winner == 'team2' %}▶{% elif game.winner %}T{% else %}vs{% endif %}</span>
+        <div class="game-team-side">
+          <span class="game-pts">{{ game.points2 }}</span>
+          <span class="team-name" style="{% if pick and pick.choice == 'team2' %}text-decoration:underline;text-underline-offset:3px;text-decoration-thickness:1.5px;{% endif %}{% if game.winner == 'team2' %}color:#34d399;{% elif game.winner == 'team1' %}color:#f87171;{% endif %}">{{ game.team2_abbrev }}</span>
         </div>
       </div>
       {% endif %}
       <div class="game-sep"><div class="game-sep-line"></div></div>
       {% if settings.lock_picks %}
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:2px;">
+      <div class="game-bottom-row">
         {% if not game.home_team %}
         <span class="game-sep-text">{% if game.game_dt_iso %}<span data-utc-full="{{ game.game_dt_iso }}">{{ game.game_dt_iso }}</span> · {% endif %}@ {{ game.team1_abbrev }}</span>
-        <div style="display:flex;align-items:center;gap:4px;">
-          {% if dist %}<span style="font-size:.5rem;font-weight:700;color:#3b82f6;white-space:nowrap;">{{ dist.team1_pct }}%</span>
-          <div style="width:14px;height:14px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:conic-gradient(rgba(59,130,246,.8) 0% {{ dist.team1_pct }}%,rgba(239,68,68,.7) {{ dist.team1_pct }}% 100%);"><div style="width:8px;height:8px;border-radius:50%;background:var(--surface2);"></div></div>
-          <span style="font-size:.5rem;font-weight:700;color:#ef4444;white-space:nowrap;">{{ dist.team2_pct }}%</span>{% endif %}
-          {% if game.graded and pick %}<span style="font-size:.75rem;{% if pick.choice == game.winner %}color:#22c55e;{% else %}color:#ef4444;{% endif %}">{% if pick.choice == game.winner %}✓{% else %}✗{% endif %}</span>{% endif %}
+        <div class="game-dist-row">
+          {% if dist %}<span class="dist-pct-t1">{{ dist.team1_pct }}%</span>
+          <div class="game-pie" style="background:conic-gradient(rgba(59,130,246,.8) 0% {{ dist.team1_pct }}%,rgba(239,68,68,.7) {{ dist.team1_pct }}% 100%);"><div class="game-pie-hole"></div></div>
+          <span class="dist-pct-t2">{{ dist.team2_pct }}%</span>{% endif %}
+          {% if game.winner and pick %}<span class="game-check" style="{% if pick.choice == game.winner %}color:#22c55e;{% else %}color:#ef4444;{% endif %}">{% if pick.choice == game.winner %}✓{% else %}✗{% endif %}</span>{% endif %}
         </div>
         {% else %}
-        <div style="display:flex;align-items:center;gap:4px;">
-          {% if dist %}<span style="font-size:.5rem;font-weight:700;color:#3b82f6;white-space:nowrap;">{{ dist.team1_pct }}%</span>
-          <div style="width:14px;height:14px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:conic-gradient(rgba(59,130,246,.8) 0% {{ dist.team1_pct }}%,rgba(239,68,68,.7) {{ dist.team1_pct }}% 100%);"><div style="width:8px;height:8px;border-radius:50%;background:var(--surface2);"></div></div>
-          <span style="font-size:.5rem;font-weight:700;color:#ef4444;white-space:nowrap;">{{ dist.team2_pct }}%</span>{% endif %}
-          {% if game.graded and pick %}<span style="font-size:.75rem;{% if pick.choice == game.winner %}color:#22c55e;{% else %}color:#ef4444;{% endif %}">{% if pick.choice == game.winner %}✓{% else %}✗{% endif %}</span>{% endif %}
+        <div class="game-dist-row">
+          {% if dist %}<span class="dist-pct-t1">{{ dist.team1_pct }}%</span>
+          <div class="game-pie" style="background:conic-gradient(rgba(59,130,246,.8) 0% {{ dist.team1_pct }}%,rgba(239,68,68,.7) {{ dist.team1_pct }}% 100%);"><div class="game-pie-hole"></div></div>
+          <span class="dist-pct-t2">{{ dist.team2_pct }}%</span>{% endif %}
+          {% if game.winner and pick %}<span class="game-check" style="{% if pick.choice == game.winner %}color:#22c55e;{% else %}color:#ef4444;{% endif %}">{% if pick.choice == game.winner %}✓{% else %}✗{% endif %}</span>{% endif %}
         </div>
         <span class="game-sep-text">{% if game.game_dt_iso %}<span data-utc-full="{{ game.game_dt_iso }}">{{ game.game_dt_iso }}</span> · {% endif %}@ {{ game.team2_abbrev }}</span>
         {% endif %}
@@ -545,138 +478,16 @@
   {% endwith %}
   {% endwith %}
   {% endfor %}
-  </div>{# end games space-between wrapper #}
+  </div>{# end games columns wrapper #}
   {% endif %}
   </div>{# end games-scroll #}
   </div>{# end games relative wrapper #}
 
   {% endif %}{# end published #}
+  </div><!-- end current-week-content -->
   </div><!-- end CENTER/GAMES -->
 
-  <!-- RIGHT: Charts -->
-  <div class="col-center mob-on">
-    <p style="font-size:.5625rem;font-weight:700;color:rgba(100,116,139,.5);text-transform:uppercase;letter-spacing:.14em;margin:0 0 14px;">Analytics</p>
-    {% if points_chart %}
-    <div>
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
-      <div id="chart-toggle" style="position:relative;display:flex;align-items:center;width:130px;height:24px;background:transparent;border:1px solid rgba(255,255,255,.07);border-radius:100px;padding:3px;cursor:grab;user-select:none;touch-action:none;">
-        <div id="toggle-pill" style="position:absolute;left:3px;width:calc(50% - 3px);height:calc(100% - 6px);background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.09);border-radius:100px;transition:left .22s cubic-bezier(.4,0,.2,1);pointer-events:none;"></div>
-        <span id="tog-score" style="position:relative;flex:1;text-align:center;font-size:.6875rem;font-weight:500;color:var(--text);z-index:1;pointer-events:none;">Score</span>
-        <span id="tog-rank"  style="position:relative;flex:1;text-align:center;font-size:.6875rem;font-weight:500;color:var(--muted);z-index:1;pointer-events:none;">Rank</span>
-      </div>
-      <p id="chart-label" style="font-size:.625rem;color:var(--muted);margin:0;text-transform:uppercase;letter-spacing:.08em;">Cumulative Score</p>
-    </div>
-    <div class="chart-wrap" onclick="openModal('mainChart')" title="Click to enlarge">
-      <span class="expand-hint">⛶ Expand</span>
-      <div class="chart-canvas-wrap" style="position:relative;height:300px;"><canvas id="mainChart"></canvas><div class="no-data-msg" id="mainChart-nodata">No data yet</div></div>
-    </div>
-    </div><!-- end main chart section -->
-
-    <!-- Weekly breakdown bar chart -->
-    <div>
-      <p style="font-size:.625rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin:0 0 10px;">Points Per Week</p>
-      <div class="chart-wrap" onclick="openModal('weeklyChart')" title="Click to enlarge">
-        <span class="expand-hint">⛶ Expand</span>
-        <div class="chart-canvas-wrap" style="position:relative;height:210px;"><canvas id="weeklyChart"></canvas><div class="no-data-msg" id="weeklyChart-nodata">No data yet</div></div>
-      </div>
-    </div>
-
-    <!-- Win Rate / Efficiency toggle -->
-    {% if win_rate_chart %}
-    <div>
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
-        <div id="analytics-toggle" style="position:relative;display:flex;align-items:center;width:150px;height:24px;background:transparent;border:1px solid rgba(255,255,255,.07);border-radius:100px;padding:3px;cursor:grab;user-select:none;touch-action:none;">
-          <div id="analytics-pill" style="position:absolute;left:3px;width:calc(50% - 3px);height:calc(100% - 6px);background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.09);border-radius:100px;transition:left .22s cubic-bezier(.4,0,.2,1);pointer-events:none;"></div>
-          <span id="tog-wr"  style="position:relative;flex:1;text-align:center;font-size:.6875rem;font-weight:500;color:var(--text);z-index:1;pointer-events:none;">Win Rate</span>
-          <span id="tog-eff" style="position:relative;flex:1;text-align:center;font-size:.6875rem;font-weight:500;color:var(--muted);z-index:1;pointer-events:none;">Efficiency</span>
-        </div>
-        <p id="analytics-label" style="font-size:.625rem;color:var(--muted);margin:0;text-transform:uppercase;letter-spacing:.08em;">% Correct Picks Per Week</p>
-      </div>
-      <div class="chart-wrap" onclick="openModal('analyticsChart')" title="Click to enlarge">
-        <span class="expand-hint">⛶ Expand</span>
-        <div class="chart-canvas-wrap" style="position:relative;height:225px;"><canvas id="analyticsChart"></canvas><div class="no-data-msg" id="analyticsChart-nodata">No data yet</div></div>
-      </div>
-    </div>
-
-    <!-- Efficiency variance -->
-    <div>
-      <p style="font-size:.625rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin:0 0 4px;">Efficiency Std. Deviation</p>
-      <p style="font-size:.75rem;color:var(--muted);margin:0 0 14px;">How consistent each player's efficiency is week to week — lower is steadier</p>
-      <div class="chart-wrap" onclick="openModal('varianceChart')" title="Click to enlarge">
-        <span class="expand-hint">⛶ Expand</span>
-        <div class="chart-canvas-wrap" style="position:relative;height:225px;"><canvas id="varianceChart"></canvas><div class="no-data-msg" id="varianceChart-nodata">No data yet</div></div>
-      </div>
-    </div>
-    {% endif %}
-
-    {% endif %}
-  </div><!-- end RIGHT/CHARTS -->
-
-</div>
-
-<!-- Games expand modal -->
-{% if settings.publish and not settings.lock_picks and games %}
-<div id="games-expand-modal" onclick="if(event.target===this)closeGamesExpand()">
-  <div id="games-expand-box">
-    <button onclick="closeGamesExpand()" style="position:absolute;top:14px;right:16px;background:rgba(255,255,255,.07);border:none;border-radius:6px;color:var(--muted2);font-size:.875rem;padding:4px 10px;cursor:pointer;line-height:1.5;">✕</button>
-    <div style="display:flex;align-items:center;gap:14px;margin-bottom:4px;">
-      <p style="font-size:.5625rem;font-weight:700;color:rgba(100,116,139,.5);text-transform:uppercase;letter-spacing:.14em;margin:0;">Games — Week {{ settings.week }}</p>
-    </div>
-    <p style="font-size:.5625rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.12em;margin:0 0 4px;">Picks lock in:</p>
-    <div style="display:flex;align-items:center;gap:5px;margin-bottom:16px;">
-      <div class="cd-digit" id="exp-cd-h">--</div>
-      <span style="color:var(--muted);font-weight:700;font-size:.9rem;">:</span>
-      <div class="cd-digit" id="exp-cd-m">--</div>
-      <span style="color:var(--muted);font-weight:700;font-size:.9rem;">:</span>
-      <div class="cd-digit" id="exp-cd-s">--</div>
-    </div>
-    <!-- Pre-rendered game cards; JS groups them by date on open -->
-    <div id="games-expand-grid">
-      {% for game in games %}{% with pick=picks_map|get_item:game.id %}
-      <div class="exp-game-card" data-home="{% if game.home_team %}{{ game.team2_abbrev }}{% else %}{{ game.team1_abbrev }}{% endif %}">
-        <div class="pick-toggle" data-game="{{ game.id }}" data-team1="{{ game.team1_abbrev }}" data-team2="{{ game.team2_abbrev }}" data-fav="{% if game.points1 <= game.points2 %}team1{% else %}team2{% endif %}">
-          <div class="pick-opt" data-choice="team1" data-game="{{ game.id }}"{% if pick and pick.choice == 'team1' %} data-selected="true"{% endif %}>
-            <span class="pick-team">{{ game.team1_abbrev }}</span>
-            <span class="pick-pts">{{ game.points1 }}</span>
-          </div>
-          <div class="pick-opt" data-choice="team2" data-game="{{ game.id }}"{% if pick and pick.choice == 'team2' %} data-selected="true"{% endif %}>
-            <span class="pick-team">{{ game.team2_abbrev }}</span>
-            <span class="pick-pts">{{ game.points2 }}</span>
-          </div>
-          <div class="pick-knob" style="{% if pick %}left:{% if pick.choice == 'team2' %}50%{% else %}3px{% endif %};{% else %}display:none;{% endif %}"></div>
-        </div>
-        <p style="font-size:.45rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin:4px 0 0;text-align:{% if game.home_team %}right{% else %}left{% endif %};">{% if game.game_dt_iso %}<span data-utc-full="{{ game.game_dt_iso }}">{{ game.game_dt_iso }}</span> · {% endif %}@ {% if game.home_team %}{{ game.team2_abbrev }}{% else %}{{ game.team1_abbrev }}{% endif %}</p>
-      </div>
-      {% endwith %}{% endfor %}
-    </div>
-  </div>
-</div>
-{% endif %}
-
-<!-- Podium expand modal -->
-{% if leaderboard %}
-<script>
-const LEADERBOARD_DATA=[{% for entry in leaderboard %}{"rank":{{forloop.counter}},"u":"{{entry.username|escapejs}}","s":{{entry.score}},"fire":{{entry.on_fire|yesno:"true,false"}},"me":{% if entry.username == request.user.username %}true{% else %}false{% endif %},"rc":{{entry.rank_change}},"rca":{{entry.rank_change_abs}}},{% endfor %}];
-</script>
-<div id="podium-expand-modal" onclick="if(event.target===this)closePodiumExpand()">
-  <div id="podium-expand-box">
-    <div id="pod-expand-header">
-      <p style="font-size:.5625rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin:0;">Standings — Week {{ settings.week }}</p>
-      <button onclick="closePodiumExpand()" style="background:rgba(255,255,255,.07);border:none;border-radius:6px;color:var(--muted2);font-size:.875rem;padding:4px 10px;cursor:pointer;line-height:1.5;">✕</button>
-    </div>
-    <div id="pod-expand-stage"></div>
-  </div>
-</div>
-{% endif %}
-
-<!-- Chart expand modal -->
-<div id="chart-modal" onclick="if(event.target===this)closeModal()">
-  <div id="chart-modal-box">
-    <button onclick="closeModal()" style="position:absolute;top:14px;right:16px;background:rgba(255,255,255,.07);border:none;border-radius:6px;color:var(--muted2);font-size:.875rem;padding:4px 10px;cursor:pointer;line-height:1.5;">✕</button>
-    <p id="modal-title" style="font-size:.625rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin:0 0 20px;"></p>
-    <div style="position:relative;height:480px;"><canvas id="modal-canvas"></canvas></div>
-  </div>
-</div>
+</div><!-- end main-grid -->
 
 {% endblock %}
 
@@ -692,6 +503,7 @@ const LEADERBOARD_DATA=[{% for entry in leaderboard %}{"rank":{{forloop.counter}
   function updateThumb() {
     const trackH   = track.clientHeight;
     const scrollable = scroll.scrollHeight - scroll.clientHeight;
+    track.style.display = scrollable > 0 ? '' : 'none';
     const pct      = scrollable > 0 ? scroll.scrollTop / scrollable : 0;
     thumb.style.top = Math.min(pct * (trackH - THUMB_H), trackH - THUMB_H) + 'px';
   }
@@ -735,6 +547,7 @@ const LEADERBOARD_DATA=[{% for entry in leaderboard %}{"rank":{{forloop.counter}
   function updateThumb() {
     const trackH    = track.clientHeight;
     const scrollable = scroll.scrollHeight - scroll.clientHeight;
+    track.style.display = scrollable > 0 ? '' : 'none';
     const pct       = scrollable > 0 ? scroll.scrollTop / scrollable : 0;
     thumb.style.top = Math.min(pct * (trackH - THUMB_H), trackH - THUMB_H) + 'px';
   }
@@ -785,173 +598,19 @@ document.querySelectorAll('.dist-t1').forEach(el=>{
   setTimeout(()=>{ el.style.width=el.dataset.w+'%'; }, 400);
 });
 
-const PALETTE = ['#6366f1','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#f97316','#ec4899'];
-const pointsData   = {{ points_chart|safe }};
-const positionData = {{ position_chart|safe }};
-const wrData       = {{ win_rate_chart|safe }};
-const effData      = {{ efficiency_chart|safe }};
+const HOME_HIST_URL = '{% url "main:ajax_history" %}';
+const SITE_WEEK = {{ settings.week }};
+const LOCK_PICKS = {{ settings.lock_picks|yesno:"true,false" }};
 
-// ── shared helpers ─────────────────────────────────
-const TIP = {backgroundColor:'#0e1422',titleColor:'#f1f5f9',bodyColor:'#64748b',padding:10,cornerRadius:8,borderColor:'rgba(255,255,255,.1)',borderWidth:1};
-const SX  = {grid:{display:false},border:{display:false},ticks:{font:{size:10},color:'#475569'}};
-const SY  = (e={}) => ({grid:{color:'rgba(255,255,255,.04)',drawTicks:false},border:{display:false},ticks:{font:{size:10},color:'#475569',padding:6},...e});
-const LEG = {position:'bottom',labels:{boxWidth:8,padding:14,font:{size:10},color:'#64748b'}};
-
-function lineDS(data, fill, ctx, h) {
-  return data[0].slice(1).map((p,i)=>{
-    const c=PALETTE[i%PALETTE.length];
-    let bg='transparent';
-    if(fill&&ctx){const g=ctx.createLinearGradient(0,0,0,h);g.addColorStop(0,c+'28');g.addColorStop(1,c+'00');bg=g;}
-    return{label:p,data:data.slice(1).map(r=>r[i+1]),borderColor:c,backgroundColor:bg,
-      pointBackgroundColor:c,pointBorderColor:'rgba(7,11,20,.9)',pointBorderWidth:1.5,
-      pointRadius:3,pointHoverRadius:6,tension:0.4,fill,borderWidth:2};
-  });
+// Live leaderboard polling while games are being graded
+if (LOCK_PICKS) {
+  setInterval(() => {
+    if (chartWeek !== SITE_WEEK) return;
+    fetch(`{% url 'main:ajax_leaderboard' %}?week=${SITE_WEEK}`)
+      .then(r => r.json())
+      .then(data => { renderLeaderboard(data.entries); renderPodium(data.entries); });
+  }, 30000);
 }
-
-// ── main score/rank ────────────────────────────────
-let mainChart=null, currentMode='score';
-
-function buildMainOn(cid,mode,showLegend=false){
-  const el=document.getElementById(cid);if(!el)return null;
-  const ctx=el.getContext('2d'),data=mode==='score'?pointsData:positionData,rev=mode==='rank';
-  if(!data||data.length<2)return null;
-  const h=el.parentElement.offsetHeight||240;
-  return new Chart(ctx,{type:'line',
-    data:{labels:data.slice(1).map(r=>'Wk '+r[0]),datasets:lineDS(data,false,ctx,h)},
-    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
-      plugins:{legend:{...LEG,display:showLegend},tooltip:{...TIP,callbacks:{label:c=>` ${c.dataset.label}: ${c.parsed.y}${rev?'':' pts'}`}}},
-      scales:{y:SY({reverse:rev}),x:SX},animation:{duration:600,easing:'easeInOutQuart'}}});
-}
-// Generic draggable pill toggle
-// modes[0]=left, modes[1]=right; returns movePill(mode,animate)
-function setupPillDrag(trackId,pillId,labelIds,modes,switchFn,getMode){
-  function movePill(mode,animate){
-    const tr=document.getElementById(trackId),pl=document.getElementById(pillId);
-    if(!tr||!pl)return;
-    const half=(tr.offsetWidth-6)/2;
-    pl.style.transition=animate?'left .22s cubic-bezier(.4,0,.2,1)':'none';
-    pl.style.left=mode===modes[0]?'3px':(3+half)+'px';
-    document.getElementById(labelIds[0]).style.color=mode===modes[0]?'var(--text)':'var(--muted)';
-    document.getElementById(labelIds[1]).style.color=mode===modes[1]?'var(--text)':'var(--muted)';
-  }
-  const track=document.getElementById(trackId);
-  if(!track)return movePill;
-  let startX=null,moved=false;
-  function pt(e){return e.touches?e.touches[0]:e;}
-  function onStart(e){
-    startX=pt(e).clientX;moved=false;track.style.cursor='grabbing';
-    document.addEventListener('mousemove',onMove);document.addEventListener('mouseup',onEnd);
-    document.addEventListener('touchmove',onMove,{passive:false});document.addEventListener('touchend',onEnd);
-  }
-  function onMove(e){
-    if(e.cancelable)e.preventDefault();
-    if(Math.abs(pt(e).clientX-startX)>3)moved=true;
-    const rect=track.getBoundingClientRect(),half=(rect.width-6)/2;
-    const pl=document.getElementById(pillId);
-    pl.style.transition='none';
-    pl.style.left=Math.max(3,Math.min(pt(e).clientX-rect.left-half/2-3,3+half))+'px';
-    const right=pt(e).clientX>=rect.left+rect.width/2;
-    document.getElementById(labelIds[0]).style.color=right?'var(--muted)':'var(--text)';
-    document.getElementById(labelIds[1]).style.color=right?'var(--text)':'var(--muted)';
-  }
-  function onEnd(e){
-    track.style.cursor='grab';
-    document.removeEventListener('mousemove',onMove);document.removeEventListener('mouseup',onEnd);
-    document.removeEventListener('touchmove',onMove);document.removeEventListener('touchend',onEnd);
-    const rect=track.getBoundingClientRect();
-    const ex=(e.changedTouches?e.changedTouches[0]:e).clientX;
-    const picked=ex>=rect.left+rect.width/2?modes[1]:modes[0];
-    switchFn(picked);
-  }
-  track.addEventListener('mousedown',onStart);
-  track.addEventListener('touchstart',onStart,{passive:true});
-  return movePill;
-}
-
-function showNoData(id){const el=document.getElementById(id+'-nodata');if(el)el.classList.add('show');}
-function initChart(mode){if(mainChart){mainChart.destroy();mainChart=null;}mainChart=buildMainOn('mainChart',mode);if(!mainChart)showNoData('mainChart');}
-let movePillMain;
-function switchChart(mode){
-  if(mode===currentMode)return;currentMode=mode;initChart(mode);if(movePillMain)movePillMain(mode,true);
-  document.getElementById('chart-label').textContent=mode==='score'?'Cumulative Score':'Rank Over Time';
-}
-movePillMain=setupPillDrag('chart-toggle','toggle-pill',['tog-score','tog-rank'],['score','rank'],switchChart,()=>currentMode);
-initChart('score');
-
-// ── weekly bars ────────────────────────────────────
-function buildWeeklyOn(cid,showLegend=false){
-  const el=document.getElementById(cid);if(!el||!pointsData||pointsData.length<2)return null;
-  const players=pointsData[0].slice(1),rows=pointsData.slice(1);
-  const weekly=players.map((_,pi)=>rows.map((r,wi)=>parseFloat((r[pi+1]-(wi>0?rows[wi-1][pi+1]:0)).toFixed(2))));
-  return new Chart(el.getContext('2d'),{type:'bar',
-    data:{labels:rows.map(r=>'Wk '+r[0]),
-      datasets:players.map((p,i)=>({label:p,data:weekly[i],backgroundColor:PALETTE[i%PALETTE.length]+'bb',borderColor:PALETTE[i%PALETTE.length],borderWidth:1,borderRadius:3}))},
-    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
-      plugins:{legend:{...LEG,display:showLegend},tooltip:{...TIP,callbacks:{label:c=>` ${c.dataset.label}: ${c.parsed.y} pts`}}},
-      scales:{x:SX,y:SY()},animation:{duration:700,easing:'easeInOutQuart'}}});
-}
-if(!buildWeeklyOn('weeklyChart'))showNoData('weeklyChart');
-
-// ── win rate / efficiency ──────────────────────────
-let analyticsChart=null,analyticsMode='wr';
-
-function buildAnalyticsOn(cid,mode,showLegend=false){
-  const el=document.getElementById(cid);if(!el)return null;
-  const data=mode==='wr'?wrData:effData;if(!data||data.length<2)return null;
-  return new Chart(el.getContext('2d'),{type:'line',
-    data:{labels:data.slice(1).map(r=>'Wk '+r[0]),datasets:lineDS(data,false,null,0)},
-    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
-      plugins:{legend:{...LEG,display:showLegend},tooltip:{...TIP,callbacks:{label:c=>` ${c.dataset.label}: ${c.parsed.y}%`}}},
-      scales:{y:SY({min:0,max:100,ticks:{font:{size:10},color:'#475569',padding:6,callback:v=>v+'%'}}),x:SX},
-      animation:{duration:600,easing:'easeInOutQuart'}}});
-}
-function initAnalytics(mode){if(analyticsChart){analyticsChart.destroy();analyticsChart=null;}analyticsChart=buildAnalyticsOn('analyticsChart',mode);if(!analyticsChart)showNoData('analyticsChart');}
-let movePillAnalytics;
-function switchAnalytics(mode){
-  if(mode===analyticsMode)return;analyticsMode=mode;initAnalytics(mode);if(movePillAnalytics)movePillAnalytics(mode,true);
-  document.getElementById('analytics-label').textContent=mode==='wr'?'% Correct Picks Per Week':'% of Max Available Points Captured';
-}
-movePillAnalytics=setupPillDrag('analytics-toggle','analytics-pill',['tog-wr','tog-eff'],['wr','eff'],switchAnalytics,()=>analyticsMode);
-initAnalytics('wr');
-
-// ── variance ───────────────────────────────────────
-function buildVarianceOn(cid,showLegend=false,showNames=false){
-  const el=document.getElementById(cid);if(!el||!effData||effData.length<2)return null;
-  const players=effData[0].slice(1),rows=effData.slice(1);
-  const v=players.map((_,pi)=>{const sc=rows.map(r=>r[pi+1]),m=sc.reduce((a,b)=>a+b,0)/sc.length;return parseFloat(Math.sqrt(sc.reduce((a,b)=>a+(b-m)**2,0)/sc.length).toFixed(2));});
-  const xAxis={...SX,ticks:{...SX.ticks,display:showNames}};
-  return new Chart(el.getContext('2d'),{type:'bar',
-    data:{labels:players,datasets:[{label:'Std. Deviation',data:v,
-      backgroundColor:players.map((_,i)=>PALETTE[i%PALETTE.length]+'bb'),
-      borderColor:players.map((_,i)=>PALETTE[i%PALETTE.length]),borderWidth:1,borderRadius:4}]},
-    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:showLegend},
-      tooltip:{...TIP,callbacks:{label:c=>` ${c.label}: ${c.parsed.y}`}}},
-      scales:{x:xAxis,y:SY()},animation:{duration:700,easing:'easeInOutQuart'}}});
-}
-if(!buildVarianceOn('varianceChart'))showNoData('varianceChart');
-
-// ── modal expand ───────────────────────────────────
-let modalChart=null;
-const MODAL_LABELS={
-  mainChart:()=>currentMode==='score'?'Cumulative Score':'Rank Over Time',
-  weeklyChart:()=>'Points Per Week',
-  analyticsChart:()=>analyticsMode==='wr'?'Win Rate Per Week':'Efficiency Per Week',
-  varianceChart:()=>'Efficiency Std. Deviation',
-};
-function openModal(chartId){
-  document.getElementById('chart-modal').style.display='flex';
-  document.getElementById('modal-title').textContent=(MODAL_LABELS[chartId]||(() =>''))();
-  if(modalChart){modalChart.destroy();modalChart=null;}
-  if(chartId==='mainChart')      modalChart=buildMainOn('modal-canvas',currentMode,true);
-  else if(chartId==='weeklyChart')    modalChart=buildWeeklyOn('modal-canvas',true);
-  else if(chartId==='analyticsChart') modalChart=buildAnalyticsOn('modal-canvas',analyticsMode,true);
-  else if(chartId==='varianceChart')  modalChart=buildVarianceOn('modal-canvas',true,true);
-}
-function closeModal(){
-  document.getElementById('chart-modal').style.display='none';
-  if(modalChart){modalChart.destroy();modalChart=null;}
-}
-document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();});
 
 // Countdown
 (function(){
@@ -973,11 +632,23 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();});
   }
   function pad(n){return String(n).padStart(2,'0');}
   const eh=document.getElementById('exp-cd-h'),em=document.getElementById('exp-cd-m'),es=document.getElementById('exp-cd-s');
+  const label=document.getElementById('cd-label');
+  const hms=document.getElementById('cd-hms');
+  let expired=false;
+  function markExpired(){
+    // A frozen, pulsing 00:00:00 reads as a broken clock. Once the target has
+    // passed, drop the digits and say what is actually happening.
+    if(expired) return;
+    expired=true;
+    if(hms) hms.style.display='none';
+    if(label&&label.dataset.expiredLabel) label.textContent=label.dataset.expiredLabel;
+  }
   function tick(){
     const diff=getTarget()-new Date();
-    const hv=diff<=0?'00':pad(Math.floor(diff/3600000));
-    const mv=diff<=0?'00':pad(Math.floor(diff%3600000/60000));
-    const sv=diff<=0?'00':pad(Math.floor(diff%60000/1000));
+    if(diff<=0){ markExpired(); return; }
+    const hv=pad(Math.floor(diff/3600000));
+    const mv=pad(Math.floor(diff%3600000/60000));
+    const sv=pad(Math.floor(diff%60000/1000));
     h.textContent=hv; m.textContent=mv; s.textContent=sv;
     if(eh) eh.textContent=hv;
     if(em) em.textContent=mv;
@@ -996,13 +667,14 @@ function updatePickStatus() {
   const el = document.getElementById('pick-status');
   if (!el) return;
   if (picksMade >= totalGames && totalGames > 0) {
-    el.innerHTML = '<span style="width:7px;height:7px;background:#34d399;border-radius:50%;flex-shrink:0;"></span><span style="font-size:.75rem;font-weight:600;color:#34d399;">All '+totalGames+' picks submitted</span>';
+    el.innerHTML = '<span class="stat-check" style="color:#34d399;">&#10003;</span><span class="stat-val" style="color:#34d399;">'+picksMade+' / '+totalGames+' picks</span>';
   } else if (picksMade > 0) {
-    el.innerHTML = '<span style="width:7px;height:7px;background:#fbbf24;border-radius:50%;flex-shrink:0;" class="pulse"></span><span style="font-size:.75rem;font-weight:600;color:#fbbf24;">'+picksMade+' / '+totalGames+' picks made</span>';
+    el.innerHTML = '<span class="stat-dot pulse" style="background:#fbbf24;"></span><span class="stat-val" style="color:#fbbf24;">'+picksMade+' / '+totalGames+' picks</span>';
   } else {
-    el.innerHTML = '<span style="width:7px;height:7px;background:#f87171;border-radius:50%;flex-shrink:0;" class="pulse"></span><span style="font-size:.75rem;font-weight:600;color:#f87171;">No picks yet</span>';
+    el.innerHTML = '<span class="stat-dot" style="background:var(--muted);opacity:.4;"></span><span class="stat-val" style="color:var(--muted);">0 / '+totalGames+' picks</span>';
   }
 }
+updatePickStatus();
 
 function pickColor(toggle, choice) {
   return choice === toggle.dataset.fav
@@ -1050,19 +722,13 @@ function initPickDrag(container) {
   container.querySelectorAll('.pick-toggle').forEach(toggle => {
     if (toggle.dataset.dragInit) return; // skip if already wired
     toggle.dataset.dragInit = '1';
-    let active = false;
+    let active = false, dragged = false, fromTeam = null;
     function pt(e) { return e.touches ? e.touches[0] : e; }
     function onStart(e) {
       active = true;
-      const knob = toggle.querySelector('.pick-knob');
-      if (knob) {
-        knob.style.transition = 'none';
-        const rect = toggle.getBoundingClientRect();
-        const halfW = (rect.width - 6) / 2;
-        const raw = pt(e).clientX - rect.left - halfW / 2;
-        knob.style.left = Math.max(3, Math.min(raw, rect.width / 2)) + 'px';
-        knob.style.display = '';
-      }
+      dragged = false;
+      const sel = toggle.querySelector('.pick-opt[data-selected="true"]');
+      fromTeam = sel ? sel.dataset.choice : null;
       document.addEventListener('mousemove', onMove);
       document.addEventListener('mouseup', onEnd);
       document.addEventListener('touchmove', onMove, { passive: false });
@@ -1071,6 +737,7 @@ function initPickDrag(container) {
     function onMove(e) {
       if (!active) return;
       if (e.cancelable) e.preventDefault();
+      dragged = true;
       const knob = toggle.querySelector('.pick-knob');
       if (!knob) return;
       const rect = toggle.getBoundingClientRect();
@@ -1086,8 +753,24 @@ function initPickDrag(container) {
       document.removeEventListener('touchmove', onMove);
       document.removeEventListener('touchend', onEnd);
       const rect = toggle.getBoundingClientRect();
-      const ex = (e.changedTouches ? e.changedTouches[0] : e).clientX;
-      const choice = ex >= rect.left + rect.width / 2 ? 'team2' : 'team1';
+      const halfW = (rect.width - 6) / 2;
+      const knob = toggle.querySelector('.pick-knob');
+      let choice;
+      if (dragged && knob) {
+        const kLeft = parseFloat(knob.style.left) || 3;
+        // 25% snap threshold: only need to drag 1/4 of the way to trigger a switch
+        if (fromTeam === 'team1') {
+          choice = kLeft > halfW * 0.25 + 3 ? 'team2' : 'team1';
+        } else if (fromTeam === 'team2') {
+          choice = kLeft < halfW * 0.75 + 3 ? 'team1' : 'team2';
+        } else {
+          choice = kLeft > halfW * 0.5 + 3 ? 'team2' : 'team1';
+        }
+      } else {
+        const ex = (e.changedTouches ? e.changedTouches[0] : e).clientX;
+        choice = ex >= rect.left + rect.width / 2 ? 'team2' : 'team1';
+      }
+      fromTeam = null;
       selectPick(parseInt(toggle.dataset.game), choice);
     }
     toggle.addEventListener('mousedown', onStart);
@@ -1095,118 +778,6 @@ function initPickDrag(container) {
   });
 }
 initPickDrag(document);
-
-// Games expand modal
-const NFL_DIV = {
-  BUF:'AFC East',MIA:'AFC East',NE:'AFC East',NYJ:'AFC East',
-  BAL:'AFC North',CIN:'AFC North',CLE:'AFC North',PIT:'AFC North',
-  HOU:'AFC South',IND:'AFC South',JAX:'AFC South',TEN:'AFC South',
-  DEN:'AFC West',KC:'AFC West',LV:'AFC West',LAC:'AFC West',
-  DAL:'NFC East',NYG:'NFC East',PHI:'NFC East',WAS:'NFC East',
-  CHI:'NFC North',DET:'NFC North',GB:'NFC North',MIN:'NFC North',
-  ATL:'NFC South',CAR:'NFC South',NO:'NFC South',TB:'NFC South',
-  ARI:'NFC West',LAR:'NFC West',SF:'NFC West',SEA:'NFC West'
-};
-const DIV_ORDER = ['AFC East','AFC North','AFC South','AFC West','NFC East','NFC North','NFC South','NFC West'];
-function openGamesExpand() {
-  const modal = document.getElementById('games-expand-modal');
-  const grid  = document.getElementById('games-expand-grid');
-  if (!modal || !grid) return;
-  if (!grid.dataset.grouped) {
-    const cards = [...grid.querySelectorAll('.exp-game-card')];
-    const groups = new Map();
-    DIV_ORDER.forEach(d => groups.set(d, []));
-    cards.forEach(c => {
-      const div = NFL_DIV[c.dataset.home] || 'Other';
-      if (!groups.has(div)) groups.set(div, []);
-      groups.get(div).push(c);
-    });
-    grid.innerHTML = '';
-    DIV_ORDER.forEach(div => {
-      const col = document.createElement('div');
-      col.className = 'exp-date-col';
-      const lbl = document.createElement('p');
-      lbl.className = 'exp-date-label';
-      lbl.textContent = div;
-      col.appendChild(lbl);
-      (groups.get(div) || []).forEach(c => col.appendChild(c));
-      grid.appendChild(col);
-    });
-    grid.style.gridTemplateColumns = 'repeat(4, 1fr)';
-    grid.dataset.grouped = '1';
-    initPickDrag(grid);
-    if (typeof initUtcDates === 'function') initUtcDates(grid);
-  }
-  modal.style.display = 'flex';
-  document.body.style.overflow = 'hidden';
-}
-function closeGamesExpand() {
-  const modal = document.getElementById('games-expand-modal');
-  if (modal) modal.style.display = 'none';
-  document.body.style.overflow = '';
-}
-function openPodiumExpand() {
-  const modal = document.getElementById('podium-expand-modal');
-  const stage = document.getElementById('pod-expand-stage');
-  if (!modal || !stage) return;
-  if (!stage.dataset.built) {
-    const data = (typeof LEADERBOARD_DATA !== 'undefined' ? LEADERBOARD_DATA : []);
-    const N = data.length;
-    // Pyramid order: center = 1st, then 2nd left, 3rd right, 4th further left, etc.
-    const left = [], right = [];
-    for (let i = 1; i < N; i++) {
-      if (i % 2 === 1) left.unshift(data[i]); else right.push(data[i]);
-    }
-    const ordered = [...left, data[0], ...right];
-    const avH = window.innerHeight - 80;
-    const maxH = Math.round(avH * 0.74);
-    const minH = Math.round(avH * 0.10);
-    ordered.forEach(p => {
-      const t = Math.pow((p.rank - 1) / Math.max(N - 1, 1), 0.45);
-      const barH = N > 1 ? Math.round(maxH - (maxH - minH) * t) : maxH;
-      const flexW = N > 1 ? (2.5 - 1.5 * t).toFixed(2) : '2.5';
-      const gold = p.rank === 1, silv = p.rank === 2, brnz = p.rank === 3;
-      const barBg = gold
-        ? 'linear-gradient(180deg,rgba(245,158,11,.45) 0%,rgba(217,119,6,.22) 100%)'
-        : silv ? 'rgba(148,163,184,.14)' : brnz ? 'rgba(251,146,60,.12)'
-        : `rgba(255,255,255,${Math.max(0.02, 0.055 - (p.rank - 4) * 0.004)})`;
-      const topC = gold ? 'rgba(245,158,11,.6)' : silv ? 'rgba(148,163,184,.32)' : brnz ? 'rgba(251,146,60,.32)' : 'rgba(255,255,255,.09)';
-      const avBg = gold ? '#b45309' : silv ? '#334155' : brnz ? '#431407' : '#1e293b';
-      const scoreC = gold ? '#fbbf24' : silv ? '#94a3b8' : brnz ? '#fb923c' : 'var(--muted)';
-      const avSz = gold ? 52 : (silv || brnz) ? 44 : 36;
-      const scoreSz = gold ? '1.25rem' : (silv || brnz) ? '1rem' : '.78rem';
-      const rc = p.rc > 0 ? `<span class="rank-up" style="font-size:.5rem;">↑${p.rc}</span>`
-               : p.rc < 0 ? `<span class="rank-down" style="font-size:.5rem;">↓${p.rca}</span>`
-               : `<span class="rank-flat" style="font-size:.5rem;">—</span>`;
-      const el = document.createElement('div');
-      el.className = 'pod-person' + (p.me ? ' pod-person-me' : '');
-      el.style.flex = flexW;
-      const riseDelay = gold ? '.32s' : `${((p.rank - 2) * 0.04).toFixed(2)}s`;
-      el.style.animation = `pod-person-rise 2s cubic-bezier(.2,0,.3,1) ${riseDelay} backwards`;
-      el.innerHTML =
-        `<div class="pod-exp-score" style="color:${scoreC};font-size:${scoreSz};">${p.s}</div>`+
-        (p.fire ? '<span style="font-size:.7rem;line-height:1;">🔥</span>' : '')+
-        rc+
-        `<div class="pod-exp-name">${p.u}</div>`+
-        (gold
-          ? `<div class="pod-gold-avatar" style="display:inline-flex;flex-direction:column;align-items:center;gap:3px;margin-top:22px;margin-bottom:4px;flex-shrink:0;">
-               <div style="font-size:1.2rem;line-height:1;">👑</div>
-               <div class="pod-exp-avatar" style="width:${avSz}px;height:${avSz}px;font-size:${Math.round(avSz*.4)}px;background:${avBg};">${p.u[0].toUpperCase()}</div>
-             </div>`
-          : `<div class="pod-exp-avatar" style="width:${avSz}px;height:${avSz}px;font-size:${Math.round(avSz*.4)}px;background:${avBg};margin-bottom:4px;">${p.u[0].toUpperCase()}</div>`)+
-        `<div class="pod-exp-bar${gold ? ' pod-gold-bar' : ''}" style="height:${barH}px;background:${barBg};border-top:2px solid ${topC};border-left:1px solid ${topC};border-right:1px solid ${topC};animation-delay:${riseDelay};">${p.rank}</div>`;
-      stage.appendChild(el);
-    });
-    stage.dataset.built = '1';
-  }
-  modal.style.display = 'flex';
-  document.body.style.overflow = 'hidden';
-}
-function closePodiumExpand() {
-  const modal = document.getElementById('podium-expand-modal');
-  if (modal) modal.style.display = 'none';
-  document.body.style.overflow = '';
-}
 
 function flipToBottom(el, container) {
   if (!el || !container) return;
@@ -1227,15 +798,8 @@ function flipToBottom(el, container) {
 }
 
 function movePickedToBottom(gameId) {
-  // Compact view
   const toggle = document.getElementById('ptoggle-' + gameId);
   if (toggle) flipToBottom(toggle.closest('.game-row'), toggle.closest('.game-row')?.parentElement);
-  // Expanded modal
-  const expGrid = document.getElementById('games-expand-grid');
-  if (expGrid) {
-    const expToggle = expGrid.querySelector('.pick-toggle[data-game="'+gameId+'"]');
-    if (expToggle) flipToBottom(expToggle.closest('.exp-game-card'), expToggle.closest('.exp-game-card')?.parentElement);
-  }
 }
 
 // Restore pick knob colors on page load
@@ -1247,16 +811,6 @@ document.querySelectorAll('.pick-toggle').forEach(toggle => {
   knob.style.backgroundColor = pickColor(toggle, choice);
   knob.style.borderColor = pickBorder(toggle, choice);
 });
-
-// Mobile tab toggle
-function mobTab(tab){
-  const isChart=tab==='chart';
-  document.querySelector('.col-center').classList.toggle('mob-on',isChart);
-  document.querySelector('.col-right').classList.toggle('mob-on',!isChart);
-  const on='background:var(--accent);color:#fff;',off='background:transparent;color:var(--muted);';
-  document.getElementById('mob-tab-chart').style.cssText+=isChart?on:off;
-  document.getElementById('mob-tab-picks').style.cssText+=isChart?off:on;
-}
 
 // Email nav + collapse
 (function(){
@@ -1297,25 +851,190 @@ function mobTab(tab){
   if(colBtn)colBtn.addEventListener('click',(e)=>{ e.stopPropagation(); toggle(); });
 })();
 
-// Week slider
-(function(){
-  const slider=document.getElementById('week-slider');
-  if(!slider)return;
-  const urls={};
-  {% for w in week_links %}urls[{{ w }}]="{% url 'main:home' week=w %}";{% endfor %}
-  const label=document.getElementById('wk-label');
-  const accentColor=getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()||'#00897b';
-  function updateFill(){
-    const min=+slider.min,max=+slider.max,val=+slider.value;
-    const pct=max>min?((val-min)/(max-min))*100:0;
-    const isLight=document.documentElement.dataset.theme==='light';
-    const fill=`color-mix(in srgb,${accentColor} 55%,transparent)`;
-    const track=isLight?'rgba(0,0,0,.15)':'rgba(255,255,255,.07)';
-    slider.style.background=`linear-gradient(to right,${fill} 0%,${fill} ${pct}%,${track} ${pct}%,${track} 100%)`;
+// Global nav slider — AJAX leaderboard update
+{% if week_links %}
+initNavSlider({
+  min: 1,
+  max: {{ settings.week }},
+  value: {{ settings.week }},
+  onChange: function(w) {
+    fetch(`{% url 'main:ajax_leaderboard' %}?week=${w}`)
+      .then(r=>r.json())
+      .then(data=>{ renderLeaderboard(data.entries); renderPodium(data.entries); });
+    if (w < {{ settings.week }}) renderPastWeekGames(w);
+    else restoreCurrentWeekGames();
   }
-  updateFill();
-  slider.addEventListener('input',()=>{ label.textContent='W'+slider.value; updateFill(); });
-  slider.addEventListener('change',()=>{ const u=urls[+slider.value];if(u)window.location.href=u; });
-})();
+});
+{% endif %}
+
+function renderScoreBars(entries){
+  if(!entries.length)return;
+  const max=Math.max(...entries.map(e=>e.score));
+  if(max<=0)return;
+  document.querySelectorAll('.score-bar-fill').forEach((el,i)=>{
+    const rawPct=parseFloat(el.dataset.pct)/max*100;
+    const hue=(rawPct/100*120).toFixed(0);
+    el.style.background=`hsl(${hue},58%,48%)`;
+    el.style.width='0%';
+    setTimeout(()=>{ el.style.width=rawPct.toFixed(1)+'%'; },250+i*55);
+  });
+}
+
+function renderLeaderboard(entries){
+  const scroll=document.getElementById('lb-scroll');
+  if(!scroll)return;
+  const me='{{ request.user.username|escapejs }}';
+  let html='<div style="min-height:100%;display:flex;flex-direction:column;justify-content:space-between;">';
+  entries.forEach((e,i)=>{
+    const rank=i+1;
+    const isMe=e.me||e.username===me;
+    const badge=rank===1?'rank-1':rank===2?'rank-2':rank===3?'rank-3':'rank-n';
+    const rc=e.rank_change>0?`<div class="rank-up">↑${e.rank_change}</div>`
+             :e.rank_change<0?`<div class="rank-down">↓${e.rank_change_abs}</div>`
+             :`<div class="rank-flat">—</div>`;
+    html+=`<div class="lb-row${isMe?' lb-row-me':''}">
+      <div class="rank-badge ${badge}">${rank}</div>
+      <div style="flex:1;min-width:0;">
+        <div style="display:flex;align-items:center;gap:5px;margin-bottom:4px;">
+          <span style="font-size:.8125rem;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${e.username}</span>
+          ${e.on_fire?'<span class="fire-indicator">🔥</span>':''}
+        </div>
+        <div class="score-bar"><div class="score-bar-fill" data-pct="${e.score}"></div></div>
+      </div>
+      <div style="text-align:right;flex-shrink:0;">
+        <div style="font-size:.875rem;font-weight:800;color:var(--text);">${e.score}${e.week_gained != null && e.week_gained > 0 ? `<span style="font-size:.65rem;font-weight:600;color:#34d399;margin-left:3px;">+${e.week_gained}</span>` : ''}</div>
+        ${rc}
+      </div>
+    </div>`;
+  });
+  html+='</div>';
+  scroll.innerHTML=html;
+  renderScoreBars(entries);
+  const thumb=document.getElementById('lb-thumb');
+  const track=document.getElementById('lb-track');
+  if(thumb&&track){
+    const THUMB_H=36;
+    const pct=scroll.scrollHeight>scroll.clientHeight?scroll.scrollTop/(scroll.scrollHeight-scroll.clientHeight):0;
+    thumb.style.top=Math.min(pct*(track.clientHeight-THUMB_H),track.clientHeight-THUMB_H)+'px';
+  }
+}
+
+function renderPastWeekGames(week) {
+  const el = document.getElementById('past-week-games');
+  const cwContent = document.getElementById('current-week-content');
+  const hdr = document.getElementById('col-right-week');
+  if (!el) return;
+  if (cwContent) cwContent.style.display = 'none';
+  el.style.display = 'flex';
+  el.style.flexDirection = 'column';
+  if (hdr) hdr.textContent = 'Week ' + week;
+  el.innerHTML = '<p style="color:var(--muted);font-size:.75rem;padding:8px 0 0;">Loading…</p>';
+  fetch(HOME_HIST_URL + '?week=' + week)
+    .then(r => r.json())
+    .then(data => {
+      if (!data.games || !data.games.length) { el.innerHTML = '<p style="color:var(--muted);font-size:.75rem;padding:8px 0;">No data.</p>'; return; }
+      const me = '{{ request.user.username|escapejs }}';
+      const myPlayer = data.players.find(p => p.username === me);
+      const sortedByDt = [...data.games].filter(g => g.game_dt_iso).sort((a,b) => a.game_dt_iso > b.game_dt_iso ? 1 : -1);
+      const lastGame = sortedByDt.length ? sortedByDt[sortedByDt.length-1] : data.games[data.games.length-1];
+      const timerLabel = lastGame ? `${lastGame.team1_abbrev} vs ${lastGame.team2_abbrev} · Last kickoff:` : 'Last kickoff:';
+      let html = `<div class="timer-wrap">
+        <p class="timer-label">${timerLabel}</p>
+        <div class="hms-wrap">
+          <div class="hms-col"><div class="cd-digit static">00</div><span class="hms-unit">hrs</span></div>
+          <span class="hms-sep">:</span>
+          <div class="hms-col"><div class="cd-digit static">00</div><span class="hms-unit">min</span></div>
+          <span class="hms-sep">:</span>
+          <div class="hms-col"><div class="cd-digit static">00</div><span class="hms-unit">sec</span></div>
+        </div>
+      </div>
+      <div class="stat-indicator">
+        <span class="stat-check" style="color:#34d399;">&#10003;</span>
+        <span class="stat-val" style="color:#34d399;">${data.games.length} / ${data.games.length} games</span>
+      </div>
+      <div class="games-columns">`;
+      for (const g of data.games) {
+        const t1w = g.winner === 'team1', t2w = g.winner === 'team2';
+        const t1c = t1w ? '#34d399' : t2w ? '#f87171' : 'var(--text)';
+        const t2c = t2w ? '#34d399' : t1w ? '#f87171' : 'var(--text)';
+        let t1n = 0, t2n = 0;
+        for (const p of data.players) { const pk = p.picks[String(g.id)]; if (pk) pk.choice === 'team1' ? t1n++ : t2n++; }
+        const tot = t1n + t2n;
+        const t1pct = tot > 0 ? Math.round(t1n/tot*100) : 0;
+        const t2pct = 100 - t1pct;
+        const myPick = myPlayer ? myPlayer.picks[String(g.id)] : null;
+        const myChoice = myPick ? myPick.choice : null;
+        const myCorrect = myPick ? myPick.correct : null;
+        const t1ul = myChoice === 'team1' ? 'text-decoration:underline;text-underline-offset:3px;text-decoration-thickness:1.5px;' : '';
+        const t2ul = myChoice === 'team2' ? 'text-decoration:underline;text-underline-offset:3px;text-decoration-thickness:1.5px;' : '';
+        const arrow = t1w ? '◀' : t2w ? '▶' : 'T';
+        const check = myCorrect !== null ? `<span class="game-check" style="color:${myCorrect?'#22c55e':'#ef4444'};">${myCorrect?'✓':'✗'}</span>` : '';
+        const homeAbbrev = g.home_team ? g.team2_abbrev : g.team1_abbrev;
+        const dtSpan = g.game_dt_iso ? `<span data-utc-full="${g.game_dt_iso}">${g.game_dt_iso}</span> · ` : '';
+        html += `<div class="game-row"><div style="flex:1;min-width:0;">
+          <div class="game-teams-row">
+            <div class="game-team-side">
+              <span class="team-name" style="${t1ul}color:${t1c};">${g.team1_abbrev}</span>
+              <span class="game-pts">${g.points1}</span>
+            </div>
+            <span class="vs-sep">${arrow}</span>
+            <div class="game-team-side">
+              <span class="game-pts">${g.points2}</span>
+              <span class="team-name" style="${t2ul}color:${t2c};">${g.team2_abbrev}</span>
+            </div>
+          </div>
+          <div class="game-sep"><div class="game-sep-line"></div></div>
+          <div class="game-bottom-row">
+            ${!g.home_team ? `<span class="game-sep-text">${dtSpan}@ ${homeAbbrev}</span>` : ''}
+            <div class="game-dist-row">
+              <span class="dist-pct-t1">${t1pct}%</span>
+              <div class="game-pie" style="background:conic-gradient(rgba(59,130,246,.8) 0% ${t1pct}%,rgba(239,68,68,.7) ${t1pct}% 100%);"><div class="game-pie-hole"></div></div>
+              <span class="dist-pct-t2">${t2pct}%</span>
+              ${check}
+            </div>
+            ${g.home_team ? `<span class="game-sep-text">${dtSpan}@ ${homeAbbrev}</span>` : ''}
+          </div>
+        </div></div>`;
+      }
+      html += '</div>';
+      el.innerHTML = html;
+      if (typeof initUtcDates === 'function') initUtcDates(el);
+    })
+    .catch(() => { el.innerHTML = '<p style="color:var(--muted);font-size:.75rem;padding:8px 0;">Failed to load.</p>'; });
+}
+
+function restoreCurrentWeekGames() {
+  const el = document.getElementById('past-week-games');
+  const cwContent = document.getElementById('current-week-content');
+  const hdr = document.getElementById('col-right-week');
+  if (el) el.style.display = 'none';
+  if (cwContent) cwContent.style.display = 'contents';
+  if (hdr) hdr.textContent = 'Week {{ settings.week }}';
+}
+
+function renderPodium(entries){
+  const wrap=document.querySelector('.podium-wrap');
+  if(!wrap||entries.length<3)return;
+  const cfg=[
+    {cls:'pod-1',bg:'#b45309',nameSize:'.625rem',nameColor:'var(--muted2)',scoreStyle:'font-size:1rem;font-weight:900;color:#fbbf24;margin:0 0 5px;',nameMb:'2',maxW:'72px',crown:true},
+    {cls:'pod-2',bg:'#334155',nameSize:'.625rem',nameColor:'var(--muted2)',scoreStyle:'font-size:.8rem;font-weight:800;color:#94a3b8;margin:0 0 4px;',nameMb:'3',maxW:'64px',crown:false},
+    {cls:'pod-3',bg:'#431407',nameSize:'.625rem',nameColor:'var(--muted2)',scoreStyle:'font-size:.8rem;font-weight:800;color:#fb923c;margin:0 0 4px;',nameMb:'3',maxW:'64px',crown:false},
+  ];
+  const displayOrder=[1,0,2];
+  let html='';
+  displayOrder.forEach(idx=>{
+    if(idx>=entries.length)return;
+    const e=entries[idx];
+    const c=cfg[idx];
+    html+=`<div class="pod ${c.cls}">
+      ${c.crown?'<div style="font-size:.875rem;margin-bottom:3px;">👑</div>':''}
+      <div class="pod-avatar" style="background:${c.bg};">${e.username[0].toUpperCase()}</div>
+      <p style="font-size:${c.nameSize};font-weight:600;color:${c.nameColor};margin:0 0 ${c.nameMb}px;max-width:${c.maxW};text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${e.username}</p>
+      <p style="${c.scoreStyle}">${e.score}</p>
+      <div class="pod-block">${idx+1}</div>
+    </div>`;
+  });
+  wrap.innerHTML=html;
+}
 </script>
 {% endblock %}

@@ -1,0 +1,143 @@
+{% extends 'base.html' %}
+{% block title %}Pick History — PutnamBowl{% endblock %}
+
+{% block extra_head %}
+<style>
+  @media (min-width:641px) {
+    main { height:calc(100vh - 53px) !important;display:flex !important;flex-direction:column !important;overflow:hidden !important;box-sizing:border-box !important; }
+    html.nav-has-slider main { height:calc(100vh - 86px) !important; }
+  }
+  .home-hist-table { border-collapse:collapse;width:100%; }
+  .home-hist-table th, .home-hist-table td { font-size:.72rem;border:1px solid rgba(0,0,0,.6); }
+  .home-hist-table th { font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:rgba(100,116,139,.5);background:var(--bg);text-align:center;position:sticky;top:0;z-index:4;box-shadow:inset 0 -1px 0 rgba(0,0,0,.6),inset 0 1px 0 rgba(0,0,0,.6); }
+  .home-hist-table th:not(.hh-game-col) { padding:0; }
+  .home-hist-table td:not(.hh-game-col) { padding:0;overflow:hidden; }
+  .home-hist-table th.hh-game-col { text-align:left;padding:0 6px;white-space:nowrap;position:sticky;left:0;top:0;z-index:5;background:var(--bg); }
+  .home-hist-table td.hh-game-col { padding:0 6px;white-space:nowrap;position:sticky;left:0;z-index:2;background:var(--bg); }
+  .home-hist-table .hh-name { writing-mode:vertical-rl;transform:rotate(180deg);white-space:nowrap;padding:0;vertical-align:bottom;display:block; }
+</style>
+{% endblock %}
+
+{% block content %}
+{% if completed_weeks %}
+
+<div id="picks-content" style="flex:1;min-height:0;overflow:auto;"></div>
+
+{% else %}
+<div style="flex:1;display:flex;align-items:center;justify-content:center;">
+  <p style="color:var(--muted);font-size:.875rem;">No history yet. Complete week 1 to see picks here.</p>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const HIST_URL = '{% url "main:ajax_history" %}';
+var currentWeek = {{ completed_weeks|last|default:1 }};
+
+function loadPicks(week) {
+  const content = document.getElementById('picks-content');
+  if (!content) return;
+  content.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted);font-size:.875rem;">Loading…</div>';
+  fetch(HIST_URL + '?week=' + week)
+    .then(r => r.json())
+    .then(data => {
+      if (data.error || !data.games || !data.games.length) {
+        content.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted);font-size:.875rem;">No data for this week.</div>';
+        return;
+      }
+      const players = [...data.players].sort(() => Math.random() - 0.5);
+      const nGames = data.games.length;
+      const nPlayers = players.length;
+      const HEADER_H = 64;
+      const LEFT_W = 80;
+      const STAT_W = 52;
+      const N_STATS = 4;
+
+      const navH = document.querySelector('nav.topnav').offsetHeight;
+      const availH = window.innerHeight - navH - HEADER_H;
+      const availW = window.innerWidth - LEFT_W - (N_STATS * STAT_W);
+      const maxW = Math.max(Math.floor(availW / nGames), 12);
+      const maxH = Math.max(Math.floor(availH / nPlayers), 12);
+      const cs = Math.max(Math.min(maxW, maxH), 60);
+      const fs = Math.max(Math.floor(cs * 0.28), 8);
+
+      const tableW = LEFT_W + nGames * cs + N_STATS * STAT_W;
+      let html = `<table class="home-hist-table" style="width:${tableW}px;border-collapse:collapse;table-layout:fixed;">`;
+      html += `<colgroup><col style="width:${LEFT_W}px;">`;
+      for (let i = 0; i < nGames; i++) html += `<col style="width:${cs}px;">`;
+      for (let i = 0; i < N_STATS; i++) html += `<col style="width:${STAT_W}px;">`;
+      html += `</colgroup>`;
+
+      // Header row: game matchups + stat labels (all vertical)
+      html += `<thead><tr style="height:${HEADER_H}px;"><th class="hh-game-col"></th>`;
+      for (const g of data.games) {
+        const graded = g.winner==='team1'||g.winner==='team2';
+        const t1c = graded ? (g.winner==='team1'?'#4ade80':'#f87171') : '#60a5fa';
+        const t2c = graded ? (g.winner==='team2'?'#4ade80':'#f87171') : '#f87171';
+        const p1 = g.points1!=null ? g.points1.toFixed(1) : '?';
+        const p2 = g.points2!=null ? g.points2.toFixed(1) : '?';
+        html += `<th style="padding:2px 2px 4px;overflow:hidden;vertical-align:bottom;text-align:center;line-height:1.25;"><span style="display:block;font-size:.72rem;font-weight:700;white-space:nowrap;"><span style="color:${t1c};">${g.team1_abbrev}</span><span style="color:var(--muted);">v</span><span style="color:${t2c};">${g.team2_abbrev}</span></span><span style="display:block;font-size:.58rem;font-weight:500;white-space:nowrap;"><span style="color:${t1c};">${p1}</span><span style="color:var(--muted);">·</span><span style="color:${t2c};">${p2}</span></span></th>`;
+      }
+      const statLabels = ['pts','+pts','rnk','±rnk'];
+      for (let si = 0; si < statLabels.length; si++) {
+        html += `<th style="padding:0;overflow:hidden;vertical-align:bottom;text-align:center;"><div style="writing-mode:vertical-rl;transform:rotate(180deg);white-space:nowrap;padding-bottom:3px;font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:rgba(100,116,139,.5);">${statLabels[si]}</div></th>`;
+      }
+      html += `</tr></thead><tbody>`;
+
+      // Player rows
+      for (let pi = 0; pi < nPlayers; pi++) {
+        const p = players[pi];
+        html += `<tr style="height:${cs}px;"><td class="hh-game-col" style="font-size:.82rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;">${p.username.slice(0,9)}</td>`;
+
+        for (const g of data.games) {
+          const pick = p.picks[String(g.id)];
+          let bg, abbrev = '';
+          if (!data.picks_locked || !pick) {
+            bg = 'rgba(100,116,139,0.10)';
+          } else {
+            abbrev = pick.choice==='team1' ? g.team1_abbrev : g.team2_abbrev;
+            if (pick.correct !== null) {
+              bg = pick.correct ? 'rgba(34,197,94,0.45)' : 'rgba(239,68,68,0.40)';
+            } else {
+              bg = pick.choice==='team1' ? 'rgba(59,130,246,0.45)' : 'rgba(239,68,68,0.40)';
+            }
+          }
+          html += `<td style="padding:0;overflow:hidden;"><div style="width:${cs}px;height:${cs}px;background:${bg};display:flex;align-items:center;justify-content:center;overflow:hidden;"><span style="font-size:${fs}px;font-weight:800;color:rgba(255,255,255,.82);letter-spacing:-.02em;line-height:1;">${abbrev}</span></div></td>`;
+        }
+
+        // Stat columns
+        const wg = p.week_gained;
+        const rc = p.rank_change;
+        const stats = [
+          { v: p.week_total!=null ? p.week_total.toFixed(1) : '—',                        c: 'var(--text)' },
+          { v: wg!=null ? (wg>=0?'+':'')+wg.toFixed(1) : '—',                             c: wg>0?'#34d399':wg<0?'#f87171':'var(--muted)' },
+          { v: p.rank ? '#'+p.rank : '—',                                                   c: 'var(--text)' },
+          { v: rc>0?'▲'+rc:rc<0?'▼'+Math.abs(rc):'—',                                     c: rc>0?'#34d399':rc<0?'#f87171':'var(--muted)' },
+        ];
+        for (const s of stats) {
+          html += `<td style="text-align:center;font-size:.9rem;font-weight:700;color:${s.c};vertical-align:middle;">${s.v}</td>`;
+        }
+        html += `</tr>`;
+      }
+
+      html += `</tbody></table>`;
+      content.innerHTML = html;
+    })
+    .catch(() => {
+      content.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted);font-size:.875rem;">Failed to load.</div>';
+    });
+}
+
+{% if completed_weeks %}
+initNavSlider({
+  min: 1,
+  max: {{ completed_weeks|last }},
+  value: {{ completed_weeks|last }},
+  onChange: function(w) { currentWeek = w; loadPicks(w); }
+});
+{% endif %}
+
+loadPicks(currentWeek);
+</script>
+{% endblock %}

@@ -98,8 +98,11 @@ def _run(lock_delay, grade_delay, advance_delay, year, stop_event):
 
             # Step 5: advance week
             settings.refresh_from_db()
-            games = list(Game.objects.all())
-            if games and all(g.graded for g in games):
+            games = list(Game.objects.filter(week=settings.week))
+            if not games:
+                _status['step'] = f'Week {settings.week}: no games found — simulation complete'
+                break
+            if all(g.graded for g in games):
                 _status['step'] = f'Week {settings.week}: advancing'
                 do_advance_week(settings)
             else:

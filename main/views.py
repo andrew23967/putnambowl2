@@ -1,17 +1,18 @@
 import json
 import random
+from collections import defaultdict
 from datetime import datetime, timezone, timedelta
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.models import User
 from django.contrib.auth.decorators import login_required
 from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib import messages
-from django.db.models import Q
+from django.db.models import Q, Prefetch
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 from . import models, forms, scrape
 from .models import (
-    Game, Pick, SiteSettings, History, WeeklyLeaderboard,
+    Game, Pick, SiteSettings, WeeklyLeaderboard,
     Announcement, SeasonRecord
 )
 from .teams import TEAM_ABBREV, ABBREV_TO_TEAM
@@ -28,7 +29,7 @@ def _calculate_points(underdog_ml, favorite_ml):
     return round((hp + 1) * u_ratio, 2)
 
 
-def home(request, week=1):
+def home(request):
     if not request.user.is_authenticated:
         return redirect('accounts:login')
 
@@ -36,20 +37,12 @@ def home(request, week=1):
     if settings.week == 1 and not request.user.profile.preseason_submitted:
         return redirect('main:preseason')
 
-    week = int(week)
     players = User.objects.select_related('profile').all()
 
-    if week == settings.week:
-        leaderboard = sorted(
-            [{'score': round(p.profile.score, 1), 'username': p.username} for p in players],
-            key=lambda x: x['score'], reverse=True
-        )
-    else:
-        try:
-            lb = WeeklyLeaderboard.objects.get(week=week)
-            leaderboard = sorted(lb.entries, key=lambda x: x['score'], reverse=True)
-        except WeeklyLeaderboard.DoesNotExist:
-            leaderboard = []
+    leaderboard = sorted(
+        [{'score': round(p.profile.score, 1), 'username': p.username} for p in players],
+        key=lambda x: x['score'], reverse=True
+    )
 
     # Rank change vs previous week
     prev_ranks = {}
@@ -68,27 +61,34 @@ def home(request, week=1):
         entry['rank_change_abs'] = abs(change)
 
     # On-fire streak: 3+ consecutive weeks with >= 50% correct
-    histories = list(History.objects.order_by('week'))
+    past_games = list(Game.objects.filter(week__lt=settings.week).prefetch_related(
+        Prefetch('picks', queryset=Pick.objects.select_related('user'))
+    ).order_by('week'))
+    games_by_past_week = defaultdict(list)
+    for pg in past_games:
+        games_by_past_week[pg.week].append(pg)
+
     player_week_results = {}
-    for hist in histories:
+    for wk_num in sorted(games_by_past_week.keys()):
         week_correct = {}
         week_total = {}
-        for game in hist.games_data:
-            for username, pd in game.get('player_picks', {}).items():
-                week_correct[username] = week_correct.get(username, 0) + (1 if pd.get('correct') else 0)
-                week_total[username] = week_total.get(username, 0) + 1
-        for username in week_correct:
-            player_week_results.setdefault(username, [])
-            t = week_total[username]
-            player_week_results[username].append(week_correct[username] >= t / 2 if t else False)
+        for pg in games_by_past_week[wk_num]:
+            for pp in pg.picks.all():
+                _u = pp.user.username
+                week_correct[_u] = week_correct.get(_u, 0) + (1 if pp.is_correct else 0)
+                week_total[_u] = week_total.get(_u, 0) + 1
+        for _u in week_correct:
+            player_week_results.setdefault(_u, [])
+            _t = week_total[_u]
+            player_week_results[_u].append(week_correct[_u] >= _t / 2 if _t else False)
 
     fire_players = {u for u, results in player_week_results.items() if len(results) >= 3 and all(results[-3:])}
     for entry in leaderboard:
         entry['on_fire'] = entry['username'] in fire_players
 
     # Games & pick distribution
-    games = list(Game.objects.all())
-    picks_map = {p.game_id: p for p in Pick.objects.filter(user=request.user)}
+    games = list(Game.objects.filter(week=settings.week))
+    picks_map = {p.game_id: p for p in Pick.objects.filter(user=request.user, game__in=games)}
     games.sort(key=lambda g: (g.id in picks_map, g.id))
 
     # Next ungraded game for countdown
@@ -116,30 +116,67 @@ def home(request, week=1):
             'team1_pct': round(counts['team1'] / total * 100) if total else 50,
             'team2_pct': round(counts['team2'] / total * 100) if total else 50,
         }
+    # Ensure every game has a dist entry so the template can always render the pie chart
+    for game in games:
+        gid = str(game.id)
+        if gid not in pick_dist:
+            pick_dist[gid] = {'team1': 0, 'team2': 0, 'total': 0, 'team1_pct': 50, 'team2_pct': 50}
 
-    # Biggest upset: graded game where underdog (team1) won, most people picked wrong
+    # Biggest upset: graded game the underdog (team2) won, where the most
+    # people had backed the favorite.
     biggest_upset = None
     for game in games:
-        if not game.graded or game.winner != 'team1':
+        if not game.graded or game.winner != 'team2':
             continue
         dist = pick_dist.get(str(game.id), {})
         total = dist.get('total', 0)
-        wrong_pct = dist.get('team2_pct', 0)
+        wrong_pct = dist.get('team1_pct', 0)
         if biggest_upset is None or wrong_pct > biggest_upset['wrong_pct']:
             biggest_upset = {
-                'winner': game.team1_abbrev,
-                'loser': game.team2_abbrev,
-                'winner_full': game.team1,
+                'winner': game.team2_abbrev,
+                'loser': game.team1_abbrev,
+                'winner_full': game.team2,
                 'wrong_pct': wrong_pct,
                 'total': total,
-                'pts': game.points1,
+                'pts': game.points2,
             }
 
-    week_links = list(range(1, settings.week + 1))
+    graded_count = sum(1 for g in games if g.winner)
 
-    # Build points + rank charts (same format as pickhistory view)
+    week_links = list(range(1, settings.week + 1))
+    week_type = scrape.get_week_type(settings.week, allow_network=False)
+
+    return render(request, 'main/home.html', {
+        'leaderboard': leaderboard,
+        'leaderboard_json': json.dumps(leaderboard),
+        'picks_map': picks_map,
+        'pick_dist': pick_dist,
+        'games': games,
+        'biggest_upset': biggest_upset,
+        'settings': settings,
+        'week_links': week_links,
+        'week_type': week_type,
+        'announcements': Announcement.objects.order_by('-id'),
+        'next_game': next_game,
+        'next_game_ts': next_game_ts,
+        'graded_count': graded_count,
+    })
+
+
+@login_required
+def analytics(request):
+    settings = SiteSettings.get()
+
+    past_games = list(Game.objects.filter(week__lt=settings.week).prefetch_related(
+        Prefetch('picks', queryset=Pick.objects.select_related('user'))
+    ).order_by('week'))
+    games_by_past_week = defaultdict(list)
+    for pg in past_games:
+        games_by_past_week[pg.week].append(pg)
+
     leaderboards = WeeklyLeaderboard.objects.order_by('week')
     chart_players = sorted({e['username'] for lb in leaderboards for e in lb.entries})
+
     points_chart = [['Week'] + chart_players]
     position_chart = [['Week'] + chart_players]
     for lb in leaderboards:
@@ -150,29 +187,26 @@ def home(request, week=1):
         points_chart.append([str(lb.week)] + [score_map.get(u, 0) for u in chart_players])
         position_chart.append([str(lb.week)] + [rank_map.get(u, len(chart_players)) for u in chart_players])
 
-    # Win rate + Efficiency per week
     win_rate_chart = [['Week'] + chart_players]
     efficiency_chart = [['Week'] + chart_players]
-    for hist in histories:
+    for wk_num in sorted(games_by_past_week.keys()):
         week_correct = {u: 0 for u in chart_players}
         week_earned = {u: 0.0 for u in chart_players}
         week_total = {u: 0 for u in chart_players}
         week_potential = 0.0
-        for game in hist.games_data:
-            if not game.get('graded'):
+        for pg in games_by_past_week[wk_num]:
+            if not pg.graded:
                 continue
-            winner = game.get('winner')
-            pot = game.get('points1' if winner == 'team1' else 'points2', 0)
-            week_potential += pot
-            for username, pd in game.get('player_picks', {}).items():
-                if username not in chart_players:
+            week_potential += pg.points1 if pg.winner == 'team1' else (pg.points2 if pg.winner == 'team2' else 0)
+            for pp in pg.picks.all():
+                if pp.user.username not in chart_players:
                     continue
-                week_total[username] += 1
-                if pd.get('correct'):
-                    week_correct[username] += 1
-                    week_earned[username] += pd.get('points', 0)
-        wr_row = [str(hist.week)]
-        eff_row = [str(hist.week)]
+                week_total[pp.user.username] += 1
+                if pp.is_correct:
+                    week_correct[pp.user.username] += 1
+                    week_earned[pp.user.username] += pp.points_earned
+        wr_row = [str(wk_num)]
+        eff_row = [str(wk_num)]
         for u in chart_players:
             t = week_total[u]
             wr_row.append(round(week_correct[u] / t * 100, 1) if t else 0)
@@ -180,53 +214,29 @@ def home(request, week=1):
         win_rate_chart.append(wr_row)
         efficiency_chart.append(eff_row)
 
-    # Upset pick rate vs success rate per player
-    upset_picks = {u: 0 for u in chart_players}
-    upset_correct = {u: 0 for u in chart_players}
-    total_picks_count = {u: 0 for u in chart_players}
-    for hist in histories:
-        for game in hist.games_data:
-            if not game.get('graded'):
-                continue
-            underdog = 'team1' if game.get('points1', 0) > game.get('points2', 0) else 'team2'
-            for username, pd in game.get('player_picks', {}).items():
-                if username not in chart_players:
-                    continue
-                total_picks_count[username] += 1
-                if pd.get('choice') == underdog:
-                    upset_picks[username] += 1
-                    if pd.get('correct'):
-                        upset_correct[username] += 1
-    upset_data = {
-        'players': chart_players,
-        'pick_rates': [
-            round(upset_picks[u] / total_picks_count[u] * 100, 1) if total_picks_count[u] else 0
-            for u in chart_players
-        ],
-        'success_rates': [
-            round(upset_correct[u] / upset_picks[u] * 100, 1) if upset_picks[u] else 0
-            for u in chart_players
-        ],
-    }
+    completed_weeks = sorted(games_by_past_week.keys())
 
-    return render(request, 'main/home.html', {
-        'leaderboard': leaderboard,
-        'leaderboard_json': json.dumps(leaderboard),
-        'picks_map': picks_map,
-        'pick_dist': pick_dist,
-        'games': games,
-        'biggest_upset': biggest_upset,
+    return render(request, 'main/analytics.html', {
         'settings': settings,
-        'viewing_week': week,
-        'week_links': week_links,
+        'completed_weeks': completed_weeks,
         'points_chart': json.dumps(points_chart),
         'position_chart': json.dumps(position_chart),
         'win_rate_chart': json.dumps(win_rate_chart),
         'efficiency_chart': json.dumps(efficiency_chart),
-        'upset_data': json.dumps(upset_data),
-        'announcements': Announcement.objects.order_by('-id'),
-        'next_game': next_game,
-        'next_game_ts': next_game_ts,
+    })
+
+
+@login_required
+def pick_history(request):
+    settings = SiteSettings.get()
+    completed_weeks = sorted(
+        Game.objects.filter(week__lt=settings.week).values_list('week', flat=True).distinct()
+    )
+    if settings.lock_picks and settings.week not in completed_weeks:
+        completed_weeks = sorted(completed_weeks + [settings.week])
+    return render(request, 'main/pick_history.html', {
+        'settings': settings,
+        'completed_weeks': completed_weeks,
     })
 
 
@@ -249,6 +259,95 @@ def ajax_save_pick(request):
         defaults={'choice': choice}
     )
     return JsonResponse({'ok': True})
+
+
+@login_required
+def site_state(request):
+    s = SiteSettings.get()
+    return JsonResponse({'week': s.week, 'publish': s.publish, 'lock_picks': s.lock_picks})
+
+
+@login_required
+def ajax_leaderboard(request):
+    week = request.GET.get('week')
+    if not week:
+        return JsonResponse({'error': 'week required'}, status=400)
+    week = int(week)
+    settings = SiteSettings.get()
+    players = list(User.objects.select_related('profile').all())
+    live_grading = False
+
+    if week == settings.week:
+        if settings.lock_picks:
+            # Sum points earned so far from graded picks this week without touching profile.score
+            live_grading = True
+            all_picks = Pick.objects.filter(game__week=week).select_related('game', 'user')
+            live_gained = {}
+            for pick in all_picks:
+                uname = pick.user.username
+                live_gained[uname] = live_gained.get(uname, 0) + pick.points_earned
+            entries = sorted(
+                [{
+                    'username': p.username,
+                    'score': round(p.profile.score + live_gained.get(p.username, 0), 1),
+                    '_base': round(p.profile.score, 1),
+                    '_gained': round(live_gained.get(p.username, 0), 1),
+                } for p in players],
+                key=lambda x: x['score'], reverse=True,
+            )
+        else:
+            entries = sorted(
+                [{'username': p.username, 'score': round(p.profile.score, 1)} for p in players],
+                key=lambda x: x['score'], reverse=True,
+            )
+    else:
+        try:
+            lb = WeeklyLeaderboard.objects.get(week=week)
+            entries = sorted(lb.entries, key=lambda x: x['score'], reverse=True)
+        except WeeklyLeaderboard.DoesNotExist:
+            entries = []
+
+    prev_ranks = {}
+    prev_scores = {}
+    # For the current week, compare against scores at the START of this week (pre-week snapshot).
+    # For past weeks, compare against the snapshot before that week.
+    # WeeklyLeaderboard(week=N) stores scores BEFORE week N, so:
+    #   current week baseline = WeeklyLeaderboard(week=settings.week)
+    #   past week N baseline  = WeeklyLeaderboard(week=N-1) — pre-week-N scores
+    baseline_week = settings.week if week == settings.week else week - 1
+    if baseline_week > 0:
+        try:
+            prev_lb = WeeklyLeaderboard.objects.get(week=baseline_week)
+            prev_ranks = {e['username']: i + 1 for i, e in enumerate(
+                sorted(prev_lb.entries, key=lambda x: x['score'], reverse=True)
+            )}
+            prev_scores = {e['username']: e['score'] for e in prev_lb.entries}
+        except WeeklyLeaderboard.DoesNotExist:
+            pass
+
+    is_past = week < settings.week
+    current_user = request.user.username
+    result = []
+    for i, entry in enumerate(entries):
+        prev = prev_ranks.get(entry['username'])
+        change = (prev - (i + 1)) if prev else 0
+        if live_grading:
+            gained = entry.get('_gained', 0)
+        elif is_past:
+            gained = round(entry['score'] - prev_scores.get(entry['username'], entry['score']), 1)
+        else:
+            gained = None
+        result.append({
+            'username': entry['username'],
+            'score': entry['score'],
+            'rank_change': change,
+            'rank_change_abs': abs(change),
+            'week_gained': gained,
+            'on_fire': False,
+            'me': entry['username'] == current_user,
+        })
+
+    return JsonResponse({'entries': result, 'live_grading': live_grading})
 
 
 @staff_member_required
@@ -277,6 +376,7 @@ def ajax_add_game(request):
         points2=points2,
         home_team=d['favorite_is_home'],
         game_dt=game_dt_utc,
+        week=settings.week,
     )
     return JsonResponse({'ok': True, 'game': {
         'id': game.id,
@@ -324,14 +424,14 @@ def pickform(request):
 
     if settings.lock_picks:
         messages.warning(request, 'Picks are currently locked.')
-        return redirect('main:home', week=1)
+        return redirect('main:home')
 
-    games = list(Game.objects.all())
+    games = list(Game.objects.filter(week=settings.week))
     if not games:
         messages.info(request, 'No games available to pick yet.')
-        return redirect('main:home', week=1)
+        return redirect('main:home')
 
-    user_picks = {p.game_id: p.choice for p in Pick.objects.filter(user=request.user)}
+    user_picks = {p.game_id: p.choice for p in Pick.objects.filter(user=request.user, game__in=games)}
 
     if request.method == 'POST':
         errors = False
@@ -350,7 +450,7 @@ def pickform(request):
                     defaults={'choice': new_picks[game.id]}
                 )
             messages.success(request, 'Picks saved!')
-            return redirect('main:home', week=1)
+            return redirect('main:home')
 
     games_with_picks = [
         {
@@ -371,7 +471,7 @@ def pickform(request):
 @login_required
 def allpicks(request):
     settings = SiteSettings.get()
-    games = Game.objects.all()
+    games = Game.objects.filter(week=settings.week)
     players = User.objects.select_related('profile').all()
 
     all_picks = Pick.objects.select_related('user', 'game').filter(game__in=games)
@@ -431,97 +531,93 @@ def allpicks(request):
 
 
 @login_required
-def pickhistory(request):
-    histories = History.objects.all()
-    players = User.objects.all()
-    settings = SiteSettings.get()
+def ajax_history(request):
+    try:
+        week = int(request.GET.get('week', 1))
+    except (TypeError, ValueError):
+        return JsonResponse({'error': 'Invalid week.'}, status=400)
 
-    history_data = []
-    for h in histories:
-        players_list = h.players_list
-        games = h.games_data
+    games = list(Game.objects.filter(week=week).order_by('id'))
+    if not games:
+        return JsonResponse({'error': f'No games found for week {week}.'}, status=404)
 
-        player_stats = {p: {'correct': 0, 'points': 0, 'games': 0} for p in players_list}
+    all_picks = list(Pick.objects.filter(game__in=games).select_related('user', 'game'))
+    picks_by_user_game = defaultdict(dict)
+    for pick in all_picks:
+        picks_by_user_game[pick.user.username][pick.game_id] = {
+            'choice': pick.choice,
+            'team': pick.team_picked,
+            'correct': pick.is_correct,
+            'points': round(pick.points_earned, 1) if pick.is_correct else 0,
+        }
 
-        games_structured = []
-        for game in games:
-            game_winner = game.get('winner', '')
-            player_picks_dict = {}
-            for player in players_list:
-                pd = game.get('player_picks', {}).get(player)
-                if pd:
-                    pick_val = pd.get('choice') or pd.get('pick')
-                    is_correct = pd.get('correct') if 'correct' in pd else (
-                        (pick_val == 'team1' and game_winner == 'team1') or
-                        (pick_val == 'team2' and game_winner == 'team2')
-                    )
-                    pts = pd.get('points') if 'points' in pd else (
-                        game.get('points1' if pick_val == 'team1' else 'points2', 0) if is_correct else 0
-                    )
-                    player_picks_dict[player] = {
-                        'choice': pick_val,
-                        'team_picked': pd.get('team_picked') or (game.get('team1') if pick_val == 'team1' else game.get('team2')),
-                        'correct': is_correct,
-                        'points': pts,
-                    }
-                    if is_correct:
-                        player_stats[player]['correct'] += 1
-                        player_stats[player]['points'] += pts
-                    player_stats[player]['games'] += 1
-                else:
-                    player_picks_dict[player] = {'choice': None, 'team_picked': '—', 'correct': False, 'points': 0}
+    # WeeklyLeaderboard(week=N) stores scores BEFORE week N's points are added.
+    # So post-week-N scores live in WeeklyLeaderboard(week=N+1).
+    try:
+        lb = WeeklyLeaderboard.objects.get(week=week)
+        recap = lb.recap
+        pre_scores = {e['username']: e['score'] for e in lb.entries}
+    except WeeklyLeaderboard.DoesNotExist:
+        recap = ''
+        pre_scores = {}
 
-            games_structured.append({
-                'team1': game.get('team1', ''),
-                'team2': game.get('team2', ''),
-                'team1_abbrev': TEAM_ABBREV.get(game.get('team1', ''), ''),
-                'team2_abbrev': TEAM_ABBREV.get(game.get('team2', ''), ''),
-                'points1': game.get('points1', 0),
-                'points2': game.get('points2', 0),
-                'winner': game_winner,
-                'player_picks': player_picks_dict,
-            })
+    try:
+        next_lb = WeeklyLeaderboard.objects.get(week=week + 1)
+        week_scores = {e['username']: e['score'] for e in next_lb.entries}
+    except WeeklyLeaderboard.DoesNotExist:
+        # Most recent week: next snapshot doesn't exist yet, use live profile scores
+        week_scores = {u.username: round(u.profile.score, 1)
+                       for u in User.objects.select_related('profile').all()}
 
-        try:
-            lb = WeeklyLeaderboard.objects.get(week=h.week)
-            week_scores = {e['username']: e['score'] for e in lb.entries}
-        except WeeklyLeaderboard.DoesNotExist:
-            week_scores = {}
+    games_data = [{
+        'id': g.id,
+        'team1': g.team1,
+        'team1_abbrev': g.team1_abbrev,
+        'team2': g.team2,
+        'team2_abbrev': g.team2_abbrev,
+        'points1': g.points1,
+        'points2': g.points2,
+        'winner': g.winner,
+        'home_team': g.home_team,
+        'game_dt_iso': g.game_dt_iso,
+    } for g in games]
 
-        player_stats_list = sorted(
-            [{'player': p, 'correct': v['correct'], 'points': round(v['points'], 1),
-              'games': v['games'], 'week_total': week_scores.get(p, 0)}
-             for p, v in player_stats.items()],
-            key=lambda x: x['week_total'], reverse=True
-        )
+    all_usernames = list(User.objects.order_by('username').values_list('username', flat=True))
 
-        history_data.append({
-            'week': h.week,
-            'games': games_structured,
-            'players': players_list,
-            'player_stats': player_stats_list,
+    rank_after  = {u: i + 1 for i, (u, _) in enumerate(sorted(week_scores.items(),  key=lambda x: x[1], reverse=True))}
+    rank_before = {u: i + 1 for i, (u, _) in enumerate(sorted(pre_scores.items(), key=lambda x: x[1], reverse=True))}
+
+    players_data = []
+    for username in all_usernames:
+        user_picks = picks_by_user_game.get(username, {})
+        correct = sum(1 for p in user_picks.values() if p['correct'])
+        total = len(user_picks)
+        after = week_scores.get(username, 0)
+        before = pre_scores.get(username, 0)
+        ra = rank_after.get(username)
+        rb = rank_before.get(username)
+        rank_change = (rb - ra) if (ra and rb) else 0
+        players_data.append({
+            'username': username,
+            'week_total': after,
+            'week_gained': round(after - before, 1),
+            'rank': ra,
+            'rank_change': rank_change,
+            'correct': correct,
+            'total': total,
+            'picks': {str(gid): info for gid, info in user_picks.items()},
         })
+    players_data.sort(key=lambda x: x['week_total'], reverse=True)
 
-    leaderboards = WeeklyLeaderboard.objects.all()
-    chart_players = [p.username for p in players]
+    settings = SiteSettings.get()
+    picks_locked = week < settings.week or (week == settings.week and settings.lock_picks)
 
-    points_chart = [['Week'] + chart_players]
-    position_chart = [['Week'] + chart_players]
-
-    for lb in leaderboards:
-        score_map = {e['username']: e['score'] for e in lb.entries}
-        sorted_lb = sorted(lb.entries, key=lambda x: x['score'], reverse=True)
-        rank_map = {e['username']: i + 1 for i, e in enumerate(sorted_lb)}
-
-        points_chart.append([str(lb.week)] + [score_map.get(u, 0) for u in chart_players])
-        position_chart.append([str(lb.week)] + [rank_map.get(u, len(chart_players)) for u in chart_players])
-
-    return render(request, 'main/pickhistory.html', {
-        'history_data': history_data,
-        'points_chart': json.dumps(points_chart),
-        'position_chart': json.dumps(position_chart),
-        'chart_players': chart_players,
-        'week': settings.week,
+    return JsonResponse({
+        'week': week,
+        'picks_locked': picks_locked,
+        'recap': recap,
+        'games': games_data,
+        'players': players_data,
     })
 
 
@@ -537,7 +633,7 @@ def preseason(request):
         request.user.profile.preseason_submitted = True
         request.user.save()
         messages.success(request, 'Preseason picks saved!')
-        return redirect('main:home', week=1)
+        return redirect('main:home')
     return render(request, 'main/preseason.html', {'form': form, 'week': settings.week})
 
 
@@ -685,6 +781,7 @@ def pickdash(request):
                 points2=points2,
                 home_team=d['favorite_is_home'],
                 game_dt=None,
+                week=settings.week,
             )
             messages.success(request, 'Game added.')
 
@@ -702,8 +799,9 @@ def pickdash(request):
         game.save()
 
     elif 'delete_all_games' in request.POST:
-        Game.objects.all().delete()
-        Pick.objects.all().delete()
+        current_games = Game.objects.filter(week=settings.week)
+        Pick.objects.filter(game__in=current_games).delete()
+        current_games.delete()
 
     elif 'toggle_publish' in request.POST:
         settings.publish = not settings.publish
@@ -721,7 +819,7 @@ def pickdash(request):
         settings.multiplier = new_mult
         settings.save()
         ratio = new_mult / old_mult
-        for game in Game.objects.all():
+        for game in Game.objects.filter(week=settings.week):
             game.points1 = round(game.points1 * ratio, 2)
             game.points2 = round(game.points2 * ratio, 2)
             game.save()
@@ -804,7 +902,11 @@ def pickdash(request):
             team1 = ABBREV_TO_TEAM.get(g[0], g[0])
             team2 = ABBREV_TO_TEAM.get(g[1], g[1])
             game_id = g[5]
-            if Game.objects.filter(Q(game_id=game_id) | Q(team1=team1, team2=team2)).exists():
+            # Scope the duplicate check to this week — games persist across
+            # weeks now, and division rivals play the same matchup twice.
+            if Game.objects.filter(week=settings.week).filter(
+                Q(game_id=game_id) | Q(team1=team1, team2=team2)
+            ).exists():
                 dupes += 1
                 continue
             ug_ml, fav_ml = g[2], g[3]
@@ -812,12 +914,17 @@ def pickdash(request):
             Game.objects.create(
                 team1=team1, team2=team2,
                 points1=float(settings.multiplier), points2=pts2,
-                home_team=g[4], game_id=game_id, game_dt=g[6]
+                home_team=g[4], game_id=game_id, game_dt=g[6],
+                week=settings.week,
             )
             added += 1
         from django.db.models import Min
         from datetime import timedelta as _td2
-        first_dt = Game.objects.filter(game_dt__isnull=False).aggregate(Min('game_dt'))['game_dt__min']
+        # Only this week's kickoffs — otherwise the earliest game of the whole
+        # season wins and the auto-lock time lands in the past.
+        first_dt = Game.objects.filter(
+            week=settings.week, game_dt__isnull=False
+        ).aggregate(Min('game_dt'))['game_dt__min']
         settings.first_game_dt = first_dt
         if first_dt and settings.lock_mode == 'offset' and settings.auto_lock_offset_minutes:
             settings.auto_lock_dt = first_dt - _td2(minutes=settings.auto_lock_offset_minutes)
@@ -843,66 +950,31 @@ def pickdash(request):
         _today = _date.today()
         _default_year = _today.year if _today.month >= 9 else _today.year - 1
         year = int(request.POST.get('scrape_year', _default_year)) or None
-        results = scrape.grade(week=week, api_type=api, year=year)
-        graded_count = 0
-        for game in Game.objects.all():
-            for r in results:
-                game_id, outcome, home_abbrev, away_abbrev = r[0], r[1], r[2], r[3]
-                if game.game_id and game.game_id == game_id:
-                    if outcome == 'home':
-                        game.winner = 'team2' if game.home_team else 'team1'
-                    elif outcome == 'away':
-                        game.winner = 'team1' if game.home_team else 'team2'
-                    else:
-                        game.winner = 'tie'
-                    game.graded = True
-                    game.save()
-                    graded_count += 1
-                    break
+        # Reuse the auto-pilot grader: it scopes to a single week's ungraded
+        # games and falls back to team abbreviations when game ids differ
+        # between nfl-data-py and ESPN.
+        from .auto import do_grade
+        graded_count = do_grade(settings, year=year, week=week)
         messages.success(request, f'Graded {graded_count} game(s) for week {week}.')
 
     elif 'nextweek' in request.POST:
-        games = Game.objects.all()
-        players = User.objects.select_related('profile').all()
+        games = list(Game.objects.filter(week=settings.week))
+        players = list(User.objects.select_related('profile').all())
         all_picks = {(p.user_id, p.game_id): p for p in Pick.objects.filter(game__in=games)}
 
         lb_entries = [{'username': p.username, 'score': round(p.profile.score, 1)} for p in players]
         WeeklyLeaderboard.objects.update_or_create(week=settings.week, defaults={'entries': lb_entries})
 
-        games_data = []
-        players_list = [p.username for p in players]
         max_score = 0
-
         for g in games:
-            player_picks = {}
             for p in players:
                 pick = all_picks.get((p.id, g.id))
-                if pick:
-                    correct = pick.is_correct
-                    pts = pick.points_earned if correct else 0
-                    if correct:
-                        p.profile.score += pts
-                    player_picks[p.username] = {
-                        'pick': pick.choice, 'correct': bool(correct), 'points': pts
-                    }
-                else:
-                    player_picks[p.username] = {'pick': None, 'correct': False, 'points': 0}
-
+                if pick and pick.is_correct:
+                    p.profile.score += pick.points_earned
             if g.winner == 'team1':
                 max_score += g.points1
             elif g.winner == 'team2':
                 max_score += g.points2
-
-            games_data.append({
-                'team1': g.team1, 'team2': g.team2,
-                'points1': g.points1, 'points2': g.points2,
-                'winner': g.winner, 'player_picks': player_picks,
-            })
-
-        History.objects.update_or_create(
-            week=settings.week,
-            defaults={'games_data': games_data, 'players_list': players_list}
-        )
 
         for p in players:
             prev_score = next((e['score'] for e in lb_entries if e['username'] == p.username), 0)
@@ -911,8 +983,6 @@ def pickdash(request):
             p.save()
 
         completed_week = settings.week
-        Pick.objects.all().delete()
-        Game.objects.all().delete()
         settings.week += 1
         settings.scrape_week = settings.week
         settings.publish = False
@@ -928,6 +998,7 @@ def pickdash(request):
             settings.refresh_from_db()
             settings.weekly_recap = recap
             settings.save()
+            WeeklyLeaderboard.objects.filter(week=completed_week).update(recap=recap)
 
         messages.success(request, f'Advanced to week {settings.week}.')
 
@@ -952,7 +1023,6 @@ def pickdash(request):
             p.save()
         Pick.objects.all().delete()
         Game.objects.all().delete()
-        History.objects.all().delete()
         WeeklyLeaderboard.objects.all().delete()
         Announcement.objects.all().delete()
         settings.week = 1
@@ -970,7 +1040,7 @@ def pickdash(request):
             p.profile.save()
         messages.success(request, 'New season started.')
 
-    games = Game.objects.order_by('graded', 'id')
+    games = Game.objects.filter(week=settings.week).order_by('graded', 'id')
     all_graded = all(g.graded for g in games) if games else False
     save_season_form = forms.SaveSeasonForm()
     from datetime import date as _date
@@ -1013,6 +1083,7 @@ def pickdash(request):
         'games': games,
         'settings': settings,
         'all_graded': all_graded,
+        'week_type': scrape.get_week_type(settings.week, allow_network=False),
         'api_options': [('nfl_data_py', 'NFL Data Py'), ('espn', 'ESPN API')],
         'scrape_year': default_scrape_year,
         'weekday_options': weekday_options,
@@ -1191,9 +1262,15 @@ def devtools(request):
 
         return redirect('main:devtools')
 
+    import json as _json
     from . import sim as sim_module
     bots = User.objects.select_related('profile').filter(profile__is_bot=True).order_by('username')
-    return render(request, 'main/devtools.html', {'bots': bots, 'sim_status': sim_module.get_status()})
+    sim_status = sim_module.get_status()
+    return render(request, 'main/devtools.html', {
+        'bots': bots,
+        'sim_status': sim_status,
+        'sim_status_json': _json.dumps(sim_status),
+    })
 
 
 @staff_member_required

@@ -1,13 +1,15 @@
 """
 python manage.py seed_bots
 
-Creates 15 bot players with randomised retroactive history.
-Safe to run multiple times — skips bots that already exist.
+Creates 15 bot players and back-fills them into every completed week.
+Safe to run multiple times — skips bots and picks that already exist.
 """
 import random
+from collections import defaultdict
+
 from django.core.management.base import BaseCommand
 from django.contrib.auth.models import User
-from main.models import History, WeeklyLeaderboard, SiteSettings
+from main.models import Game, Pick, WeeklyLeaderboard, SiteSettings
 
 BOTS = [
     ('bot_hal',      'HAL 9000',   '#ef4444'),
@@ -47,52 +49,49 @@ class Command(BaseCommand):
             p.theme = theme
             p.is_bot = True
             p.score = 0
+            p.preseason_submitted = True
             p.save()
             bots.append(user)
 
-        # Retroactively add bot picks to each history week
+        current_week = SiteSettings.get().week
         cumulative = {u.username: 0.0 for u in bots}
 
-        for hist in History.objects.order_by('week'):
-            modified = False
-            for game in hist.games_data:
-                if not game.get('graded'):
-                    continue
-                points1 = game.get('points1', 1.0)
-                points2 = game.get('points2', 1.0)
-                winner  = game.get('winner', '')
-                pp = game.setdefault('player_picks', {})
+        # Which (bot, game) pairs already have a pick, so reruns are no-ops.
+        bot_ids = [b.id for b in bots]
+        existing = set(
+            Pick.objects.filter(user_id__in=bot_ids).values_list('user_id', 'game_id')
+        )
 
+        games_by_week = defaultdict(list)
+        for game in Game.objects.filter(week__lt=current_week, graded=True):
+            games_by_week[game.week].append(game)
+
+        for week in sorted(games_by_week):
+            new_picks = []
+            for game in games_by_week[week]:
                 for bot in bots:
-                    if bot.username in pp:
-                        continue  # already has a pick
-                    choice  = random.choice(['team1', 'team2'])
-                    correct = (choice == winner)
-                    pts     = (points1 if choice == 'team1' else points2) if correct else 0.0
-                    pp[bot.username] = {
-                        'choice': choice,
-                        'correct': correct,
-                        'points': round(pts, 2),
-                        'team_picked': game.get('team1' if choice == 'team1' else 'team2', ''),
-                    }
-                    cumulative[bot.username] = round(cumulative[bot.username] + pts, 2)
-                    modified = True
-
-            if modified:
-                hist.save()
+                    if (bot.id, game.id) in existing:
+                        # Already picked — still count it toward the running total.
+                        continue
+                    choice = random.choice(['team1', 'team2'])
+                    new_picks.append(Pick(user=bot, game=game, choice=choice))
+                    if choice == game.winner:
+                        pts = game.points1 if choice == 'team1' else game.points2
+                        cumulative[bot.username] = round(cumulative[bot.username] + pts, 2)
+            Pick.objects.bulk_create(new_picks, batch_size=500)
 
             # Rebuild WeeklyLeaderboard entries to include bots
             try:
-                lb = WeeklyLeaderboard.objects.get(week=hist.week)
-                existing = {e['username']: e['score'] for e in lb.entries}
+                lb = WeeklyLeaderboard.objects.get(week=week)
+                entries = {e['username']: e['score'] for e in lb.entries}
                 for bot in bots:
-                    existing[bot.username] = cumulative[bot.username]
-                lb.entries = [{'username': k, 'score': v} for k, v in existing.items()]
+                    entries[bot.username] = cumulative[bot.username]
+                lb.entries = [{'username': k, 'score': v} for k, v in entries.items()]
                 lb.save()
             except WeeklyLeaderboard.DoesNotExist:
                 pass
 
-            self.stdout.write(f'  Week {hist.week} updated')
+            self.stdout.write(f'  Week {week} updated ({len(new_picks)} picks added)')
 
         # Set final scores on profiles
         for bot in bots:

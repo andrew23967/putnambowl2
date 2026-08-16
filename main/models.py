@@ -59,6 +59,7 @@ class Game(models.Model):
     home_team = models.BooleanField(default=True, help_text='True = team2 is home')
     game_id = models.CharField(max_length=50, blank=True, default='')
     game_dt = models.DateTimeField(null=True, blank=True)
+    week = models.IntegerField(default=1)
 
     @property
     def game_dt_iso(self):
@@ -120,22 +121,11 @@ class Pick(models.Model):
         return self.game.points1 if self.choice == 'team1' else self.game.points2
 
 
-class History(models.Model):
-    week = models.IntegerField(default=1, unique=True)
-    games_data = models.JSONField(default=list)
-    players_list = models.JSONField(default=list)
-
-    class Meta:
-        ordering = ['week']
-        verbose_name_plural = 'Histories'
-
-    def __str__(self):
-        return f'Week {self.week}'
-
 
 class WeeklyLeaderboard(models.Model):
     week = models.IntegerField(default=1, unique=True)
     entries = models.JSONField(default=list)
+    recap = models.TextField(blank=True, default='')
 
     class Meta:
         ordering = ['week']

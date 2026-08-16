@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Game, Pick, SiteSettings, History, WeeklyLeaderboard, Announcement, Bug, SeasonRecord
+from .models import Game, Pick, SiteSettings, WeeklyLeaderboard, Announcement, Bug, SeasonRecord
 
 
 @admin.register(SiteSettings)
@@ -9,8 +9,8 @@ class SiteSettingsAdmin(admin.ModelAdmin):
 
 @admin.register(Game)
 class GameAdmin(admin.ModelAdmin):
-    list_display = ['team1', 'team2', 'points1', 'points2', 'winner', 'graded', 'game_dt']
-    list_filter = ['graded']
+    list_display = ['week', 'team1', 'team2', 'points1', 'points2', 'winner', 'graded', 'game_dt']
+    list_filter = ['graded', 'week']
 
 
 @admin.register(Pick)
@@ -19,10 +19,6 @@ class PickAdmin(admin.ModelAdmin):
     list_filter = ['choice']
     search_fields = ['user__username']
 
-
-@admin.register(History)
-class HistoryAdmin(admin.ModelAdmin):
-    list_display = ['week']
 
 
 @admin.register(WeeklyLeaderboard)

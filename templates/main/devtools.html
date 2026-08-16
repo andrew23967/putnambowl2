@@ -214,7 +214,7 @@ function updateStatus(s) {
 }
 
 // Init from server-rendered status
-updateStatus({{ sim_status|safe }});
+updateStatus({{ sim_status_json|safe }});
 {% if sim_status.running %}startPolling();{% endif %}
 </script>
 {% endblock %}

@@ -2,9 +2,9 @@ import logging
 from datetime import datetime, timezone, timedelta
 
 from django.contrib.auth.models import User
-from django.db.models import Q
+from django.db.models import Q, Prefetch
 
-from .models import SiteSettings, Game, Pick, History, WeeklyLeaderboard
+from .models import SiteSettings, Game, Pick, WeeklyLeaderboard
 from .teams import ABBREV_TO_TEAM, TEAM_ABBREV
 from . import scrape as scrape_module
 
@@ -52,37 +52,33 @@ def _this_or_next_weekday_hour(weekday, hour, minute=0):
 
 def build_recap(week):
     """Generate recap text for the given week using Gemini. Falls back to template if unavailable."""
-    try:
-        hist = History.objects.get(week=week)
-    except History.DoesNotExist:
+    games = list(Game.objects.filter(week=week).prefetch_related(
+        Prefetch('picks', queryset=Pick.objects.select_related('user'))
+    ))
+    if not games:
         return None
 
-    games_data = hist.games_data
     player_scores = {}
-    for g in games_data:
-        for username, pd in g.get('player_picks', {}).items():
-            player_scores[username] = round(player_scores.get(username, 0) + pd.get('points', 0), 1)
+    game_lines = []
+    for g in games:
+        t1, t2 = g.team1, g.team2
+        p1, p2 = g.points1, g.points2
+        winner = t1 if g.winner == 'team1' else (t2 if g.winner == 'team2' else 'Tie')
+        pick_strs = []
+        for pick in g.picks.all():
+            pts = pick.points_earned if pick.is_correct else 0
+            player_scores[pick.user.username] = round(
+                player_scores.get(pick.user.username, 0) + pts, 1
+            )
+            pick_strs.append(f"{pick.user.username}→{pick.choice or 'no pick'}")
+        game_lines.append(f'{t1} ({p1}pts) vs {t2} ({p2}pts) — winner: {winner} | picks: {", ".join(pick_strs)}')
 
     ranked = sorted(player_scores.items(), key=lambda x: -x[1])
     if not ranked:
         return None
 
-    # Build a structured summary to feed to Gemini
     league_avg = round(sum(s for _, s in ranked) / len(ranked), 1)
     standings_str = '\n'.join(f'{i+1}. {name}: {pts} pts' for i, (name, pts) in enumerate(ranked))
-
-    game_lines = []
-    for g in games_data:
-        winner_key = g.get('winner')
-        t1, t2 = g.get('team1', ''), g.get('team2', '')
-        p1, p2 = g.get('points1', 0), g.get('points2', 0)
-        winner = t1 if winner_key == 'team1' else (t2 if winner_key == 'team2' else 'Tie')
-        picks = ', '.join(
-            f"{u}→{pd.get('pick') or 'no pick'}"
-            for u, pd in g.get('player_picks', {}).items()
-        )
-        game_lines.append(f'{t1} ({p1}pts) vs {t2} ({p2}pts) — winner: {winner} | picks: {picks}')
-
     games_str = '\n'.join(game_lines)
 
     prompt = f"""You are the commissioner of a private NFL pick'em fantasy league called PutnamBowl.
@@ -155,19 +151,36 @@ Write a short introduction (2-3 sentences) to kick off the new season. Introduce
             "and post a recap here after each week's games are complete.")
 
 
-def make_bot_picks():
-    """Create picks for all bot users based on their underdog percentage."""
+def make_bot_picks(week=None):
+    """Create picks for all bot users based on their underdog percentage.
+
+    Scoped to a single week — picking across every game ever would retroactively
+    add bot picks to completed weeks and rewrite league history.
+    """
     import random as _random
-    bots = User.objects.select_related('profile').filter(profile__is_bot=True)
-    games = list(Game.objects.all())
+    week = SiteSettings.get().week if week is None else week
+    bots = list(User.objects.select_related('profile').filter(profile__is_bot=True))
+    games = list(Game.objects.filter(week=week))
+    if not bots or not games:
+        return
+
+    bot_ids = [b.id for b in bots]
+    existing = set(
+        Pick.objects.filter(user_id__in=bot_ids, game__week=week)
+        .values_list('user_id', 'game_id')
+    )
+
+    new_picks = []
     for bot in bots:
         pct = bot.profile.bot_underdog_pct
         for game in games:
-            if Pick.objects.filter(user=bot, game=game).exists():
+            if (bot.id, game.id) in existing:
                 continue
             choice = 'team2' if _random.randint(1, 100) <= pct else 'team1'
-            Pick.objects.create(user=bot, game=game, choice=choice)
-    log.info('Bot picks created for %s bots across %s games', len(bots), len(games))
+            new_picks.append(Pick(user=bot, game=game, choice=choice))
+    Pick.objects.bulk_create(new_picks, batch_size=500)
+    log.info('Bot picks: %s created for %s bots across %s games in week %s',
+             len(new_picks), len(bots), len(games), week)
 
 
 def _game_day_in_filter(game_dt, from_day, to_day, tz_str='UTC'):
@@ -188,6 +201,13 @@ def _game_day_in_filter(game_dt, from_day, to_day, tz_str='UTC'):
 
 def do_scrape_and_publish(settings, year=None):
     year = year or _current_season_year()
+
+    week_type = scrape_module.get_week_type(settings.week, year)
+    auto_multiplier = {'regular': 1, 'playoffs': 2, 'superbowl': 4}[week_type]
+    if settings.multiplier != auto_multiplier:
+        log.info('Auto: multiplier → %sx (%s, week %s)', auto_multiplier, week_type, settings.week)
+        settings.multiplier = auto_multiplier
+
     games_data = scrape_module.scrape(week=settings.week, api_type=settings.grade_api, year=year)
     from_day = settings.scrape_filter_from_day
     to_day = settings.scrape_filter_to_day
@@ -199,7 +219,11 @@ def do_scrape_and_publish(settings, year=None):
         team1 = ABBREV_TO_TEAM.get(g[0], g[0])
         team2 = ABBREV_TO_TEAM.get(g[1], g[1])
         game_id = g[5]
-        if Game.objects.filter(Q(game_id=game_id) | Q(team1=team1, team2=team2)).exists():
+        # Scope to this week — games persist across weeks now, and division
+        # rivals play the same matchup twice a season.
+        if Game.objects.filter(week=settings.week).filter(
+            Q(game_id=game_id) | Q(team1=team1, team2=team2)
+        ).exists():
             continue
         ug_ml, fav_ml = g[2], g[3]
         pts2 = (_calculate_points(ug_ml, abs(fav_ml)) * settings.multiplier
@@ -207,7 +231,8 @@ def do_scrape_and_publish(settings, year=None):
         Game.objects.create(
             team1=team1, team2=team2,
             points1=float(settings.multiplier), points2=pts2,
-            home_team=g[4], game_id=game_id, game_dt=game_dt
+            home_team=g[4], game_id=game_id, game_dt=game_dt,
+            week=settings.week,
         )
         added += 1
 
@@ -219,7 +244,7 @@ def do_scrape_and_publish(settings, year=None):
     settings.edit = False
     settings.save()
     log.info('Auto scrape+publish: week %s, %s games added, first kickoff %s', settings.week, added, first_dt)
-    make_bot_picks()
+    make_bot_picks(week=settings.week)
 
     try:
         from .email_utils import send_picks_published_email
@@ -238,11 +263,12 @@ def do_lock_picks(settings):
     log.info('Auto: picks locked for week %s', settings.week)
 
 
-def do_grade(settings, year=None):
+def do_grade(settings, year=None, week=None):
     year = year or _current_season_year()
-    results = scrape_module.grade(week=settings.week, api_type=settings.grade_api, year=year)
+    week = settings.week if week is None else week
+    results = scrape_module.grade(week=week, api_type=settings.grade_api, year=year)
     graded = 0
-    for game in Game.objects.filter(graded=False):
+    for game in Game.objects.filter(week=week, graded=False):
         for r in results:
             game_id, outcome, home_abbrev, away_abbrev = r[0], r[1], r[2], r[3]
             # Primary: game_id match
@@ -265,60 +291,36 @@ def do_grade(settings, year=None):
             graded += 1
             break
     if graded:
-        log.info('Auto: graded %s game(s) for week %s', graded, settings.week)
+        log.info('Auto: graded %s game(s) for week %s', graded, week)
     return graded
 
 
 def do_advance_week(settings):
-    games = list(Game.objects.all())
+    games = list(Game.objects.filter(week=settings.week))
     players = list(User.objects.select_related('profile').all())
     all_picks = {(p.user_id, p.game_id): p for p in Pick.objects.filter(game__in=games)}
 
     lb_entries = [{'username': p.username, 'score': round(p.profile.score, 1)} for p in players]
     WeeklyLeaderboard.objects.update_or_create(week=settings.week, defaults={'entries': lb_entries})
 
-    games_data = []
-    players_list = [p.username for p in players]
     max_score = 0
-
     for g in games:
-        player_picks = {}
         for p in players:
             pick = all_picks.get((p.id, g.id))
-            if pick:
-                correct = pick.is_correct
-                pts = pick.points_earned if correct else 0
-                if correct:
-                    p.profile.score += pts
-                player_picks[p.username] = {'pick': pick.choice, 'correct': bool(correct), 'points': pts}
-            else:
-                player_picks[p.username] = {'pick': None, 'correct': False, 'points': 0}
-
+            if pick and pick.is_correct:
+                p.profile.score += pick.points_earned
         if g.winner == 'team1':
             max_score += g.points1
         elif g.winner == 'team2':
             max_score += g.points2
 
-        games_data.append({
-            'team1': g.team1, 'team2': g.team2,
-            'points1': g.points1, 'points2': g.points2,
-            'winner': g.winner, 'player_picks': player_picks,
-        })
-
-    History.objects.update_or_create(
-        week=settings.week,
-        defaults={'games_data': games_data, 'players_list': players_list}
-    )
-
     for p in players:
         prev_score = next((e['score'] for e in lb_entries if e['username'] == p.username), 0)
         if round(p.profile.score - prev_score, 1) == round(max_score, 1):
             p.profile.score += 10
-        p.save()  # triggers post_save signal which saves profile
+        p.save()
 
     completed_week = settings.week
-    Pick.objects.all().delete()
-    Game.objects.all().delete()
     settings.week += 1
     settings.scrape_week = settings.week
     settings.publish = False
@@ -336,6 +338,7 @@ def do_advance_week(settings):
         settings.refresh_from_db()
         settings.weekly_recap = recap
         settings.save()
+        WeeklyLeaderboard.objects.filter(week=completed_week).update(recap=recap)
 
     log.info('Auto: advanced to week %s', settings.week)
 
@@ -362,7 +365,7 @@ def auto_tick():
 
     # 3. Grade while locked; advance when all done
     if settings.lock_picks:
-        games = list(Game.objects.all())
+        games = list(Game.objects.filter(week=settings.week))
         if games and not all(g.graded for g in games):
             do_grade(settings)
         elif games and all(g.graded for g in games):

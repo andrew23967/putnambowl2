@@ -55,7 +55,7 @@ def send_picks_published_email(site_settings):
         .exclude(profile__is_bot=True)
         .values_list('email', flat=True)
     )
-    print(f'[email] recipients: {recipients}', flush=True)
+    print(f'[email] {len(recipients)} recipient(s)', flush=True)
     if not recipients:
         print('[email] No recipients — skipping.', flush=True)
         return
@@ -63,7 +63,8 @@ def send_picks_published_email(site_settings):
     week = site_settings.week
     site_url = getattr(django_settings, 'SITE_URL', 'http://localhost:8000')
     from_email = getattr(django_settings, 'RESEND_FROM', 'onboarding@resend.dev')
-    picks_url = f'{site_url}/picks/'
+    # Picks are made inline on the home page; /picks/ is the legacy form.
+    picks_url = f'{site_url.rstrip("/")}/home/'
 
     lock_line = ''
     if site_settings.auto_lock_dt:
@@ -87,18 +88,27 @@ def send_picks_published_email(site_settings):
     )
 
     def _send():
+        # One message per recipient. Putting the whole league in a single `to`
+        # would disclose every member's address to everyone else.
         try:
             import resend
             resend.api_key = api_key
-            print(f'[email] attempting send to {recipients}', flush=True)
-            resend.Emails.send({
-                'from': from_email,
-                'to': recipients,
-                'subject': subject,
-                'text': body,
-            })
-            print(f'[email] sent OK to {len(recipients)} recipients for week {week}', flush=True)
         except Exception as e:
-            print(f'[email] FAILED: {e}', flush=True)
+            print(f'[email] FAILED to init resend: {e}', flush=True)
+            return
+
+        sent = 0
+        for address in recipients:
+            try:
+                resend.Emails.send({
+                    'from': from_email,
+                    'to': [address],
+                    'subject': subject,
+                    'text': body,
+                })
+                sent += 1
+            except Exception as e:
+                print(f'[email] FAILED for one recipient: {e}', flush=True)
+        print(f'[email] sent OK to {sent}/{len(recipients)} recipients for week {week}', flush=True)
 
     threading.Thread(target=_send, daemon=True).start()

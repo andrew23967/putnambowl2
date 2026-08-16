@@ -209,6 +209,18 @@
     /* Overrides for Tailwind-generated classes we still use */
     .text-muted { color: var(--muted2); }
     .text-dim   { color: var(--muted); }
+
+    /* Nav week slider */
+    #nav-week-slider { -webkit-appearance:none;appearance:none;width:100%;height:3px;border-radius:2px;outline:none;cursor:pointer; }
+    #nav-week-slider::-webkit-slider-thumb { -webkit-appearance:none;width:11px;height:11px;border-radius:50%;background:var(--accent);cursor:pointer; }
+    #nav-week-slider::-moz-range-thumb { width:11px;height:11px;border-radius:50%;background:var(--accent);cursor:pointer;box-sizing:border-box;border:none; }
+    /* Phones get the slider too — it is the only way to reach past weeks.
+       Give the thumb a finger-sized target. */
+    @media (max-width:640px) {
+      #nav-week-slider { height:4px; }
+      #nav-week-slider::-webkit-slider-thumb { width:18px;height:18px; }
+      #nav-week-slider::-moz-range-thumb { width:18px;height:18px; }
+    }
   </style>
   {% block extra_head %}{% endblock %}
 </head>
@@ -220,7 +232,7 @@
     <div style="display:flex;align-items:center;height:52px;gap:8px;">
 
       <!-- Logo -->
-      <a href="{% url 'main:home' week=settings.week|default:1 %}" style="display:flex;align-items:center;gap:8px;margin-right:16px;text-decoration:none;">
+      <a href="{% url 'main:home' %}" style="display:flex;align-items:center;gap:8px;margin-right:16px;text-decoration:none;">
         <svg width="24" height="27" viewBox="0 0 24 27" fill="none" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0;">
           <!-- Bowl body -->
           <path d="M3 7 C4 13 7 18 11 18 L13 18 C17 18 20 13 21 7 Z" fill="url(#pb-lg1)"/>
@@ -267,7 +279,9 @@
       {% if request.user.is_authenticated %}
       <!-- Desktop links -->
       <div class="hidden-mobile" style="display:flex;align-items:center;gap:2px;flex:1;">
-        <a href="{% url 'main:home' week=settings.week|default:1 %}" class="nav-link">Home</a>
+        <a href="{% url 'main:home' %}" class="nav-link">Home</a>
+        <a href="{% url 'main:pick_history' %}" class="nav-link">Pick History</a>
+        <a href="{% url 'main:analytics' %}" class="nav-link">Analytics</a>
         <a href="{% url 'main:rules' %}" class="nav-link">Rules</a>
         <a href="{% url 'main:montecarlo' %}" class="nav-link">Strategy</a>
         {% if request.user.is_staff %}
@@ -277,11 +291,11 @@
             <svg width="10" height="10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>
           </button>
           <div class="dropdown" style="left:0;">
-            <a href="{% url 'main:pickdash' %}"><span>🎮</span> Pick Dashboard</a>
-            <a href="{% url 'main:accountdash' %}"><span>👥</span> Accounts</a>
-            <a href="{% url 'main:announcements' %}"><span>📢</span> Announcements</a>
-            <a href="{% url 'main:montecarlo' %}"><span>📊</span> Strategy</a>
-            <a href="{% url 'main:devtools' %}"><span>🛠</span> Developer Tools</a>
+            <a href="{% url 'main:pickdash' %}">Pick Dashboard</a>
+            <a href="{% url 'main:accountdash' %}">Accounts</a>
+            <a href="{% url 'main:announcements' %}">Announcements</a>
+            <a href="{% url 'main:montecarlo' %}">Strategy</a>
+            <a href="{% url 'main:devtools' %}">Developer Tools</a>
           </div>
         </div>
         {% endif %}
@@ -298,9 +312,9 @@
             <span style="font-size:.8125rem;font-weight:500;color:var(--muted2);">{{ request.user.username }}</span>
           </button>
           <div class="dropdown" style="right:0;">
-            <a href="{% url 'accounts:user_profile' %}"><span>👤</span> My Profile</a>
+            <a href="{% url 'accounts:user_profile' %}">My Profile</a>
             <div style="height:1px;background:var(--border);margin:4px 0;"></div>
-            <a href="{% url 'accounts:logout' %}" style="color:#f87171!important;"><span>↩</span> Logout</a>
+            <a href="{% url 'accounts:logout' %}" style="color:#f87171!important;">Logout</a>
           </div>
         </div>
       </div>
@@ -325,11 +339,21 @@
     </div>
   </div>
 
+  <!-- Nav week slider -->
+  <div id="nav-slider-row" style="display:none;border-top:1px solid var(--border);">
+    <div style="max-width:1280px;margin:0 auto;padding:0 24px;height:32px;display:flex;align-items:center;gap:12px;">
+      <input type="range" id="nav-week-slider" min="1" max="18" value="18" style="flex:1;">
+      <span id="nav-week-label" style="font-size:.625rem;font-weight:700;color:var(--accent);min-width:22px;text-align:right;white-space:nowrap;">W18</span>
+    </div>
+  </div>
+
   <!-- Mobile menu -->
   {% if request.user.is_authenticated %}
   <div id="mobile-menu" style="border-top:1px solid var(--border);padding:8px 16px 12px;">
     <div style="display:flex;flex-direction:column;gap:2px;">
-      <a href="{% url 'main:home' week=settings.week|default:1 %}" class="nav-link">Home</a>
+      <a href="{% url 'main:home' %}" class="nav-link">Home</a>
+      <a href="{% url 'main:pick_history' %}" class="nav-link">Pick History</a>
+      <a href="{% url 'main:analytics' %}" class="nav-link">Analytics</a>
       <a href="{% url 'main:rules' %}" class="nav-link">Rules</a>
       <a href="{% url 'main:montecarlo' %}" class="nav-link">Simulation</a>
       {% if request.user.is_staff %}
@@ -410,6 +434,37 @@ function _syncThemeIcons() {
   document.querySelectorAll('.theme-icon-el').forEach(el => { el.textContent = light ? '🌙' : '☀️'; });
 }
 document.addEventListener('DOMContentLoaded', _syncThemeIcons);
+function initNavSlider(config) {
+  const row=document.getElementById('nav-slider-row');
+  const slider=document.getElementById('nav-week-slider');
+  const label=document.getElementById('nav-week-label');
+  if(!row||!slider||!label)return;
+  slider.min=config.min;
+  slider.max=config.max;
+  slider.value=config.value;
+  function wkType(w){ return w<=18?'Regular Season':w>=22?'Super Bowl':'Playoffs'; }
+  function wkLabel(w){ return 'W'+w+' '+wkType(w); }
+  label.textContent=wkLabel(config.value);
+  const accentColor=getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()||'#00897b';
+  function updateFill(){
+    const mn=+slider.min,mx=+slider.max,val=+slider.value;
+    const pct=mx>mn?((val-mn)/(mx-mn))*100:0;
+    const isLight=document.documentElement.dataset.theme==='light';
+    const fill=`color-mix(in srgb,${accentColor} 55%,transparent)`;
+    const track=isLight?'rgba(0,0,0,.15)':'rgba(255,255,255,.07)';
+    slider.style.background=`linear-gradient(to right,${fill} 0%,${fill} ${pct}%,${track} ${pct}%,${track} 100%)`;
+  }
+  updateFill();
+  slider.addEventListener('input',()=>{ label.textContent=wkLabel(+slider.value); updateFill(); });
+  slider.addEventListener('change',()=>{
+    const val=+slider.value;
+    label.textContent=wkLabel(val);
+    updateFill();
+    if(config.onChange)config.onChange(val);
+  });
+  row.style.display='';
+  document.documentElement.classList.add('nav-has-slider');
+}
 </script>
 <script>
 (function() {
@@ -431,5 +486,23 @@ document.addEventListener('DOMContentLoaded', _syncThemeIcons);
 })();
 </script>
 {% block extra_js %}{% endblock %}
+{% if request.user.is_authenticated %}
+<script>
+(function(){
+  var url='{% url "main:site_state" %}';
+  var state=null;
+  function poll(){
+    fetch(url,{credentials:'same-origin'}).then(function(r){return r.json();}).then(function(s){
+      if(!state){state=s;return;}
+      if(s.week!==state.week||s.publish!==state.publish||s.lock_picks!==state.lock_picks){
+        window.location.reload();
+      }
+    }).catch(function(){});
+  }
+  poll();
+  setInterval(poll,15000);
+})();
+</script>
+{% endif %}
 </body>
 </html>
