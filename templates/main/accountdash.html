@@ -33,6 +33,7 @@
        data-is-staff="{{ p.is_staff|yesno:'true,false' }}"
        data-is-bot="{{ p.profile.is_bot|yesno:'true,false' }}"
        data-bot-pct="{{ p.profile.bot_underdog_pct }}"
+       data-bot-strategy="{{ p.profile.bot_strategy }}"
        data-preseason="{{ p.profile.preseason_submitted|yesno:'true,false' }}">
     <div class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold"
          style="background:{{ p.profile.theme }};color:#fff;flex-shrink:0;">
@@ -79,7 +80,16 @@
       <label class="flex items-center gap-2 text-sm cursor-pointer" style="color:var(--text);"><input id="f-is-bot" type="checkbox"> Bot account</label>
       <label class="flex items-center gap-2 text-sm cursor-pointer" style="color:var(--text);"><input id="f-preseason" type="checkbox"> Preseason submitted</label>
     </div>
-    <div><label class="modal-label">Bot underdog % (0–100)</label><input id="f-bot-pct" type="number" min="0" max="100" class="modal-input" style="max-width:100px;"></div>
+    <div class="grid grid-cols-2 gap-3">
+      <div>
+        <label class="modal-label">Bot strategy</label>
+        <select id="f-bot-strategy" class="modal-input">
+          <option value="random">Random (uses underdog %)</option>
+          <option value="gemini">Gemini AI picks each game</option>
+        </select>
+      </div>
+      <div><label class="modal-label">Bot underdog % (0–100)</label><input id="f-bot-pct" type="number" min="0" max="100" class="modal-input" style="max-width:100px;"></div>
+    </div>
 
     <div style="height:1px;background:var(--border);"></div>
     <p class="text-xs font-semibold uppercase tracking-wide" style="color:var(--muted);">Profile</p>
@@ -133,6 +143,7 @@ document.querySelectorAll('.player-row').forEach(row => {
     document.getElementById('f-is-staff').checked = d.isStaff === 'true';
     document.getElementById('f-is-bot').checked = d.isBot === 'true';
     document.getElementById('f-bot-pct').value = d.botPct;
+    document.getElementById('f-bot-strategy').value = d.botStrategy || 'random';
     document.getElementById('f-preseason').checked = d.preseason === 'true';
     document.getElementById('f-real-name').value = d.realName;
     document.getElementById('f-bio').value = d.bio;
@@ -176,6 +187,7 @@ async function savePlayer() {
     afc_champ: document.getElementById('f-afc').value,
     superbowl_winner: document.getElementById('f-sb').value,
     bot_underdog_pct: document.getElementById('f-bot-pct').value,
+    bot_strategy: document.getElementById('f-bot-strategy').value,
   });
   if (document.getElementById('f-is-staff').checked) body.append('is_staff','on');
   if (document.getElementById('f-is-bot').checked) body.append('is_bot','on');

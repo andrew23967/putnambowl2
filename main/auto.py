@@ -170,17 +170,35 @@ def make_bot_picks(week=None):
         .values_list('user_id', 'game_id')
     )
 
+    # Gemini is only consulted if an AI bot actually needs picks this week, and
+    # only once for the whole slate rather than once per game.
+    ai_picks = {}
+    ai_bots = [b for b in bots if b.profile.bot_strategy == 'gemini']
+    ai_needs = [g for g in games
+                if any((b.id, g.id) not in existing for b in ai_bots)]
+    if ai_bots and ai_needs:
+        from .ai_picks import choose_picks
+        try:
+            ai_picks = choose_picks(ai_needs)
+        except Exception as e:
+            # Never let the picker stall the season.
+            log.error('AI picks failed, falling back to random: %s', e)
+            ai_picks = {}
+
     new_picks = []
     for bot in bots:
         pct = bot.profile.bot_underdog_pct
+        use_ai = bot.profile.bot_strategy == 'gemini'
         for game in games:
             if (bot.id, game.id) in existing:
                 continue
-            choice = 'team2' if _random.randint(1, 100) <= pct else 'team1'
+            choice = ai_picks.get(game.id) if use_ai else None
+            if choice is None:
+                choice = 'team2' if _random.randint(1, 100) <= pct else 'team1'
             new_picks.append(Pick(user=bot, game=game, choice=choice))
     Pick.objects.bulk_create(new_picks, batch_size=500)
-    log.info('Bot picks: %s created for %s bots across %s games in week %s',
-             len(new_picks), len(bots), len(games), week)
+    log.info('Bot picks: %s created for %s bots (%s AI) across %s games in week %s',
+             len(new_picks), len(bots), len(ai_bots), len(games), week)
 
 
 def _game_day_in_filter(game_dt, from_day, to_day, tz_str='UTC'):

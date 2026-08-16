@@ -60,7 +60,25 @@ duplicates). `main/tests.py` has regression tests for each.
 
 **WeeklyLeaderboard**: end-of-week snapshot of cumulative scores (saved by `do_advance_week`). Used for historical leaderboard views and charts since deriving scores from Pick sums is expensive.
 
-**Profile** (in `accounts`): score (running total), theme colour, preseason picks (nfc_champ, afc_champ, superbowl_winner, etc.)
+**Profile** (in `accounts`): score (running total), theme colour, preseason picks (nfc_champ, afc_champ, superbowl_winner, etc.), plus bot fields: `is_bot`, `bot_strategy`, `bot_underdog_pct`.
+
+## Bot players
+
+`make_bot_picks(week)` fills in picks for every `is_bot` profile. `bot_strategy`
+decides how:
+
+- `random` — coin flip weighted by `bot_underdog_pct`.
+- `gemini` — `main/ai_picks.py` asks Gemini to pick the whole slate in one call.
+  Used by the `putnambot` account. Create/refresh it with
+  `python manage.py create_putnambot`.
+
+`ai_picks.choose_picks()` is best-effort on purpose: it runs inside the
+auto-pilot worker, so a missing key, network error or malformed reply returns
+`{}` and the caller fills those games in randomly. **A season is never blocked by
+the model being unavailable** — but that also means a misconfigured worker
+degrades silently to random picks, so check the logs for `[ai_picks]` if
+PutnamBot's choices look arbitrary. `GEMINI_API_KEY` must be set on the *worker*
+service, not just `web`.
 
 ## Points formula
 

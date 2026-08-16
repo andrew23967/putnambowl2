@@ -736,6 +736,9 @@ def edit_player(request, user_id):
     p.afc_champ = request.POST.get('afc_champ', p.afc_champ)
     p.superbowl_winner = request.POST.get('superbowl_winner', p.superbowl_winner)
     p.is_bot = request.POST.get('is_bot') == 'on'
+    strategy = request.POST.get('bot_strategy', p.bot_strategy)
+    if strategy in dict(p.BOT_STRATEGY_CHOICES):
+        p.bot_strategy = strategy
     try:
         p.bot_underdog_pct = int(request.POST.get('bot_underdog_pct', p.bot_underdog_pct))
     except ValueError:

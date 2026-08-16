@@ -18,6 +18,14 @@ class Profile(models.Model):
     superbowl_winner = models.CharField(max_length=50, choices=TEAMS, default='Arizona Cardinals')
     unread_messages = models.IntegerField(default=0)
     is_bot = models.BooleanField(default=False)
+    BOT_STRATEGY_CHOICES = [
+        ('random', 'Random (uses underdog %)'),
+        ('gemini', 'Gemini AI picks each game'),
+    ]
+    bot_strategy = models.CharField(
+        max_length=20, choices=BOT_STRATEGY_CHOICES, default='random',
+        help_text='How this bot decides its picks. Only applies when is_bot is set.',
+    )
     bot_underdog_pct = models.IntegerField(default=50)
     preseason_submitted = models.BooleanField(default=False)
 

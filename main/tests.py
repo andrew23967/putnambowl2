@@ -130,6 +130,103 @@ class GradeScopeTests(TestCase):
         self.assertEqual(target.winner, 'team2')
 
 
+class AiPickParsingTests(TestCase):
+    """The model's reply is untrusted input arriving inside the worker."""
+
+    def setUp(self):
+        from . import ai_picks
+        self.parse = ai_picks._parse
+        self.valid = {1, 2, 3}
+
+    def test_plain_json(self):
+        self.assertEqual(
+            self.parse('{"1": "team1", "2": "team2"}', self.valid),
+            {1: 'team1', 2: 'team2'},
+        )
+
+    def test_strips_code_fences(self):
+        self.assertEqual(
+            self.parse('```json\n{"1": "team2"}\n```', self.valid),
+            {1: 'team2'},
+        )
+
+    def test_extracts_from_surrounding_prose(self):
+        self.assertEqual(
+            self.parse('Sure! Here are my picks:\n{"3": "team1"}\nGood luck.', self.valid),
+            {3: 'team1'},
+        )
+
+    def test_drops_unknown_game_ids(self):
+        self.assertEqual(self.parse('{"999": "team1"}', self.valid), {})
+
+    def test_drops_invalid_choices(self):
+        self.assertEqual(
+            self.parse('{"1": "the packers", "2": "team1"}', self.valid),
+            {2: 'team1'},
+        )
+
+    def test_garbage_returns_empty(self):
+        for junk in ('', 'no idea sorry', '{{{', None, '[1,2,3]'):
+            self.assertEqual(self.parse(junk, self.valid), {})
+
+
+class AiBotPickTests(TestCase):
+    """putnambot uses Gemini; a failure must degrade to random, never block."""
+
+    def setUp(self):
+        self.settings = SiteSettings.get()
+        self.settings.week = 2
+        self.settings.save()
+        self.bot = User.objects.create_user('putnambot')
+        self.bot.profile.is_bot = True
+        self.bot.profile.bot_strategy = 'gemini'
+        self.bot.profile.save()
+        self.g1 = make_game(week=2, team1='Chicago Bears', team2='Green Bay Packers')
+        self.g2 = make_game(week=2, team1='Miami Dolphins', team2='New York Jets')
+
+    def _patch(self, fn):
+        from . import ai_picks
+        self.addCleanup(setattr, ai_picks, 'choose_picks', ai_picks.choose_picks)
+        ai_picks.choose_picks = fn
+
+    def test_uses_gemini_choices(self):
+        self._patch(lambda games: {self.g1.id: 'team2', self.g2.id: 'team1'})
+        make_bot_picks()
+        picks = {p.game_id: p.choice for p in Pick.objects.filter(user=self.bot)}
+        self.assertEqual(picks, {self.g1.id: 'team2', self.g2.id: 'team1'})
+
+    def test_partial_response_is_filled_in(self):
+        self._patch(lambda games: {self.g1.id: 'team2'})
+        make_bot_picks()
+        picks = Pick.objects.filter(user=self.bot)
+        self.assertEqual(picks.count(), 2, 'every game must get a pick')
+        self.assertEqual(picks.get(game=self.g1).choice, 'team2')
+
+    def test_gemini_failure_falls_back_to_random(self):
+        def boom(games):
+            raise RuntimeError('gemini exploded')
+        self._patch(boom)
+        make_bot_picks()
+        self.assertEqual(Pick.objects.filter(user=self.bot).count(), 2)
+
+    def test_random_bots_never_call_gemini(self):
+        called = []
+        self._patch(lambda games: called.append(1) or {})
+        self.bot.profile.bot_strategy = 'random'
+        self.bot.profile.save()
+        make_bot_picks()
+        self.assertEqual(called, [], 'random bots must not hit the API')
+        self.assertEqual(Pick.objects.filter(user=self.bot).count(), 2)
+
+    def test_no_api_call_when_picks_already_exist(self):
+        Pick.objects.create(user=self.bot, game=self.g1, choice='team1')
+        Pick.objects.create(user=self.bot, game=self.g2, choice='team1')
+        called = []
+        self._patch(lambda games: called.append(1) or {})
+        make_bot_picks()
+        self.assertEqual(called, [], 'should not re-ask for a fully picked week')
+
+
 class ApiSplitTests(TestCase):
     """scrape_api and grade_api are independent. nfl-data-py is the only source
     with moneylines; ESPN is the only one with live scores. Driving both jobs
