@@ -159,6 +159,40 @@ railway logs --service web --deployment
 railway run --service Postgres <cmd>   # runs locally with DATABASE_PUBLIC_URL set
 ```
 
+## Importing from the original site
+
+The original site's SQLite export lives at `../db.sqlite3` (outside this repo).
+`import_old_data` moves accounts across, copying password hashes verbatim so
+members keep the passwords they already use. Existing usernames are never
+overwritten.
+
+```bash
+# preview, writes nothing
+python manage.py import_old_data --db ../db.sqlite3 --users-only --zero-scores --dry-run
+
+# accounts only, starting everyone at 0 for a new season
+python manage.py import_old_data --db ../db.sqlite3 --users-only --zero-scores
+```
+
+- `--users-only` skips history/leaderboards/announcements. **Without it the
+  command also rebuilds 22 weeks of Game/Pick rows**, which is usually not what
+  you want on a site that has already started a season.
+- `--zero-scores` is important when the target is starting fresh — otherwise
+  last season's totals carry into week 1.
+- `--dry-run` wraps everything in a transaction and rolls back.
+- Imported profiles have `preseason_submitted=False`, so on week 1 each member
+  is routed to `/preseason/` on first login. That is usually desirable.
+- `is_staff` carries over from the source. `mrfavorite` was staff on the old
+  site and therefore has admin access on the new one.
+
+To run any management command against the Railway database from a laptop, bridge
+`DATABASE_PUBLIC_URL` into `DATABASE_URL` — Railway's `DATABASE_URL` points at an
+internal host that is unreachable externally:
+
+```bash
+railway run --service Postgres python -c "import os;os.environ['DATABASE_URL']=os.environ['DATABASE_PUBLIC_URL'];..."
+```
+
 ## Transferring local data to Railway
 
 ```powershell
