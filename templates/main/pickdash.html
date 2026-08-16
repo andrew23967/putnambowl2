@@ -202,7 +202,8 @@
         {% csrf_token %}
         <input type="hidden" name="scrape_year" id="sh-year" value="{{ scrape_year }}">
         <input type="hidden" name="scrape_week" id="sh-week" value="{{ settings.scrape_week }}">
-        <input type="hidden" name="grade_api" id="sh-api" value="{{ settings.grade_api }}">
+        <input type="hidden" name="scrape_api" id="sh-scrape-api" value="{{ settings.scrape_api }}">
+        <input type="hidden" name="grade_api" id="sh-grade-api" value="{{ settings.grade_api }}">
         <div style="display:flex;gap:8px;align-items:center;">
           <button name="scrape" type="submit" class="ctrl-btn" style="flex:1;">Scrape</button>
           <button name="grade" type="submit" class="ctrl-btn" style="flex:1;">Grade</button>
@@ -221,12 +222,22 @@
               <input id="sp-week" type="number" value="{{ settings.scrape_week }}" class="dash-input">
             </div>
             <div>
-              <label class="dash-label">API</label>
-              <select id="sp-api" class="dash-input">
+              <label class="dash-label">Scrape source</label>
+              <select id="sp-scrape-api" class="dash-input">
+                {% for val, label in api_options %}
+                <option value="{{ val }}" {% if val == settings.scrape_api %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+              </select>
+              <p style="font-size:.6rem;color:var(--muted);margin:4px 0 0;line-height:1.4;">Only NFL Data Py has moneylines — ESPN scrapes every game at flat 1×.</p>
+            </div>
+            <div>
+              <label class="dash-label">Grade source</label>
+              <select id="sp-grade-api" class="dash-input">
                 {% for val, label in api_options %}
                 <option value="{{ val }}" {% if val == settings.grade_api %}selected{% endif %}>{{ label }}</option>
                 {% endfor %}
               </select>
+              <p style="font-size:.6rem;color:var(--muted);margin:4px 0 0;line-height:1.4;">Only ESPN has live scores — NFL Data Py lags 1–3 days.</p>
             </div>
             <button type="button" onclick="saveScrapeSettings()" class="ctrl-btn" style="width:100%;padding:7px 0;font-size:.8rem;margin-top:2px;">Save</button>
           </div>
@@ -780,7 +791,8 @@ function toggleScrapePopout(e) {
 function saveScrapeSettings() {
   document.getElementById('sh-year').value = document.getElementById('sp-year').value;
   document.getElementById('sh-week').value = document.getElementById('sp-week').value;
-  document.getElementById('sh-api').value  = document.getElementById('sp-api').value;
+  document.getElementById('sh-scrape-api').value = document.getElementById('sp-scrape-api').value;
+  document.getElementById('sh-grade-api').value  = document.getElementById('sp-grade-api').value;
   document.getElementById('scrape-popout').style.display = 'none';
 }
 document.addEventListener('click', function(e) {

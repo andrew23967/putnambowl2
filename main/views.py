@@ -888,15 +888,17 @@ def pickdash(request):
 
     elif 'scrape' in request.POST:
         week = int(request.POST.get('scrape_week', settings.scrape_week))
-        api = request.POST.get('grade_api', settings.grade_api)
+        scrape_api = request.POST.get('scrape_api', settings.scrape_api)
+        grade_api = request.POST.get('grade_api', settings.grade_api)
         from datetime import date as _date
         _today = _date.today()
         _default_year = _today.year if _today.month >= 9 else _today.year - 1
         year = int(request.POST.get('scrape_year', _default_year)) or None
         settings.scrape_week = week
-        settings.grade_api = api
+        settings.scrape_api = scrape_api
+        settings.grade_api = grade_api
         settings.save()
-        games = scrape.scrape(week=week, api_type=api, year=year)
+        games = scrape.scrape(week=week, api_type=scrape_api, year=year)
         added = dupes = 0
         for g in games:
             team1 = ABBREV_TO_TEAM.get(g[0], g[0])
@@ -945,7 +947,12 @@ def pickdash(request):
 
     elif 'grade' in request.POST:
         week = settings.scrape_week
-        api = settings.grade_api
+        # The settings popout submits through whichever button is pressed, so
+        # persist a grade-source change made here without requiring a scrape.
+        grade_api = request.POST.get('grade_api', settings.grade_api)
+        if grade_api != settings.grade_api:
+            settings.grade_api = grade_api
+            settings.save()
         from datetime import date as _date
         _today = _date.today()
         _default_year = _today.year if _today.month >= 9 else _today.year - 1

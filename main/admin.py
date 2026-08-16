@@ -4,7 +4,7 @@ from .models import Game, Pick, SiteSettings, WeeklyLeaderboard, Announcement, B
 
 @admin.register(SiteSettings)
 class SiteSettingsAdmin(admin.ModelAdmin):
-    list_display = ['week', 'publish', 'edit', 'lock_picks', 'multiplier', 'grade_api']
+    list_display = ['week', 'publish', 'edit', 'lock_picks', 'multiplier', 'scrape_api', 'grade_api']
 
 
 @admin.register(Game)

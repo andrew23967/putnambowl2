@@ -10,6 +10,10 @@ class SiteSettings(models.Model):
     lock_picks = models.BooleanField(default=False)
     multiplier = models.IntegerField(default=1)
     scrape_week = models.IntegerField(default=1)
+    # Two sources, chosen independently. nfl-data-py is the only one carrying
+    # moneylines, so it should almost always be the scrape source; ESPN is the
+    # only one with live scores, so it is the better grade source.
+    scrape_api = models.CharField(max_length=20, default='nfl_data_py')
     grade_api = models.CharField(max_length=20, default='nfl_data_py')
     weekly_recap = models.TextField(blank=True, default='')
     auto_enabled = models.BooleanField(default=False)

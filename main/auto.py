@@ -208,7 +208,7 @@ def do_scrape_and_publish(settings, year=None):
         log.info('Auto: multiplier → %sx (%s, week %s)', auto_multiplier, week_type, settings.week)
         settings.multiplier = auto_multiplier
 
-    games_data = scrape_module.scrape(week=settings.week, api_type=settings.grade_api, year=year)
+    games_data = scrape_module.scrape(week=settings.week, api_type=settings.scrape_api, year=year)
     from_day = settings.scrape_filter_from_day
     to_day = settings.scrape_filter_to_day
     added = 0

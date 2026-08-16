@@ -130,6 +130,57 @@ class GradeScopeTests(TestCase):
         self.assertEqual(target.winner, 'team2')
 
 
+class ApiSplitTests(TestCase):
+    """scrape_api and grade_api are independent. nfl-data-py is the only source
+    with moneylines; ESPN is the only one with live scores. Driving both jobs
+    from one setting made the useful combination impossible."""
+
+    def test_defaults_are_independent_fields(self):
+        s = SiteSettings.get()
+        s.scrape_api = 'nfl_data_py'
+        s.grade_api = 'espn'
+        s.save()
+        s.refresh_from_db()
+        self.assertEqual(s.scrape_api, 'nfl_data_py')
+        self.assertEqual(s.grade_api, 'espn')
+
+    def test_scrape_uses_scrape_api(self):
+        from . import auto
+        s = SiteSettings.get()
+        s.scrape_api = 'nfl_data_py'
+        s.grade_api = 'espn'
+        s.week = 3
+        s.save()
+
+        seen = {}
+        self.addCleanup(setattr, scrape, 'scrape', scrape.scrape)
+        self.addCleanup(setattr, auto.scrape_module, 'get_first_game_dt',
+                        auto.scrape_module.get_first_game_dt)
+        self.addCleanup(setattr, auto.scrape_module, 'get_week_type',
+                        auto.scrape_module.get_week_type)
+        auto.scrape_module.scrape = lambda **kw: seen.update(kw) or []
+        auto.scrape_module.get_first_game_dt = lambda **kw: None
+        auto.scrape_module.get_week_type = lambda *a, **kw: 'regular'
+
+        auto.do_scrape_and_publish(s, year=2025)
+        self.assertEqual(seen['api_type'], 'nfl_data_py')
+
+    def test_grade_uses_grade_api(self):
+        from . import auto
+        s = SiteSettings.get()
+        s.scrape_api = 'nfl_data_py'
+        s.grade_api = 'espn'
+        s.week = 3
+        s.save()
+
+        seen = {}
+        self.addCleanup(setattr, auto.scrape_module, 'grade', auto.scrape_module.grade)
+        auto.scrape_module.grade = lambda **kw: seen.update(kw) or []
+
+        do_grade(s, year=2025)
+        self.assertEqual(seen['api_type'], 'espn')
+
+
 class BiggestUpsetTests(TestCase):
     """team2 is the underdog, so an upset is a team2 win — the home view had
     the two sides reversed."""
