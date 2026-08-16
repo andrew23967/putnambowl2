@@ -2,5 +2,14 @@
 builder = "NIXPACKS"
 
 [deploy]
-preDeployCommand = "python manage.py collectstatic --no-input && python manage.py migrate"
-startCommand = "bash -c 'if [ \"$SERVICE_TYPE\" = \"worker\" ]; then python manage.py run_auto; else gunicorn config.wsgi --bind 0.0.0.0:$PORT --log-file -; fi'"
+# preDeployCommand runs in its own ephemeral container, so anything it writes to
+# disk is thrown away before the app starts. Migrations belong here (they touch
+# the database and must run exactly once per deploy); collectstatic does NOT —
+# its output has to exist in the container that actually serves requests, so it
+# runs in startCommand below.
+#
+# This was masked while DEBUG=True, because ManifestStaticFilesStorage only
+# reads staticfiles.json when DEBUG is off. With DEBUG=False a missing manifest
+# turns every page that uses {% static %} into a 500.
+preDeployCommand = "python manage.py migrate"
+startCommand = "bash -c 'if [ \"$SERVICE_TYPE\" = \"worker\" ]; then python manage.py run_auto; else python manage.py collectstatic --no-input && gunicorn config.wsgi --bind 0.0.0.0:$PORT --log-file -; fi'"
