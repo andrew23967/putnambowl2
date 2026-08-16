@@ -11,7 +11,8 @@ runs the migration, and checks nothing was lost.
 Usage:
     python scripts/verify_history_migration.py [path/to/legacy/db.sqlite3]
 
-The legacy database defaults to ../db.sqlite3 (the original site's export).
+The legacy database defaults to ../legacy/db.sqlite3 (the original site's
+export). See ../legacy/README.md.
 """
 import json
 import os
@@ -21,7 +22,7 @@ import sys
 
 PROJ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ROOT = os.path.dirname(PROJ)
-LEGACY_DB = sys.argv[1] if len(sys.argv) > 1 else os.path.join(ROOT, 'db.sqlite3')
+LEGACY_DB = sys.argv[1] if len(sys.argv) > 1 else os.path.join(ROOT, 'legacy', 'db.sqlite3')
 PY = sys.executable
 TESTDB = os.path.join(PROJ, 'scripts', 'testmig.sqlite3')
 

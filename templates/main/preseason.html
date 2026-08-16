@@ -31,6 +31,15 @@
     cursor:pointer;transition:opacity .15s;
   }
   .pre-submit:hover { opacity:.88; }
+  .pre-defer {
+    width:100%;margin-top:10px;padding:10px;
+    background:none;color:var(--muted2);
+    border:1px solid var(--border2);border-radius:10px;
+    font-size:.8125rem;font-weight:600;font-family:inherit;
+    cursor:pointer;transition:background .14s ease,color .14s ease;
+  }
+  .pre-defer:hover { background:var(--fill-2);color:var(--text); }
+  .pre-defer-note { font-size:.6875rem;color:var(--muted);margin:10px 0 0;text-align:center;line-height:1.55; }
 </style>
 {% endblock %}
 {% block content %}
@@ -57,8 +66,15 @@
         {% for e in field.errors %}<p class="pre-error">{{ e }}</p>{% endfor %}
       </div>
       {% endfor %}
-      <button type="submit" class="pre-submit">Save Preseason Picks</button>
+      <button type="submit" class="pre-submit">Save preseason picks</button>
     </form>
+    {% if can_defer %}
+    <form method="post" style="margin:0;">
+      {% csrf_token %}
+      <button type="submit" name="defer" value="1" class="pre-defer">I'll do this later</button>
+    </form>
+    <p class="pre-defer-note">You can make these any time during week 1. We'll keep reminding you on the home page until you do.</p>
+    {% endif %}
   </div>
 </div>
 {% endblock %}

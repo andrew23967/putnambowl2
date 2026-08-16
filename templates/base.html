@@ -21,16 +21,63 @@
       --text:     #f1f5f9;
       --muted:    #64748b;
       --muted2:   #94a3b8;
+
+      /* Ink-on-surface fills. Every component uses these instead of hardcoded
+         rgba(255,255,255,…) so light mode flips without per-component overrides. */
+      --fill-1: rgba(255,255,255,.035);
+      --fill-2: rgba(255,255,255,.06);
+      --fill-3: rgba(255,255,255,.10);
+      --on-accent: #fff;
+
+      /* Semantic status colours, tuned per theme for contrast. */
+      --good: #34d399;
+      --bad:  #f87171;
+      --warn: #fbbf24;
+      --info: #60a5fa;
+      --good-fill: rgba(16,185,129,.16);
+      --bad-fill:  rgba(239,68,68,.16);
+      --warn-fill: rgba(245,158,11,.16);
+
+      --radius: 10px;
+      --radius-sm: 7px;
     }
     [data-theme="light"] {
-      --bg:      #f1f5f9;
+      --bg:      #eef2f7;
       --surface: #ffffff;
-      --surface2:#f8fafc;
-      --border:  rgba(0,0,0,.08);
-      --border2: rgba(0,0,0,.14);
-      --text:    #0f172a;
+      --surface2:#f5f8fc;
+      --border:  rgba(15,23,42,.10);
+      --border2: rgba(15,23,42,.17);
+      --text:    #0b1220;
       --muted:   #64748b;
       --muted2:  #475569;
+
+      --fill-1: rgba(15,23,42,.035);
+      --fill-2: rgba(15,23,42,.06);
+      --fill-3: rgba(15,23,42,.11);
+
+      /* Darker so they stay legible on white. */
+      --good: #0f9d63;
+      --bad:  #d93a3a;
+      --warn: #b45309;
+      --info: #2563eb;
+      --good-fill: rgba(16,185,129,.15);
+      --bad-fill:  rgba(217,58,58,.12);
+      --warn-fill: rgba(180,83,9,.12);
+    }
+
+    /* Keyboard focus is visible everywhere, mouse clicks stay clean. */
+    :where(a, button, input, select, textarea, [tabindex]):focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+      border-radius: var(--radius-sm);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: .01ms !important;
+      }
     }
 
     *, *::before, *::after { box-sizing: border-box; }
@@ -74,15 +121,13 @@
     }
     .btn-accent:hover { filter: brightness(1.15); }
     .btn-ghost {
-      background: rgba(255,255,255,.06);
+      background: var(--fill-2);
       color: var(--muted2);
       border-radius: 8px;
       transition: background .15s, color .15s;
     }
-    .btn-ghost:hover { background: rgba(255,255,255,.1); color: var(--text); }
-    .btn-ghost.active { background: var(--accent); color: #fff; }
-    [data-theme="light"] .btn-ghost { background: rgba(0,0,0,.06); }
-    [data-theme="light"] .btn-ghost:hover { background: rgba(0,0,0,.1); }
+    .btn-ghost:hover { background: var(--fill-3); color: var(--text); }
+    .btn-ghost.active { background: var(--accent); color: var(--on-accent); }
 
     /* Nav */
     nav.topnav {
@@ -102,8 +147,8 @@
       transition: background .12s, color .12s;
       white-space: nowrap;
     }
-    .nav-link:hover { background: rgba(255,255,255,.07); color: var(--text); }
-    [data-theme="light"] .nav-link:hover { background: rgba(0,0,0,.06); }
+    .nav-link:hover { background: var(--fill-2); color: var(--text); }
+    .nav-link[aria-current="page"] { color: var(--text); background: var(--fill-1); }
     /* Theme toggle button */
     .theme-btn {
       background: none; border: 1px solid var(--border2); border-radius: 7px;
@@ -111,8 +156,7 @@
       display: flex; align-items: center; line-height: 1;
       transition: background .12s, border-color .12s;
     }
-    .theme-btn:hover { background: rgba(255,255,255,.07); }
-    [data-theme="light"] .theme-btn:hover { background: rgba(0,0,0,.06); }
+    .theme-btn:hover { background: var(--fill-2); }
 
     /* Dropdown */
     .nav-group .dropdown { display: none; }
@@ -121,16 +165,16 @@
       position: absolute;
       top: 100%;
       min-width: 200px;
-      background: #0e1422;
+      background: var(--surface);
       border: 1px solid var(--border2);
-      border-radius: 10px;
+      border-radius: var(--radius);
       padding: 6px;
       padding-top: 14px;
       margin-top: 0;
       box-shadow: 0 20px 60px rgba(0,0,0,.5);
       z-index: 100;
     }
-    [data-theme="light"] .dropdown { background: #ffffff; box-shadow: 0 12px 40px rgba(0,0,0,.12); }
+    [data-theme="light"] .dropdown { box-shadow: 0 12px 40px rgba(15,23,42,.14); }
     .dropdown a {
       display: flex;
       align-items: center;
@@ -142,8 +186,7 @@
       font-weight: 500;
       transition: background .1s, color .1s;
     }
-    .dropdown a:hover { background: rgba(255,255,255,.07); color: var(--text); }
-    [data-theme="light"] .dropdown a:hover { background: rgba(0,0,0,.05); }
+    .dropdown a:hover { background: var(--fill-2); color: var(--text); }
 
     /* Mobile menu */
     #mobile-menu { display: none; }
@@ -294,7 +337,6 @@
             <a href="{% url 'main:pickdash' %}">Pick Dashboard</a>
             <a href="{% url 'main:accountdash' %}">Accounts</a>
             <a href="{% url 'main:announcements' %}">Announcements</a>
-            <a href="{% url 'main:montecarlo' %}">Strategy</a>
             <a href="{% url 'main:devtools' %}">Developer Tools</a>
           </div>
         </div>

@@ -34,7 +34,12 @@ def home(request):
         return redirect('accounts:login')
 
     settings = SiteSettings.get()
-    if settings.week == 1 and not request.user.profile.preseason_submitted:
+    # Week 1 asks for preseason picks, but never traps you here: "Later" sets a
+    # session flag so the rest of the site is reachable, and the home page keeps
+    # a banner up until the picks are actually in.
+    needs_preseason = (settings.week == 1
+                       and not request.user.profile.preseason_submitted)
+    if needs_preseason and not request.session.get('preseason_deferred'):
         return redirect('main:preseason')
 
     players = User.objects.select_related('profile').all()
@@ -89,7 +94,9 @@ def home(request):
     # Games & pick distribution
     games = list(Game.objects.filter(week=settings.week))
     picks_map = {p.game_id: p for p in Pick.objects.filter(user=request.user, game__in=games)}
-    games.sort(key=lambda g: (g.id in picks_map, g.id))
+    # Kickoff order, and stable regardless of what you have picked. Sorting
+    # picked games to the bottom made the list reshuffle under your cursor.
+    games.sort(key=lambda g: (g.game_dt is None, g.game_dt, g.id))
 
     # Next ungraded game for countdown
     next_game = None
@@ -160,6 +167,7 @@ def home(request):
         'next_game': next_game,
         'next_game_ts': next_game_ts,
         'graded_count': graded_count,
+        'needs_preseason': needs_preseason,
     })
 
 
@@ -624,6 +632,14 @@ def ajax_history(request):
 @login_required
 def preseason(request):
     settings = SiteSettings.get()
+
+    # "I'll do this later" — remembered for the session so the prompt does not
+    # reappear on every page load, but not persisted, so it comes back next
+    # visit while week 1 is still open.
+    if request.method == 'POST' and 'defer' in request.POST:
+        request.session['preseason_deferred'] = True
+        return redirect('main:home')
+
     form = forms.PreseasonForm(request.user, request.POST or None)
     if form.is_valid():
         request.user.profile.big_loser = form.cleaned_data['big_loser']
@@ -632,9 +648,15 @@ def preseason(request):
         request.user.profile.superbowl_winner = form.cleaned_data['superbowl_winner']
         request.user.profile.preseason_submitted = True
         request.user.save()
-        messages.success(request, 'Preseason picks saved!')
+        request.session.pop('preseason_deferred', None)
+        messages.success(request, 'Preseason picks saved.')
         return redirect('main:home')
-    return render(request, 'main/preseason.html', {'form': form, 'week': settings.week})
+    return render(request, 'main/preseason.html', {
+        'form': form,
+        'week': settings.week,
+        # Only week 1 is skippable; later weeks reach this page by choice.
+        'can_defer': settings.week == 1,
+    })
 
 
 def standings_view(request):

@@ -90,39 +90,57 @@
   .game-pie-hole { width:13px;height:13px;border-radius:50%;background:var(--bg);position:absolute;top:50%;left:50%;transform:translate(-50%,-50%); }
   .game-check { font-size:.95rem; }
 
-  /* Inline pick slider toggle */
-  .pick-toggle {
-    position:relative;display:flex;flex:1;min-width:0;
-    background:transparent;border:1px solid rgba(255,255,255,.07);
-    border-radius:100px;padding:2px;cursor:pointer;user-select:none;touch-action:none;
+  /* ── Pick control ──
+     Two tappable halves backed by real radio inputs. Selection is expressed
+     entirely through :checked, so there is no JS-positioned knob to fall out of
+     sync with the saved value — the previous slider's whole class of bugs. It
+     is also keyboard- and screen-reader-navigable for free. */
+  .pick-2up { display:grid;grid-template-columns:1fr 1fr;gap:6px;flex:1;min-width:0; }
+  .pick-radio { position:absolute;width:1px;height:1px;opacity:0;pointer-events:none; }
+  .pick-side {
+    display:flex;align-items:baseline;justify-content:center;gap:6px;
+    padding:9px 8px;border-radius:var(--radius-sm);
+    border:1px solid var(--border);background:var(--fill-1);
+    cursor:pointer;user-select:none;min-width:0;
+    transition:background .14s ease,border-color .14s ease;
   }
-  .pick-opt {
-    position:relative;z-index:2;flex:1;display:flex;align-items:center;justify-content:center;
-    gap:4px;padding:5px 8px;border-radius:100px;cursor:pointer;
+  .pick-side:hover { background:var(--fill-2);border-color:var(--border2); }
+  .pick-abbr { font-size:.8125rem;font-weight:700;color:var(--muted2);letter-spacing:-.01em;line-height:1; }
+  .pick-val  { font-size:.625rem;font-weight:600;color:var(--muted);font-variant-numeric:tabular-nums;line-height:1; }
+  .pick-radio:checked + .pick-side {
+    background:color-mix(in srgb,var(--accent) 16%,transparent);
+    border-color:var(--accent);
   }
-  .pick-team { font-size:.75rem;font-weight:600;color:var(--muted);transition:color .18s;line-height:1; }
-  .pick-pts  { font-size:.5rem;color:rgba(255,255,255,.25);transition:color .18s;line-height:1; }
-  .pick-opt[data-selected="true"] .pick-team { color:var(--muted2); }
-  .pick-opt[data-selected="true"] .pick-pts  { color:rgba(255,255,255,.35); }
-  .pick-knob {
-    position:absolute;top:3px;left:3px;
-    height:calc(100% - 6px);width:calc(50% - 3px);
-    border-radius:100px;border:1px solid rgba(255,255,255,.15);
-    background:rgba(255,255,255,.06);
-    transition:left .32s cubic-bezier(.25,0,.2,1),background-color .22s ease,border-color .22s ease;pointer-events:none;
-  }
+  .pick-radio:checked + .pick-side .pick-abbr { color:var(--text); }
+  .pick-radio:checked + .pick-side .pick-val  { color:var(--muted2); }
+  .pick-radio:focus-visible + .pick-side { outline:2px solid var(--accent);outline-offset:2px; }
+  /* Briefly acknowledge the save without moving anything on the page. */
+  @keyframes pickSaved { from { box-shadow:0 0 0 0 color-mix(in srgb,var(--accent) 55%,transparent); }
+                           to { box-shadow:0 0 0 7px transparent; } }
+  .pick-side.saved { animation:pickSaved .5s ease-out; }
 
   .col-left, .col-right { display:flex;flex-direction:column; }
 
   /* Games grid — two columns on wide screens, one on phones. */
   .games-columns { column-count:2;column-gap:16px; }
 
-  /* ── Light mode overrides ── */
-  [data-theme="light"] .pick-toggle { border-color: rgba(0,0,0,.1); }
-  [data-theme="light"] .pick-knob { border-color: rgba(0,0,0,.12); background: rgba(0,0,0,.05); }
-  [data-theme="light"] .pick-pts { color: rgba(0,0,0,.3); }
-  [data-theme="light"] .pick-opt[data-selected="true"] .pick-pts { color: rgba(0,0,0,.5); }
-  [data-theme="light"] .pts-tag { background: rgba(0,0,0,.06); }
+  /* Preseason reminder, shown only after someone chooses "later". */
+  .preseason-nudge {
+    display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+    background:var(--warn-fill);border:1px solid color-mix(in srgb,var(--warn) 45%,transparent);
+    border-radius:var(--radius);padding:10px 14px;margin-bottom:18px;
+    text-decoration:none;flex-shrink:0;transition:background .14s ease;
+  }
+  .preseason-nudge:hover { background:color-mix(in srgb,var(--warn) 22%,transparent); }
+  .preseason-nudge-dot { width:7px;height:7px;border-radius:50%;background:var(--warn);flex-shrink:0; }
+  .preseason-nudge-text { font-size:.8125rem;color:var(--text);flex:1;min-width:0; }
+  .preseason-nudge-text strong { font-weight:700; }
+  .preseason-nudge-cta { font-size:.75rem;font-weight:700;color:var(--warn);white-space:nowrap; }
+
+  /* ── Light mode overrides ──
+     The pick control needs none of these; it is built on --fill-*/--border
+     tokens that already flip with the theme. */
+  [data-theme="light"] .pts-tag { background: var(--fill-2); }
   [data-theme="light"] .vs-sep { color: var(--muted); }
   [data-theme="light"] #week-slider { background: rgba(0,0,0,.15); }
   [data-theme="light"] #week-slider::-webkit-slider-thumb { background: rgba(0,0,0,.5); border-color: rgba(0,0,0,.2); }
@@ -225,15 +243,24 @@
     #games-track, #games-thumb { display:none !important; }
     #games-scroll { position:static !important;overflow:visible !important; }
     .game-row { padding:10px 12px !important; }
-    .pick-opt { padding:9px 10px !important; }
-    .pick-team { font-size:.8125rem !important; }
-    .pick-pts { font-size:.5625rem !important; }
+    /* Bigger tap targets on phones. */
+    .pick-side { padding:12px 10px !important; }
+    .pick-abbr { font-size:.875rem !important; }
+    .pick-val  { font-size:.6875rem !important; }
     .pick-dist { display:none !important; }
   }
 </style>
 {% endblock %}
 
 {% block content %}
+
+{% if needs_preseason %}
+<a href="{% url 'main:preseason' %}" class="preseason-nudge">
+  <span class="preseason-nudge-dot"></span>
+  <span class="preseason-nudge-text"><strong>Your preseason picks aren't in yet.</strong> They lock when week 1 ends.</span>
+  <span class="preseason-nudge-cta">Make them →</span>
+</a>
+{% endif %}
 
 <!-- ── EMAIL DISPLAY ── -->
 {% if announcements %}
@@ -286,7 +313,6 @@
         {% endwith %}
         {% with p1=leaderboard.0 %}
         <div class="pod pod-1">
-          <div style="font-size:.875rem;margin-bottom:3px;">👑</div>
           <div class="pod-avatar" style="background:#b45309;">{{ p1.username|first|upper }}</div>
           <p style="font-size:.625rem;font-weight:600;color:var(--muted2);margin:0 0 2px;max-width:72px;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ p1.username }}</p>
           <p style="font-size:1rem;font-weight:900;color:#fbbf24;margin:0 0 5px;">{{ p1.score }}</p>
@@ -413,24 +439,21 @@
   <div class="game-row">
     <div style="flex:1;min-width:0;">
       {% if not settings.lock_picks %}
-      <!-- Inline pick slider -->
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
-        <div class="pick-toggle" id="ptoggle-{{ game.id }}" data-game="{{ game.id }}" data-team1="{{ game.team1_abbrev }}" data-team2="{{ game.team2_abbrev }}" data-fav="{% if game.points1 <= game.points2 %}team1{% else %}team2{% endif %}">
-          <div class="pick-opt" data-choice="team1" data-game="{{ game.id }}"
-               {% if pick and pick.choice == 'team1' %}data-selected="true"{% endif %}>
-            <span class="pick-team">{{ game.team1_abbrev }}</span>
-            <span class="pick-pts">{{ game.points1 }}</span>
-          </div>
-          <div class="pick-opt" data-choice="team2" data-game="{{ game.id }}"
-               {% if pick and pick.choice == 'team2' %}data-selected="true"{% endif %}>
-            <span class="pick-team">{{ game.team2_abbrev }}</span>
-            <span class="pick-pts">{{ game.points2 }}</span>
-          </div>
-          <div class="pick-knob" id="pknob-{{ game.id }}"
-               style="{% if pick %}left:{% if pick.choice == 'team2' %}50%{% else %}3px{% endif %};{% else %}display:none;{% endif %}"></div>
-        </div>
-        <span id="pick-had-{{ game.id }}" style="display:none;">{% if pick %}1{% else %}0{% endif %}</span>
+      <div class="pick-2up" role="radiogroup" aria-label="{{ game.team1_abbrev }} versus {{ game.team2_abbrev }}">
+        <input class="pick-radio" type="radio" name="game-{{ game.id }}" id="g{{ game.id }}-t1"
+               value="team1" data-game="{{ game.id }}"{% if pick and pick.choice == 'team1' %} checked{% endif %}>
+        <label class="pick-side" for="g{{ game.id }}-t1">
+          <span class="pick-abbr">{{ game.team1_abbrev }}</span>
+          <span class="pick-val">{{ game.points1 }}</span>
+        </label>
+        <input class="pick-radio" type="radio" name="game-{{ game.id }}" id="g{{ game.id }}-t2"
+               value="team2" data-game="{{ game.id }}"{% if pick and pick.choice == 'team2' %} checked{% endif %}>
+        <label class="pick-side" for="g{{ game.id }}-t2">
+          <span class="pick-abbr">{{ game.team2_abbrev }}</span>
+          <span class="pick-val">{{ game.points2 }}</span>
+        </label>
       </div>
+      <span id="pick-had-{{ game.id }}" hidden>{% if pick %}1{% else %}0{% endif %}</span>
       {% else %}
       <!-- Locked / graded display -->
       <div class="game-teams-row">
@@ -676,141 +699,58 @@ function updatePickStatus() {
 }
 updatePickStatus();
 
-function pickColor(toggle, choice) {
-  return choice === toggle.dataset.fav
-    ? 'rgba(59,130,246,0.28)'
-    : 'rgba(239,68,68,0.22)';
-}
-function pickBorder(toggle, choice) {
-  return choice === toggle.dataset.fav
-    ? 'rgba(59,130,246,0.5)'
-    : 'rgba(239,68,68,0.42)';
-}
+// One delegated listener for every pick. The radio has already re-rendered
+// itself by the time this fires; all that is left is to persist the choice.
+// Games deliberately stay where they are — the old build reordered the list on
+// each pick, which moved the next game out from under you mid-tap.
+document.addEventListener('change', function (e) {
+  const radio = e.target.closest('.pick-radio');
+  if (!radio) return;
 
-function selectPick(gameId, choice) {
-  const hadEl = document.getElementById('pick-had-'+gameId);
-  const noPickYet = hadEl && hadEl.textContent === '0';
-  const isLeft = choice === 'team1';
-  // Update every toggle for this game (compact + expanded modal)
-  document.querySelectorAll('.pick-toggle[data-game="'+gameId+'"]').forEach(toggle => {
-    const knob = toggle.querySelector('.pick-knob');
-    if (knob) {
-      knob.style.transition = (noPickYet && isLeft) ? 'none' : 'left .32s cubic-bezier(.25,0,.2,1),background-color .22s ease';
-      knob.style.display = '';
-      knob.style.left = isLeft ? '3px' : '50%';
-      const choice = isLeft ? 'team1' : 'team2';
-      knob.style.backgroundColor = pickColor(toggle, choice);
-      knob.style.borderColor = pickBorder(toggle, choice);
-    }
-    toggle.querySelectorAll('.pick-opt').forEach(el => el.removeAttribute('data-selected'));
-    const selEl = toggle.querySelector('[data-choice="'+choice+'"]');
-    if (selEl) selEl.setAttribute('data-selected','true');
-  });
-  // Autosave
+  const gameId = radio.dataset.game;
+  const label = radio.nextElementSibling;
+  if (label) {
+    label.classList.remove('saved');
+    void label.offsetWidth;   // restart the animation on a repeat pick
+    label.classList.add('saved');
+  }
+
+  const hadEl = document.getElementById('pick-had-' + gameId);
   const fd = new FormData();
-  fd.append('game_id', gameId); fd.append('choice', choice); fd.append('csrfmiddlewaretoken', CSRF);
-  fetch(SAVE_URL, {method:'POST', body:fd})
-    .then(r=>r.json())
-    .then(data=>{
-      if (data.ok && hadEl && hadEl.textContent==='0') { hadEl.textContent='1'; picksMade++; updatePickStatus(); movePickedToBottom(gameId); }
-    })
-    .catch(()=>{ });
-}
+  fd.append('game_id', gameId);
+  fd.append('choice', radio.value);
+  fd.append('csrfmiddlewaretoken', CSRF);
 
-// Attach drag-to-slide handlers to every .pick-toggle inside container
-function initPickDrag(container) {
-  container.querySelectorAll('.pick-toggle').forEach(toggle => {
-    if (toggle.dataset.dragInit) return; // skip if already wired
-    toggle.dataset.dragInit = '1';
-    let active = false, dragged = false, fromTeam = null;
-    function pt(e) { return e.touches ? e.touches[0] : e; }
-    function onStart(e) {
-      active = true;
-      dragged = false;
-      const sel = toggle.querySelector('.pick-opt[data-selected="true"]');
-      fromTeam = sel ? sel.dataset.choice : null;
-      document.addEventListener('mousemove', onMove);
-      document.addEventListener('mouseup', onEnd);
-      document.addEventListener('touchmove', onMove, { passive: false });
-      document.addEventListener('touchend', onEnd);
-    }
-    function onMove(e) {
-      if (!active) return;
-      if (e.cancelable) e.preventDefault();
-      dragged = true;
-      const knob = toggle.querySelector('.pick-knob');
-      if (!knob) return;
-      const rect = toggle.getBoundingClientRect();
-      const halfW = (rect.width - 6) / 2;
-      const raw = pt(e).clientX - rect.left - halfW / 2;
-      knob.style.left = Math.max(3, Math.min(raw, rect.width / 2)) + 'px';
-    }
-    function onEnd(e) {
-      if (!active) return;
-      active = false;
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onEnd);
-      document.removeEventListener('touchmove', onMove);
-      document.removeEventListener('touchend', onEnd);
-      const rect = toggle.getBoundingClientRect();
-      const halfW = (rect.width - 6) / 2;
-      const knob = toggle.querySelector('.pick-knob');
-      let choice;
-      if (dragged && knob) {
-        const kLeft = parseFloat(knob.style.left) || 3;
-        // 25% snap threshold: only need to drag 1/4 of the way to trigger a switch
-        if (fromTeam === 'team1') {
-          choice = kLeft > halfW * 0.25 + 3 ? 'team2' : 'team1';
-        } else if (fromTeam === 'team2') {
-          choice = kLeft < halfW * 0.75 + 3 ? 'team1' : 'team2';
-        } else {
-          choice = kLeft > halfW * 0.5 + 3 ? 'team2' : 'team1';
-        }
-      } else {
-        const ex = (e.changedTouches ? e.changedTouches[0] : e).clientX;
-        choice = ex >= rect.left + rect.width / 2 ? 'team2' : 'team1';
+  fetch(SAVE_URL, { method: 'POST', body: fd })
+    .then(r => r.json())
+    .then(data => {
+      if (!data.ok) { showPickError(data.error || 'Could not save that pick.'); return; }
+      if (hadEl && hadEl.textContent === '0') {
+        hadEl.textContent = '1';
+        picksMade++;
+        updatePickStatus();
       }
-      fromTeam = null;
-      selectPick(parseInt(toggle.dataset.game), choice);
-    }
-    toggle.addEventListener('mousedown', onStart);
-    toggle.addEventListener('touchstart', onStart, { passive: true });
-  });
-}
-initPickDrag(document);
-
-function flipToBottom(el, container) {
-  if (!el || !container) return;
-  const children = Array.from(container.children);
-  const before = children.map(c => c.getBoundingClientRect().top);
-  container.appendChild(el);
-  Array.from(container.children).forEach(child => {
-    const oldIdx = children.indexOf(child);
-    const dy = (oldIdx === -1 ? before[before.length - 1] : before[oldIdx]) - child.getBoundingClientRect().top;
-    if (Math.abs(dy) < 1) return;
-    child.style.transition = 'none';
-    child.style.transform = `translateY(${dy}px)`;
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-      child.style.transition = 'transform .4s cubic-bezier(.25,0,.2,1)';
-      child.style.transform = '';
-    }));
-  });
-}
-
-function movePickedToBottom(gameId) {
-  const toggle = document.getElementById('ptoggle-' + gameId);
-  if (toggle) flipToBottom(toggle.closest('.game-row'), toggle.closest('.game-row')?.parentElement);
-}
-
-// Restore pick knob colors on page load
-document.querySelectorAll('.pick-toggle').forEach(toggle => {
-  const knob = toggle.querySelector('.pick-knob');
-  if (!knob || knob.style.display === 'none') return;
-  const choice = knob.style.left === '50%' ? 'team2' : 'team1';
-  knob.style.transition = 'none';
-  knob.style.backgroundColor = pickColor(toggle, choice);
-  knob.style.borderColor = pickBorder(toggle, choice);
+    })
+    .catch(() => showPickError('Could not save that pick. Check your connection.'));
 });
+
+// A silently dropped pick is worse than a visible failure — say so.
+function showPickError(msg) {
+  let bar = document.getElementById('pick-error');
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'pick-error';
+    bar.setAttribute('role', 'status');
+    bar.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);bottom:20px;z-index:200;' +
+      'background:var(--bad-fill);border:1px solid var(--bad);color:var(--bad);' +
+      'padding:9px 14px;border-radius:var(--radius-sm);font-size:.8125rem;font-weight:600;';
+    document.body.appendChild(bar);
+  }
+  bar.textContent = msg;
+  bar.style.display = '';
+  clearTimeout(bar._t);
+  bar._t = setTimeout(() => { bar.style.display = 'none'; }, 4000);
+}
 
 // Email nav + collapse
 (function(){
@@ -1016,7 +956,7 @@ function renderPodium(entries){
   const wrap=document.querySelector('.podium-wrap');
   if(!wrap||entries.length<3)return;
   const cfg=[
-    {cls:'pod-1',bg:'#b45309',nameSize:'.625rem',nameColor:'var(--muted2)',scoreStyle:'font-size:1rem;font-weight:900;color:#fbbf24;margin:0 0 5px;',nameMb:'2',maxW:'72px',crown:true},
+    {cls:'pod-1',bg:'#b45309',nameSize:'.625rem',nameColor:'var(--muted2)',scoreStyle:'font-size:1rem;font-weight:900;color:#fbbf24;margin:0 0 5px;',nameMb:'2',maxW:'72px',crown:false},
     {cls:'pod-2',bg:'#334155',nameSize:'.625rem',nameColor:'var(--muted2)',scoreStyle:'font-size:.8rem;font-weight:800;color:#94a3b8;margin:0 0 4px;',nameMb:'3',maxW:'64px',crown:false},
     {cls:'pod-3',bg:'#431407',nameSize:'.625rem',nameColor:'var(--muted2)',scoreStyle:'font-size:.8rem;font-weight:800;color:#fb923c;margin:0 0 4px;',nameMb:'3',maxW:'64px',crown:false},
   ];
