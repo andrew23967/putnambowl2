@@ -128,11 +128,32 @@ History archive decoding. Run it before pushing.
 
 ## Deployment (Railway)
 
-Two services:
-- **web** — `railway.toml` handles it: preDeployCommand runs collectstatic + migrate, startCommand runs gunicorn
-- **worker** (putnambowl2 service) — start command: `python manage.py run_auto`
+**Live site: https://www.putnambowl.com/**
 
-GitHub repo: `andrew23967/putnambowl2` on `main` branch → auto-deploys web on push.
+Railway project `putnambowl`, environment `production`, three services:
+- **web** — `railway.toml` handles it: preDeployCommand runs collectstatic + migrate, startCommand runs gunicorn
+- **putnambowl2** (the worker) — same repo; `SERVICE_TYPE=worker` makes the
+  startCommand run `python manage.py run_auto`
+- **Postgres**
+
+GitHub repo: `andrew23967/putnambowl2` on `main` branch → pushing to `main`
+auto-deploys **both** web and worker.
+
+Note: both services run `preDeployCommand`, so `migrate` runs twice on a deploy.
+The second one logs "No migrations to apply" — that is expected, not a sign the
+migration was skipped. Check `django_migrations` if you need to be sure.
+
+The Railway-generated domain (`web-production-*.up.railway.app`) returns
+**400 DisallowedHost** — only the custom domain is in `ALLOWED_HOSTS`. Use
+putnambowl.com when testing production.
+
+Useful CLI checks (the CLI is already linked to the project):
+
+```bash
+railway status --json          # service + deployment status
+railway logs --service web --deployment
+railway run --service Postgres <cmd>   # runs locally with DATABASE_PUBLIC_URL set
+```
 
 ## Transferring local data to Railway
 
