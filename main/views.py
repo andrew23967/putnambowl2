@@ -13,7 +13,7 @@ from django.views.decorators.http import require_POST
 from . import models, forms, scrape
 from .models import (
     Game, Pick, SiteSettings, WeeklyLeaderboard,
-    Announcement, SeasonRecord
+    LeagueEmail, SeasonRecord
 )
 from .teams import TEAM_ABBREV, ABBREV_TO_TEAM
 
@@ -27,6 +27,75 @@ def _calculate_points(underdog_ml, favorite_ml):
     f_ratio = 100 / f
     hp = ((1 / (u_ratio * f_ratio)) ** 0.5) - 1
     return round((hp + 1) * u_ratio, 2)
+
+
+def _countdown(settings, games):
+    """Milestones for the shared countdown, in chronological order: the picks
+    lock first, then every remaining kickoff.
+
+    The template hands the whole list to the clock, which counts to the first one
+    still ahead and moves itself along as each passes. That is what makes it roll
+    from "picks lock in" to the next kickoff, and from one kickoff to the next,
+    without a reload.
+
+    Lock time follows the precedence email_utils already uses: auto_lock_dt is
+    the real moment, first_game_dt stands in when the week was published without
+    one. With neither written — auto-pilot has never run — fall back to the
+    earliest kickoff on record minus the configured offset, so the clock still
+    has something true to count to.
+    """
+    milestones = []
+
+    if not settings.lock_picks:
+        lock_dt = settings.auto_lock_dt or settings.first_game_dt
+        if lock_dt is None:
+            kickoffs = [g.game_dt for g in games if g.game_dt]
+            if kickoffs:
+                lock_dt = min(kickoffs) - timedelta(
+                    minutes=settings.auto_lock_offset_minutes or 0)
+        if lock_dt:
+            milestones.append({
+                'kind': 'lock',
+                'ts': int(lock_dt.timestamp() * 1000),
+                'label': 'Picks lock in:',
+                'expired': 'Picks are locked',
+            })
+
+    upcoming = sorted((g for g in games if not g.graded and g.game_dt),
+                      key=lambda g: g.game_dt)
+    for game in upcoming:
+        matchup = f'{game.team1_abbrev} vs {game.team2_abbrev}'
+        milestones.append({
+            'kind': 'game',
+            'ts': int(game.game_dt.timestamp() * 1000),
+            'label': f'{matchup} · Kickoff in:',
+            # A game only plausibly runs for so long; past that it has finished
+            # and is waiting on the grader rather than being played.
+            'expired': f'{matchup} · Underway',
+            'stale': f'{matchup} · Awaiting result',
+        })
+
+    if not games:
+        idle = 'No games this week'
+    elif all(g.graded for g in games):
+        idle = 'Week complete'
+    else:
+        idle = 'Waiting on kickoff times'
+
+    return {'milestones_json': json.dumps(milestones), 'idle_label': idle}
+
+
+def _email_feed(limit=None):
+    """The Emails feed, newest first.
+
+    One source of truth: `LeagueEmail`. Mail the league sends lands here through
+    `inbound_email`, and mail the site sends is recorded at send time — including
+    PutnamBot's recaps, which sign themselves in the body. That keeps ordering
+    honest, because every row carries a real `sent_at`; a feed stitched together
+    from `WeeklyLeaderboard.recap` had no timestamp to sort by.
+    """
+    qs = LeagueEmail.objects.filter(published=True).select_related('author', 'author__profile')
+    return list(qs[:limit] if limit else qs)
 
 
 def home(request):
@@ -91,82 +160,28 @@ def home(request):
     for entry in leaderboard:
         entry['on_fire'] = entry['username'] in fire_players
 
-    # Games & pick distribution
+    # This week at a glance. The slate itself lives on /picks/ now, so the home
+    # page only needs enough to say what state the week is in.
     games = list(Game.objects.filter(week=settings.week))
-    picks_map = {p.game_id: p for p in Pick.objects.filter(user=request.user, game__in=games)}
-    # Kickoff order, and stable regardless of what you have picked. Sorting
-    # picked games to the bottom made the list reshuffle under your cursor.
-    games.sort(key=lambda g: (g.game_dt is None, g.game_dt, g.id))
+    my_picks = list(
+        Pick.objects.filter(user=request.user, game__in=games).select_related('game')
+    )
 
-    # Next ungraded game for countdown
-    next_game = None
-    next_game_ts = None
-    for game in games:
-        if not game.graded:
-            next_game = game
-            if game.game_dt:
-                next_game_ts = int(game.game_dt.timestamp() * 1000)
-            break
-    raw_dist = {}
-    for p in Pick.objects.filter(game__in=games).values('game_id', 'choice'):
-        gid = str(p['game_id'])
-        raw_dist.setdefault(gid, {'team1': 0, 'team2': 0})
-        raw_dist[gid][p['choice']] = raw_dist[gid].get(p['choice'], 0) + 1
-    # Add pct fields
-    pick_dist = {}
-    for gid, counts in raw_dist.items():
-        total = counts['team1'] + counts['team2']
-        pick_dist[gid] = {
-            'team1': counts['team1'],
-            'team2': counts['team2'],
-            'total': total,
-            'team1_pct': round(counts['team1'] / total * 100) if total else 50,
-            'team2_pct': round(counts['team2'] / total * 100) if total else 50,
-        }
-    # Ensure every game has a dist entry so the template can always render the pie chart
-    for game in games:
-        gid = str(game.id)
-        if gid not in pick_dist:
-            pick_dist[gid] = {'team1': 0, 'team2': 0, 'total': 0, 'team1_pct': 50, 'team2_pct': 50}
-
-    # Biggest upset: graded game the underdog (team2) won, where the most
-    # people had backed the favorite.
-    biggest_upset = None
-    for game in games:
-        if not game.graded or game.winner != 'team2':
-            continue
-        dist = pick_dist.get(str(game.id), {})
-        total = dist.get('total', 0)
-        wrong_pct = dist.get('team1_pct', 0)
-        if biggest_upset is None or wrong_pct > biggest_upset['wrong_pct']:
-            biggest_upset = {
-                'winner': game.team2_abbrev,
-                'loser': game.team1_abbrev,
-                'winner_full': game.team2,
-                'wrong_pct': wrong_pct,
-                'total': total,
-                'pts': game.points2,
-            }
-
-    graded_count = sum(1 for g in games if g.winner)
-
-    week_links = list(range(1, settings.week + 1))
-    week_type = scrape.get_week_type(settings.week, allow_network=False)
+    feed = _email_feed(limit=2)
+    countdown = _countdown(settings, games)
 
     return render(request, 'main/home.html', {
+        'countdown_json': countdown['milestones_json'],
+        'countdown_idle': countdown['idle_label'],
         'leaderboard': leaderboard,
         'leaderboard_json': json.dumps(leaderboard),
-        'picks_map': picks_map,
-        'pick_dist': pick_dist,
-        'games': games,
-        'biggest_upset': biggest_upset,
         'settings': settings,
-        'week_links': week_links,
-        'week_type': week_type,
-        'announcements': Announcement.objects.order_by('-id'),
-        'next_game': next_game,
-        'next_game_ts': next_game_ts,
-        'graded_count': graded_count,
+        'latest_email': feed[0] if feed else None,
+        'email_count': LeagueEmail.objects.filter(published=True).count(),
+        'total_games': len(games),
+        'picks_made': len(my_picks),
+        'my_correct': sum(1 for p in my_picks if p.is_correct),
+        'graded_count': sum(1 for g in games if g.winner),
         'needs_preseason': needs_preseason,
     })
 
@@ -231,6 +246,16 @@ def analytics(request):
         'position_chart': json.dumps(position_chart),
         'win_rate_chart': json.dumps(win_rate_chart),
         'efficiency_chart': json.dumps(efficiency_chart),
+    })
+
+
+@login_required
+def emails(request):
+    """Every message the league has sent or received, newest first. The home page
+    carries the newest one inline; this is the archive."""
+    return render(request, 'main/emails.html', {
+        'settings': SiteSettings.get(),
+        'emails': _email_feed(),
     })
 
 
@@ -427,52 +452,73 @@ def ajax_set_winner(request):
 
 
 @login_required
-def pickform(request):
+def picks(request):
+    """This week's slate, in whichever of its three states applies: unpublished,
+    open for picking, or locked and filling in with results as games are graded.
+
+    Picks save one at a time through ajax_save_pick, so there is no POST branch
+    here — the page is the form and the receipt for it.
+    """
     settings = SiteSettings.get()
 
-    if settings.lock_picks:
-        messages.warning(request, 'Picks are currently locked.')
-        return redirect('main:home')
-
     games = list(Game.objects.filter(week=settings.week))
-    if not games:
-        messages.info(request, 'No games available to pick yet.')
-        return redirect('main:home')
+    picks_map = {p.game_id: p for p in Pick.objects.filter(user=request.user, game__in=games)}
+    # Kickoff order, and stable regardless of what you have picked. Sorting
+    # picked games to the bottom made the list reshuffle under your cursor.
+    games.sort(key=lambda g: (g.game_dt is None, g.game_dt, g.id))
 
-    user_picks = {p.game_id: p.choice for p in Pick.objects.filter(user=request.user, game__in=games)}
-
-    if request.method == 'POST':
-        errors = False
-        new_picks = {}
-        for game in games:
-            choice = request.POST.get(f'game_{game.id}')
-            if choice not in ('team1', 'team2'):
-                errors = True
-                break
-            new_picks[game.id] = choice
-
-        if not errors:
-            for game in games:
-                Pick.objects.update_or_create(
-                    user=request.user, game=game,
-                    defaults={'choice': new_picks[game.id]}
-                )
-            messages.success(request, 'Picks saved!')
-            return redirect('main:home')
-
-    games_with_picks = [
-        {
-            'game': g,
-            'current_pick': user_picks.get(g.id, 'team1'),
-            'team1_abbrev': g.team1_abbrev,
-            'team2_abbrev': g.team2_abbrev,
+    raw_dist = {}
+    for p in Pick.objects.filter(game__in=games).values('game_id', 'choice'):
+        gid = str(p['game_id'])
+        raw_dist.setdefault(gid, {'team1': 0, 'team2': 0})
+        raw_dist[gid][p['choice']] = raw_dist[gid].get(p['choice'], 0) + 1
+    # Add pct fields
+    pick_dist = {}
+    for gid, counts in raw_dist.items():
+        total = counts['team1'] + counts['team2']
+        pick_dist[gid] = {
+            'team1': counts['team1'],
+            'team2': counts['team2'],
+            'total': total,
+            'team1_pct': round(counts['team1'] / total * 100) if total else 50,
+            'team2_pct': round(counts['team2'] / total * 100) if total else 50,
         }
-        for g in games
-    ]
+    # Ensure every game has a dist entry so the template can always render the pie chart
+    for game in games:
+        gid = str(game.id)
+        if gid not in pick_dist:
+            pick_dist[gid] = {'team1': 0, 'team2': 0, 'total': 0, 'team1_pct': 50, 'team2_pct': 50}
 
-    return render(request, 'main/pickform.html', {
-        'games_with_picks': games_with_picks,
-        'week': settings.week,
+    # Biggest upset: graded game the underdog (team2) won, where the most
+    # people had backed the favorite.
+    biggest_upset = None
+    for game in games:
+        if not game.graded or game.winner != 'team2':
+            continue
+        dist = pick_dist.get(str(game.id), {})
+        total = dist.get('total', 0)
+        wrong_pct = dist.get('team1_pct', 0)
+        if biggest_upset is None or wrong_pct > biggest_upset['wrong_pct']:
+            biggest_upset = {
+                'winner': game.team2_abbrev,
+                'loser': game.team1_abbrev,
+                'winner_full': game.team2,
+                'wrong_pct': wrong_pct,
+                'total': total,
+                'pts': game.points2,
+            }
+
+    countdown = _countdown(settings, games)
+
+    return render(request, 'main/picks.html', {
+        'settings': settings,
+        'games': games,
+        'picks_map': picks_map,
+        'pick_dist': pick_dist,
+        'biggest_upset': biggest_upset,
+        'graded_count': sum(1 for g in games if g.winner),
+        'countdown_json': countdown['milestones_json'],
+        'countdown_idle': countdown['idle_label'],
     })
 
 
@@ -697,23 +743,6 @@ def seasons(request):
 
 
 @staff_member_required
-def announcements(request):
-    form = forms.AnnouncementForm(request.POST or None)
-    if 'add' in request.POST and form.is_valid():
-        Announcement.objects.create(message=form.cleaned_data['message'])
-    elif 'delete_all' in request.POST:
-        Announcement.objects.all().delete()
-    elif 'delete' in request.POST:
-        ann_id = request.POST.get('announcement_id')
-        Announcement.objects.filter(id=ann_id).delete()
-
-    return render(request, 'main/announcements.html', {
-        'form': forms.AnnouncementForm(),
-        'announcements': Announcement.objects.all(),
-    })
-
-
-@staff_member_required
 def accountdash(request):
     from main.teams import TEAMS
     players = sorted(
@@ -766,6 +795,9 @@ def edit_player(request, user_id):
     except ValueError:
         pass
     p.preseason_submitted = request.POST.get('preseason_submitted') == 'on'
+    # Granting this is granting write access to the home page — see
+    # main/inbound_email.py for the checks a message still has to pass.
+    p.email_posts_enabled = request.POST.get('email_posts_enabled') == 'on'
     p.save()
 
     return JsonResponse({'ok': True, 'username': user.username})
@@ -915,9 +947,7 @@ def pickdash(request):
         week = int(request.POST.get('scrape_week', settings.scrape_week))
         scrape_api = request.POST.get('scrape_api', settings.scrape_api)
         grade_api = request.POST.get('grade_api', settings.grade_api)
-        from datetime import date as _date
-        _today = _date.today()
-        _default_year = _today.year if _today.month >= 9 else _today.year - 1
+        _default_year = scrape.current_season_year()
         year = int(request.POST.get('scrape_year', _default_year)) or None
         settings.scrape_week = week
         settings.scrape_api = scrape_api
@@ -978,9 +1008,7 @@ def pickdash(request):
         if grade_api != settings.grade_api:
             settings.grade_api = grade_api
             settings.save()
-        from datetime import date as _date
-        _today = _date.today()
-        _default_year = _today.year if _today.month >= 9 else _today.year - 1
+        _default_year = scrape.current_season_year()
         year = int(request.POST.get('scrape_year', _default_year)) or None
         # Reuse the auto-pilot grader: it scopes to a single week's ungraded
         # games and falls back to team abbreviations when game ids differ
@@ -1031,6 +1059,8 @@ def pickdash(request):
             settings.weekly_recap = recap
             settings.save()
             WeeklyLeaderboard.objects.filter(week=completed_week).update(recap=recap)
+            from .email_utils import record_recap_email
+            record_recap_email(completed_week, recap)
 
         messages.success(request, f'Advanced to week {settings.week}.')
 
@@ -1056,7 +1086,8 @@ def pickdash(request):
         Pick.objects.all().delete()
         Game.objects.all().delete()
         WeeklyLeaderboard.objects.all().delete()
-        Announcement.objects.all().delete()
+        # The Emails feed is league correspondence, not season data — a new
+        # season does not wipe it.
         settings.week = 1
         settings.scrape_week = 1
         settings.publish = False
@@ -1067,6 +1098,8 @@ def pickdash(request):
         from .auto import build_intro
         settings.weekly_recap = build_intro()
         settings.save()
+        from .email_utils import record_recap_email
+        record_recap_email(None, settings.weekly_recap, subject='Season preview')
         for p in User.objects.select_related('profile').all():
             p.profile.preseason_submitted = False
             p.profile.save()
@@ -1078,9 +1111,7 @@ def pickdash(request):
     games = Game.objects.filter(week=settings.week).order_by('game_dt', 'id')
     all_graded = all(g.graded for g in games) if games else False
     save_season_form = forms.SaveSeasonForm()
-    from datetime import date as _date
-    _today = _date.today()
-    default_scrape_year = _today.year if _today.month >= 9 else _today.year - 1
+    default_scrape_year = scrape.current_season_year()
 
     from .auto import WEEKDAY_NAMES
     weekday_options = list(WEEKDAY_NAMES.items())[:5]  # Mon–Fri only
@@ -1162,6 +1193,11 @@ def generate_recap(request):
         return JsonResponse({'error': f'No history saved for week {last_week}.'}, status=404)
     settings.weekly_recap = recap
     settings.save()
+    # Keep the archive in step with the live copy, the same way do_advance_week
+    # does. Without this the feed would keep serving the superseded text.
+    WeeklyLeaderboard.objects.filter(week=last_week).update(recap=recap)
+    from .email_utils import record_recap_email
+    record_recap_email(last_week, recap)
     return JsonResponse({'recap': recap})
 
 

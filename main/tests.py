@@ -94,6 +94,167 @@ class FirstGameDtTests(TestCase):
         self.assertGreater(first_dt, week1_kick)
 
 
+class AutoLockRespectsDayFilterTests(TestCase):
+    """do_scrape_and_publish took the lock time from get_first_game_dt, which
+    ignores the scrape day filter. In a Sunday-only league that pinned the lock
+    to the Thursday nighter — excluded from the slate — so picks shut 2.7 days
+    before the first game anyone could pick."""
+
+    def setUp(self):
+        from . import auto
+        self.auto = auto
+        self.settings = SiteSettings.get()
+        self.settings.week = 3
+        self.settings.lock_mode = 'offset'
+        self.settings.auto_lock_offset_minutes = 20
+        self.settings.auto_tz = 'UTC'
+        # Sunday only.
+        self.settings.scrape_filter_from_day = 6
+        self.settings.scrape_filter_to_day = 6
+        self.settings.save()
+
+        self.thursday = datetime(2026, 9, 24, 23, 15, tzinfo=timezone.utc)
+        self.sunday = datetime(2026, 9, 27, 17, 0, tzinfo=timezone.utc)
+
+        # (away, home, underdog_ml, favorite_ml, home_team, game_id, game_dt)
+        rows = [
+            ('GB', 'ATL', 150, -170, True, '2026_03_GB_ATL', self.thursday),
+            ('BUF', 'LAC', 140, -160, True, '2026_03_BUF_LAC', self.sunday),
+        ]
+        for name, repl in (
+            ('scrape', lambda **kw: rows),
+            ('get_first_game_dt', lambda **kw: self.thursday),
+            ('get_week_type', lambda *a, **kw: 'regular'),
+        ):
+            self.addCleanup(setattr, auto.scrape_module, name,
+                            getattr(auto.scrape_module, name))
+            setattr(auto.scrape_module, name, repl)
+
+        self.addCleanup(setattr, auto, 'make_bot_picks', auto.make_bot_picks)
+        auto.make_bot_picks = lambda **kw: None
+
+    def test_lock_uses_earliest_game_in_the_slate(self):
+        self.auto.do_scrape_and_publish(self.settings, year=2026)
+        self.settings.refresh_from_db()
+
+        stored = list(Game.objects.filter(week=3))
+        self.assertEqual(len(stored), 1, 'the Thursday game should be filtered out')
+        self.assertEqual(stored[0].game_dt, self.sunday)
+
+        self.assertEqual(self.settings.auto_lock_dt,
+                         self.sunday - timedelta(minutes=20))
+        self.assertGreater(self.settings.auto_lock_dt, self.thursday,
+                           'lock must not precede a game excluded from the slate')
+
+    def test_falls_back_when_the_week_stored_no_kickoffs(self):
+        # Nothing survives the filter: the week's true first kickoff is all there
+        # is to go on, so the old behaviour is still the right fallback.
+        self.auto.scrape_module.scrape = lambda **kw: []
+        self.auto.do_scrape_and_publish(self.settings, year=2026)
+        self.settings.refresh_from_db()
+
+        self.assertEqual(Game.objects.filter(week=3).count(), 0)
+        self.assertEqual(self.settings.first_game_dt, self.thursday)
+
+
+class InboundEmailTests(TestCase):
+    """Publishing to the home page by email needs every gate to hold. The one
+    that matters is authentication: From is trivially forged, so without it
+    anyone knowing the commissioner's address could post to the site."""
+
+    def setUp(self):
+        from main.models import LeagueEmail
+        self.LeagueEmail = LeagueEmail
+        from main import inbound_email
+        self.ingest = inbound_email.ingest_message
+
+        self.boss = User.objects.create_user('boss', email='boss@example.com')
+        self.boss.profile.email_posts_enabled = True
+        self.boss.profile.save()
+        # Enough other members that "half the league" is a real threshold.
+        self.members = []
+        for i in range(4):
+            u = User.objects.create_user(f'member{i}', email=f'm{i}@example.com')
+            self.members.append(u)
+        # A bot has no address and must not count toward the league total.
+        bot = User.objects.create_user('bot_x')
+        bot.profile.is_bot = True
+        bot.profile.save()
+
+    def _raw(self, sender='boss@example.com', to=None, auth='dmarc=pass',
+             subject='Week 3', body='Get your picks in.', msgid='<a@example.com>'):
+        to = to if to is not None else [m.email for m in self.members]
+        lines = [
+            f'From: The Commissioner <{sender}>',
+            f'To: {", ".join(to)}',
+            f'Subject: {subject}',
+            f'Message-ID: {msgid}',
+            'Date: Mon, 22 Sep 2025 10:00:00 +0000',
+        ]
+        if auth:
+            lines.append(f'Authentication-Results: mx.example.com; {auth}')
+        lines += ['Content-Type: text/plain; charset="utf-8"', '', body]
+        return '\r\n'.join(lines).encode()
+
+    def test_league_wide_email_from_an_enabled_member_is_published(self):
+        obj, reason = self.ingest(self._raw())
+        self.assertIsNotNone(obj, reason)
+        self.assertEqual(obj.author, self.boss)
+        self.assertEqual(obj.subject, 'Week 3')
+        self.assertEqual(obj.body, 'Get your picks in.')
+        self.assertEqual(obj.recipient_count, 4)
+        self.assertTrue(obj.published)
+
+    def test_forged_sender_without_passing_auth_is_rejected(self):
+        obj, reason = self.ingest(self._raw(auth='dmarc=fail'))
+        self.assertIsNone(obj)
+        self.assertIn('authentication failed', reason)
+
+    def test_missing_auth_header_is_rejected(self):
+        obj, reason = self.ingest(self._raw(auth=None))
+        self.assertIsNone(obj)
+        self.assertIn('authentication', reason)
+
+    def test_member_without_the_flag_is_rejected(self):
+        self.boss.profile.email_posts_enabled = False
+        self.boss.profile.save()
+        obj, reason = self.ingest(self._raw())
+        self.assertIsNone(obj)
+        self.assertIn('email posting enabled', reason)
+
+    def test_unknown_sender_is_rejected(self):
+        obj, reason = self.ingest(self._raw(sender='stranger@example.com'))
+        self.assertIsNone(obj)
+        self.assertIn('not a league member', reason)
+
+    def test_private_note_to_the_site_only_is_rejected(self):
+        obj, reason = self.ingest(self._raw(to=['league@putnambowl.com']))
+        self.assertIsNone(obj)
+        self.assertIn('not a league-wide email', reason)
+
+    def test_list_address_alone_satisfies_league_wide(self):
+        with self.settings(LEAGUE_LIST_ADDRESS='league@putnambowl.com'):
+            obj, reason = self.ingest(self._raw(to=['league@putnambowl.com']))
+        self.assertIsNotNone(obj, reason)
+
+    def test_same_message_is_not_ingested_twice(self):
+        first, _ = self.ingest(self._raw())
+        self.assertIsNotNone(first)
+        second, reason = self.ingest(self._raw())
+        self.assertIsNone(second)
+        self.assertEqual(reason, 'already ingested')
+        self.assertEqual(self.LeagueEmail.objects.count(), 1)
+
+    def test_quoted_reply_is_trimmed_off(self):
+        body = ('Reminder: picks close tonight.\r\n\r\n'
+                'On Mon, 22 Sep 2025 at 09:00, someone wrote:\r\n'
+                '> the entire previous thread\r\n')
+        obj, reason = self.ingest(self._raw(body=body))
+        self.assertIsNotNone(obj, reason)
+        self.assertEqual(obj.body, 'Reminder: picks close tonight.')
+        self.assertNotIn('previous thread', obj.body)
+
+
 class GradeScopeTests(TestCase):
     """The manual grade handler looped over every game ever and re-graded them."""
 
@@ -279,8 +440,8 @@ class ApiSplitTests(TestCase):
 
 
 class BiggestUpsetTests(TestCase):
-    """team2 is the underdog, so an upset is a team2 win — the home view had
-    the two sides reversed."""
+    """team2 is the underdog, so an upset is a team2 win — the view had the two
+    sides reversed. Computed on /picks/, which owns the week's slate."""
 
     def setUp(self):
         self.user = User.objects.create_user('player', password='pw')
@@ -297,7 +458,7 @@ class BiggestUpsetTests(TestCase):
         Pick.objects.create(user=self.user, game=game, choice='team1')
 
         self.client.login(username='player', password='pw')
-        upset = self.client.get('/home/').context['biggest_upset']
+        upset = self.client.get('/picks/').context['biggest_upset']
 
         self.assertIsNotNone(upset)
         self.assertEqual(upset['winner_full'], 'Carolina Panthers')
@@ -308,7 +469,7 @@ class BiggestUpsetTests(TestCase):
         Pick.objects.create(user=self.user, game=game, choice='team1')
 
         self.client.login(username='player', password='pw')
-        self.assertIsNone(self.client.get('/home/').context['biggest_upset'])
+        self.assertIsNone(self.client.get('/picks/').context['biggest_upset'])
 
 
 class ScheduleCacheTests(TestCase):

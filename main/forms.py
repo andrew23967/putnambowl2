@@ -38,10 +38,6 @@ class PreseasonForm(forms.Form):
         return data
 
 
-class AnnouncementForm(forms.Form):
-    message = forms.CharField(widget=forms.Textarea(attrs={'rows': 3}))
-
-
 class AdjustScoreForm(forms.Form):
     username = forms.CharField(max_length=150)
     amount = forms.FloatField(label='Points to add (use negative to subtract)')

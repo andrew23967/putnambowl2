@@ -35,7 +35,9 @@ putnambowl2/
   templates/
     base.html                   # design tokens, nav, theme toggle
     accounts/auth_base.html     # shared shell for login + register
-    main/home.html              # picks + leaderboard
+    main/home.html              # leaderboard + recap + links out
+    main/picks.html             # this week's slate — form, then results
+    main/emails.html            # the league's Emails feed
     main/pickdash.html          # admin control panel
     main/pick_history.html      # player × game grid
   scripts/verify_history_migration.py
@@ -143,6 +145,101 @@ With `auto_enabled`, the `run_auto` worker ticks every 5 min:
 5. Multiplier is set automatically from week type (1× / 2× / 4×)
 
 ## UI conventions
+
+### One job per page
+
+The week's slate lives on `/picks/`, not the home page. That one view covers all
+three states — unpublished, open for picking, locked and filling in with results
+— so there is no separate "view my picks" page. Home is the leaderboard, the
+PutnamBot recap, and links to the other two. Everything used to share the home
+page, which left nothing readable on a phone.
+
+The recap is on the home page in **every** state. It used to appear only while
+picks were unpublished, so it vanished exactly when people came looking for it.
+Home carries the newest post inline and links to `/blog/` for the archive.
+
+### The countdown is one component, shared
+
+`main/_countdown.html` is included by both home and picks (`compact=True` shrinks
+the digits for home); its CSS lives in `base.html` so the two can't drift. The
+view supplies `views._countdown()`, which returns **every** milestone — the picks
+lock, then each remaining kickoff — as JSON.
+
+The clock counts to the first milestone still ahead and walks itself forward as
+each passes, so it rolls from "picks lock in" to the next kickoff, and kickoff to
+kickoff, without a reload. Don't reduce it to a single target: the old version
+counted to one timestamp and froze, and it labelled that target "Underway" the
+moment it passed, which was wrong for every game that had already finished.
+Beyond a four-hour window a kickoff reads "Awaiting result" instead.
+
+Lock time precedence matches `email_utils`: `auto_lock_dt`, then
+`first_game_dt`, then the earliest kickoff on record minus the offset — the last
+of these matters because with auto-pilot off neither scheduling field is ever
+written. Over 24h the digits switch to d:h:m; a four-figure hour count just reads
+as a bug.
+
+## Season year: call `scrape.current_season_year()`
+
+A season is named for the year it starts, so Jan/Feb belong to the previous
+year's. The cutoff is **August**, not September — next season's schedule is out
+well before week 1, and August is when the season gets set up. A September cutoff
+meant every August scrape silently pulled *last* season, leaving a week full of
+eleven-month-old games.
+
+This one-liner had been copy-pasted into six places, so fixing any single one
+fixed nothing. There is now exactly one definition; don't write the month
+comparison again.
+
+## The scrape day filter also bounds the lock
+
+`scrape_filter_from_day`/`to_day` keep a league to, say, Sundays only.
+`do_scrape_and_publish` therefore takes its lock time from the earliest kickoff
+**stored for the week**, not from `get_first_game_dt()`, which ignores the filter
+and would pin the lock to an excluded Thursday nighter — shutting picks 2.7 days
+before the first game anyone could pick. It falls back to `get_first_game_dt()`
+only when the filter left the week empty. `main/tests.py` covers both.
+
+## The Emails feed
+
+`/emails/` is every message the league has sent or received, newest first, and
+home carries the newest one inline. It reads **only `LeagueEmail`** — one source,
+so every row has a real `sent_at` to sort by. A feed stitched together from
+`WeeklyLeaderboard.recap` had no timestamp at all, and labelling posts from
+`settings.week - 1` got the week wrong (advancing a week with no games generates
+no recap, so the old text stays live while the counter moves on).
+
+Rows arrive two ways:
+
+- **Recorded at send time** — `email_utils.record_site_email()` /
+  `record_recap_email()`. The site's own mail appears even if ingestion is
+  broken. Keyed on a stable slug, so regenerating a recap replaces its row
+  instead of stacking duplicates. PutnamBot's recaps carry `PUTNAMBOT_SIGNOFF`,
+  because the mail that goes out has no author chrome to identify it.
+- **Ingested** — `main/inbound_email.py` polls IMAP from the worker.
+
+Anything writing `settings.weekly_recap` should also update the matching
+`WeeklyLeaderboard` row **and** call `record_recap_email` — see
+`do_advance_week` and `generate_recap`.
+
+### Inbound mail: four gates, and one that matters
+
+A message is published only if authentication passed, the sender is a member,
+that member has `profile.email_posts_enabled`, and it went league-wide (list
+address, or half the other members copied). **The authentication check is the
+only real security boundary** — `From` is trivially forged, so with
+`INBOUND_REQUIRE_AUTH` off, anyone knowing the commissioner's address can post
+to the home page. Every rejection is logged with its reason; silent drops make
+inbound mail impossible to debug. `main/tests.py` covers all four gates plus
+dedupe and reply trimming.
+
+Polling lives in `run_auto` **outside `auto_tick()`**, which returns early when
+`auto_enabled` is off — a league running its weeks by hand still gets its mail.
+Bodies are plain text rendered escaped; HTML mail would need a real sanitiser.
+
+Test without a mailbox: `python manage.py fetch_emails --file message.eml`.
+
+There is no `Announcement` model. It and its dashboard page were removed when the
+feed replaced them; the old site's announcements are deliberately not imported.
 
 Both pick controls — the player's team choice and the admin's result selector —
 are **radio inputs styled with `:checked`**, not JS-positioned sliders. The

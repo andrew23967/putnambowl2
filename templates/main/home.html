@@ -1,14 +1,8 @@
 {% extends 'base.html' %}
-{% load main_tags %}
 {% block title %}Week {{ settings.week }} — PutnamBowl{% endblock %}
 
 {% block extra_head %}
 <style>
-  /* ── Section headers ── */
-  .sec-head { display:flex;align-items:center;justify-content:space-between;padding-bottom:10px;border-bottom:1px solid var(--border);margin-bottom:0; }
-  .sec-title { font-size:.6875rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin:0; }
-  .stat-label { font-size:.6875rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:10px;display:flex;align-items:center;gap:6px; }
-
   /* ── Podium ── */
   .podium-wrap { display:flex;align-items:flex-end;justify-content:center;gap:8px;padding:8px 0 0; }
   .pod { display:flex;flex-direction:column;align-items:center; }
@@ -16,15 +10,12 @@
   .pod-1 .pod-block { background:linear-gradient(160deg,rgba(245,158,11,.2),rgba(217,119,6,.1));border-top:1px solid rgba(245,158,11,.25);border-left:1px solid rgba(245,158,11,.15);border-right:1px solid rgba(245,158,11,.15);width:100px;height:44px;font-size:1.2rem; }
   .pod-2 .pod-block { background:rgba(255,255,255,.04);border-top:1px solid rgba(255,255,255,.08);border-left:1px solid rgba(255,255,255,.06);border-right:1px solid rgba(255,255,255,.06);width:86px;height:28px;font-size:.95rem; }
   .pod-3 .pod-block { background:rgba(255,255,255,.025);border-top:1px solid rgba(255,255,255,.05);border-left:1px solid rgba(255,255,255,.04);border-right:1px solid rgba(255,255,255,.04);width:80px;height:16px;font-size:.8rem; }
-  .pod-4 .pod-block { background:rgba(255,255,255,.015);border-top:1px solid rgba(255,255,255,.04);border-left:1px solid rgba(255,255,255,.03);border-right:1px solid rgba(255,255,255,.03);width:72px;height:26px;font-size:.8rem; }
-  .pod-5 .pod-block { background:rgba(255,255,255,.01);border-top:1px solid rgba(255,255,255,.03);border-left:1px solid rgba(255,255,255,.02);border-right:1px solid rgba(255,255,255,.02);width:66px;height:16px;font-size:.75rem; }
   .pod-avatar { width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.8rem;color:#fff;margin-bottom:4px; }
   .pod-1 .pod-avatar { width:36px;height:36px;font-size:.95rem; }
-  .pod-4 .pod-avatar,.pod-5 .pod-avatar { width:34px;height:34px;font-size:.8rem; }
 
   @keyframes podRise { from{transform:translateY(20px);opacity:0} to{transform:translateY(0);opacity:1} }
   .pod { animation:podRise .45s ease both; }
-  .pod:nth-child(1){animation-delay:.15s} .pod:nth-child(2){animation-delay:.05s} .pod:nth-child(3){animation-delay:0s} .pod:nth-child(4){animation-delay:.1s} .pod:nth-child(5){animation-delay:.2s}
+  .pod:nth-child(1){animation-delay:.15s} .pod:nth-child(2){animation-delay:.05s} .pod:nth-child(3){animation-delay:0s}
 
   /* ── Leaderboard rows ── */
   .lb-row { display:flex;align-items:center;gap:10px;padding:6px 8px 6px 0;border-bottom:1px solid var(--border);transition:background .12s; }
@@ -40,89 +31,66 @@
   .rank-down { color:#f87171;font-size:.6875rem;font-weight:700; }
   .rank-flat { color:var(--muted);font-size:.6875rem; }
 
-  /* ── Game rows ── */
-  .game-row { display:flex;align-items:center;padding:10px 12px;gap:12px;transition:opacity .12s;break-inside:avoid;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.055);border-radius:0;margin-bottom:8px; }
-  .game-row:hover { opacity:.85; }
-  .game-sep { display:flex;align-items:center;gap:8px;margin-bottom:1px; }
-  .game-sep-text { font-size:.5rem;color:var(--muted);white-space:nowrap;opacity:.6; }
-  .game-sep-line { flex:1;height:1px;background:rgba(255,255,255,.05); }
-  .team-name { font-weight:700;font-size:1rem;color:var(--text); }
-  .team-name.winner { color:#34d399; }
-  .pts-tag { font-size:.625rem;font-weight:600;padding:1px 5px;border-radius:5px;background:rgba(255,255,255,.06);color:var(--muted2);white-space:nowrap; }
-  .pts-tag.won { background:rgba(16,185,129,.15);color:#34d399; }
-  .pts-tag.fav { background:rgba(99,102,241,.1);color:#a5b4fc; }
-  .vs-sep { color:var(--muted);font-size:.8rem;font-weight:800;flex-shrink:0; }
-  .pick-chip { font-size:.6rem;font-weight:700;padding:2px 7px;border-radius:99px;white-space:nowrap; }
-  .pick-correct { background:rgba(16,185,129,.2);color:#34d399; }
-  .pick-wrong   { background:rgba(239,68,68,.15);color:#f87171; }
-  .pick-pending { background:color-mix(in srgb,var(--accent) 20%,transparent);color:var(--accent); }
-
-  /* Dist bar */
-  .dist-bar { height:3px;background:rgba(255,255,255,.06);border-radius:99px;overflow:hidden;display:flex;margin-top:4px; }
-  .dist-t1 { height:100%;background:#6366f1;width:0;transition:width 1s cubic-bezier(.2,.8,.2,1); }
-  .dist-t2 { height:100%;background:#f59e0b;flex:1; }
-
-  /* Countdown */
-  @keyframes cdPulse { 0%,100%{opacity:1} 50%{opacity:.45} }
-  .cd-digit { background:var(--surface2);border-radius:6px;padding:10px 14px;width:100%;box-sizing:border-box;text-align:center;font-weight:800;font-size:2rem;color:var(--text);font-variant-numeric:tabular-nums;line-height:1;animation:cdPulse 2s ease-in-out infinite; }
-  .cd-digit.static { animation:none; }
-  /* Shared timer layout */
-  .timer-wrap { margin-bottom:12px; }
-  .timer-label { font-size:.5625rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.12em;margin:0 0 10px; }
-  .hms-wrap { display:flex;align-items:center;gap:6px;width:100%; }
-  .hms-col { display:flex;flex-direction:column;align-items:center;gap:4px;flex:1; }
-  .hms-sep { color:var(--muted);font-weight:700;font-size:1.5rem;margin-bottom:16px;flex-shrink:0; }
-  .hms-unit { font-size:.5rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em; }
-  /* Shared status indicator */
-  .stat-indicator { margin-bottom:14px;display:flex;align-items:center;gap:6px; }
-  .stat-dot { width:7px;height:7px;border-radius:50%;flex-shrink:0; }
-  .stat-check { font-size:.8rem;line-height:1;flex-shrink:0; }
-  .stat-val { font-size:.75rem;font-weight:600; }
-  /* Shared locked/past game card content */
-  .game-teams-row { display:flex;align-items:center;justify-content:space-between;gap:4px; }
-  .game-team-side { display:flex;align-items:center;gap:4px; }
-  .game-pts { font-size:.75rem;color:var(--muted); }
-  .game-bottom-row { display:flex;align-items:center;justify-content:space-between;margin-top:2px; }
-  .game-dist-row { display:flex;align-items:center;gap:5px; }
-  .dist-pct-t1 { font-size:.7rem;font-weight:700;color:#3b82f6;white-space:nowrap; }
-  .dist-pct-t2 { font-size:.7rem;font-weight:700;color:#ef4444;white-space:nowrap; }
-  .game-pie { width:22px;height:22px;border-radius:50%;flex-shrink:0;position:relative; }
-  .game-pie-hole { width:13px;height:13px;border-radius:50%;background:var(--bg);position:absolute;top:50%;left:50%;transform:translate(-50%,-50%); }
-  .game-check { font-size:.95rem; }
-
-  /* ── Pick control ──
-     Two tappable halves backed by real radio inputs. Selection is expressed
-     entirely through :checked, so there is no JS-positioned knob to fall out of
-     sync with the saved value — the previous slider's whole class of bugs. It
-     is also keyboard- and screen-reader-navigable for free. */
-  .pick-2up { display:grid;grid-template-columns:1fr 1fr;gap:6px;flex:1;min-width:0; }
-  .pick-radio { position:absolute;width:1px;height:1px;opacity:0;pointer-events:none; }
-  .pick-side {
-    display:flex;align-items:baseline;justify-content:center;gap:6px;
-    padding:9px 8px;border-radius:var(--radius-sm);
-    border:1px solid var(--border);background:var(--fill-1);
-    cursor:pointer;user-select:none;min-width:0;
-    transition:background .14s ease,border-color .14s ease;
+  /* ── Picks card ──
+     The slate itself lives on /picks/. This is the doorway to it, and says
+     which of the three states the week is in without reproducing the games.
+     The countdown sits inside it rather than in a box of its own: two stacked
+     cards cost ~110px of the column, and every pixel here comes out of the
+     PutnamBot section below. */
+  .pk-card {
+    display:block;text-decoration:none;flex-shrink:0;
+    background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+    padding:16px 18px;transition:border-color .14s ease,background .14s ease;
   }
-  .pick-side:hover { background:var(--fill-2);border-color:var(--border2); }
-  .pick-abbr { font-size:.8125rem;font-weight:700;color:var(--muted2);letter-spacing:-.01em;line-height:1; }
-  .pick-val  { font-size:.625rem;font-weight:600;color:var(--muted);font-variant-numeric:tabular-nums;line-height:1; }
-  .pick-radio:checked + .pick-side {
-    background:color-mix(in srgb,var(--accent) 16%,transparent);
-    border-color:var(--accent);
+  a.pk-card:hover { border-color:var(--border2);background:var(--surface2); }
+  .pk-card-top { display:flex;align-items:center;gap:8px;margin-bottom:7px; }
+  .pk-dot { width:7px;height:7px;border-radius:50%;flex-shrink:0; }
+  .pk-card-title { font-size:.9375rem;font-weight:700;color:var(--text);margin:0;letter-spacing:-.01em; }
+  .pk-card-body { font-size:.8125rem;color:var(--muted);line-height:1.65;margin:0; }
+  .pk-card-cta {
+    display:flex;align-items:center;justify-content:space-between;gap:10px;
+    margin-top:14px;padding-top:12px;border-top:1px solid var(--border);
   }
-  .pick-radio:checked + .pick-side .pick-abbr { color:var(--text); }
-  .pick-radio:checked + .pick-side .pick-val  { color:var(--muted2); }
-  .pick-radio:focus-visible + .pick-side { outline:2px solid var(--accent);outline-offset:2px; }
-  /* Briefly acknowledge the save without moving anything on the page. */
-  @keyframes pickSaved { from { box-shadow:0 0 0 0 color-mix(in srgb,var(--accent) 55%,transparent); }
-                           to { box-shadow:0 0 0 7px transparent; } }
-  .pick-side.saved { animation:pickSaved .5s ease-out; }
+  /* Filled rather than accent-coloured text: --accent is the player's own theme
+     colour, and the dark end of that range is unreadable as type on a card. */
+  .pk-card-go {
+    display:inline-flex;align-items:center;gap:6px;white-space:nowrap;
+    background:var(--accent);color:var(--on-accent);
+    font-size:.75rem;font-weight:700;padding:7px 12px;border-radius:var(--radius-sm);
+    transition:filter .15s ease;
+  }
+  a.pk-card:hover .pk-card-go { filter:brightness(1.15); }
+  .pk-card-stat { font-size:.75rem;font-weight:600;color:var(--muted);white-space:nowrap; }
+  .pk-card-timer { margin-top:13px; }
+  .pk-card-timer .timer-wrap { margin-bottom:0; }
 
-  .col-left, .col-right { display:flex;flex-direction:column; }
-
-  /* Games grid — two columns on wide screens, one on phones. */
-  .games-columns { column-count:2;column-gap:16px; }
+  /* ── PutnamBot recap ──
+     Always on the page now. Before, it only appeared in the gap before picks
+     were published, so the week's write-up vanished the moment it mattered. */
+  /* flex:1 so it takes the column's leftover height. Without it the block sized
+     to its content and 48-81px pooled uselessly underneath while the text above
+     was being clipped. */
+  .recap { flex:1;margin-top:22px;padding-top:18px;border-top:1px solid var(--border);display:flex;flex-direction:column;min-height:0; }
+  .recap-head { display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-shrink:0; }
+  .recap-avatar {
+    width:22px;height:22px;border-radius:50%;background:var(--fill-2);
+    display:flex;align-items:center;justify-content:center;font-size:.7rem;flex-shrink:0;
+  }
+  .recap-avatar-person { background:var(--accent);color:var(--on-accent);font-weight:800;font-size:.625rem; }
+  .recap-label { overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0; }
+  .recap-name { font-size:.75rem;font-weight:700;color:var(--text); }
+  .recap-dot { font-size:.6875rem;color:var(--muted);opacity:.6; }
+  .recap-label { font-size:.6875rem;color:var(--muted); }
+  /* Pushed to the right of the byline row, so the header doubles as the way in
+     to the archive without spending a whole row on a link. */
+  .recap-all {
+    margin-left:auto;flex-shrink:0;white-space:nowrap;text-decoration:none;
+    font-size:.6875rem;font-weight:700;color:var(--muted2);
+    transition:color .14s ease;
+  }
+  .recap-all:hover { color:var(--text);text-decoration:underline; }
+  .recap-body { font-size:.9375rem;color:var(--muted2);line-height:1.9;flex:1;min-height:0;overflow-y:auto; }
+  .recap-empty { font-size:.8125rem;color:var(--muted);font-style:italic; }
 
   /* Preseason reminder, shown only after someone chooses "later". */
   .preseason-nudge {
@@ -137,30 +105,19 @@
   .preseason-nudge-text strong { font-weight:700; }
   .preseason-nudge-cta { font-size:.75rem;font-weight:700;color:var(--warn);white-space:nowrap; }
 
-  /* ── Light mode overrides ──
-     The pick control needs none of these; it is built on --fill-*/--border
-     tokens that already flip with the theme. */
-  [data-theme="light"] .pts-tag { background: var(--fill-2); }
-  [data-theme="light"] .vs-sep { color: var(--muted); }
-  [data-theme="light"] #week-slider { background: rgba(0,0,0,.15); }
-  [data-theme="light"] #week-slider::-webkit-slider-thumb { background: rgba(0,0,0,.5); border-color: rgba(0,0,0,.2); }
-  [data-theme="light"] #week-slider::-moz-range-thumb { background: rgba(0,0,0,.5); border-color: rgba(0,0,0,.2); }
-  [data-theme="light"] #week-slider::-moz-range-track { background: rgba(0,0,0,.15); }
-  [data-theme="light"] #week-slider::-moz-range-progress { background: rgba(0,0,0,.3); }
-  [data-theme="light"] .game-sep-line { background: rgba(0,0,0,.07); }
-  [data-theme="light"] .game-row { background:rgba(0,0,0,.03);border-color:rgba(0,0,0,.07); }
-  [data-theme="light"] .dist-bar { background: rgba(0,0,0,.07); }
-  [data-theme="light"] #games-track, [data-theme="light"] #lb-track { background: rgba(0,0,0,.07); }
+  /* ── Light mode overrides ── */
+  [data-theme="light"] #lb-track { background: rgba(0,0,0,.07); }
   [data-theme="light"] .pod-block { color: rgba(0,0,0,.45); }
   [data-theme="light"] .pod-2 .pod-block { background: rgba(0,0,0,.04); border-color: rgba(0,0,0,.08); }
   [data-theme="light"] .pod-3 .pod-block { background: rgba(0,0,0,.025); border-color: rgba(0,0,0,.05); }
-  [data-theme="light"] .pod-4 .pod-block { background: rgba(0,0,0,.015); border-color: rgba(0,0,0,.04); }
-  [data-theme="light"] .pod-5 .pod-block { background: rgba(0,0,0,.01); border-color: rgba(0,0,0,.03); }
   [data-theme="light"] .rank-n { background: rgba(0,0,0,.04); }
-  [data-theme="light"] .exp-date-label { border-bottom-color: var(--border); }
-  [data-theme="light"] .pod-exp-bar { color: rgba(0,0,0,.2); }
 
-  .no-scrollbar::-webkit-scrollbar { display:none; }
+  /* Leaderboard custom scrollbar */
+  .lb-scroll { scrollbar-width:none; }
+  .lb-scroll::-webkit-scrollbar { display:none; }
+  #lb-track { position:absolute;left:0;top:0;bottom:0;width:4px;background:rgba(255,255,255,.06);border-radius:2px;z-index:2; }
+  #lb-thumb { position:absolute;left:0;width:100%;height:36px;border-radius:2px;background:var(--accent);opacity:.55;transition:opacity .15s;cursor:pointer; }
+  #lb-thumb:hover { opacity:.85; }
 
   /* ── Viewport-fill layout (tablet + desktop) ── */
   @media (min-width:641px) {
@@ -171,83 +128,48 @@
       overflow: hidden !important;
       box-sizing: border-box !important;
     }
-    html.nav-has-slider main {
-      height: calc(100vh - 86px) !important;
-    }
     .main-grid {
       flex: 1 !important;
       min-height: 0 !important;
     }
   }
 
-  /* Info tooltip */
-  .info-icon-wrap:hover .info-tooltip { display:block !important; }
-  .info-icon-wrap:hover span { opacity:1 !important; }
-
-  /* Leaderboard custom scrollbar */
-  .lb-scroll { scrollbar-width:none; }
-  .lb-scroll::-webkit-scrollbar { display:none; }
-  #lb-track { position:absolute;left:0;top:0;bottom:0;width:4px;background:rgba(255,255,255,.06);border-radius:2px;z-index:2; }
-  #lb-thumb { position:absolute;left:0;width:100%;height:36px;border-radius:2px;background:var(--accent);opacity:.55;transition:opacity .15s;cursor:pointer; }
-  #lb-thumb:hover { opacity:.85; }
-  /* Games custom scrollbar */
-  .games-scroll { scrollbar-width:none; }
-  .games-scroll::-webkit-scrollbar { display:none; }
-  #games-track { position:absolute;right:0;top:0;bottom:0;width:4px;background:rgba(255,255,255,.06);border-radius:2px;z-index:2; }
-  #games-thumb { position:absolute;left:0;width:100%;height:36px;border-radius:2px;background:var(--accent);opacity:.55;transition:opacity .15s;cursor:pointer; }
-  #games-thumb:hover { opacity:.85; }
-
   /* Mobile / tablet responsive */
-  .col-tabs { display:none; }
   @media (max-width:1024px) and (min-width:641px) {
     main { padding:clamp(12px,2.4vw,24px) !important; }
-    #email-section { margin-bottom:clamp(12px,2vw,20px) !important;padding-bottom:clamp(10px,1.5vw,16px) !important; }
-    .main-grid { gap:clamp(8px,1.4vw,14px) !important; }
-    /* Charts — flex-fill, no fixed heights */
-    /* Game rows */
-    .game-row { padding:clamp(8px,1.1vw,12px) clamp(8px,1.1vw,12px); }
-    .game-sep { margin-bottom:clamp(2px,.3vw,3px); }
-    /* Leaderboard rows */
+    .main-grid { gap:clamp(12px,2vw,24px) !important; }
     .lb-row { padding:clamp(2px,.4vw,3px) 8px clamp(2px,.4vw,3px) 0; }
-    /* Podium — hide 4&5, scale 1–3 with viewport */
-    .pod-4, .pod-5 { display:none; }
+    /* Podium — scale with viewport */
     .podium-wrap { padding:8px 0 0;gap:clamp(4px,.6vw,6px); }
     .pod-1 .pod-block { width:clamp(54px,7.5vw,70px);height:clamp(44px,6vw,60px);font-size:clamp(.85rem,1.2vw,1.1rem); }
     .pod-2 .pod-block { width:clamp(44px,6vw,58px);height:clamp(28px,4.5vw,42px);font-size:clamp(.72rem,1vw,.9rem); }
     .pod-3 .pod-block { width:clamp(38px,5.5vw,52px);height:clamp(18px,3vw,28px);font-size:clamp(.62rem,.9vw,.8rem); }
     .pod-avatar { width:clamp(26px,3.5vw,32px);height:clamp(26px,3.5vw,32px);font-size:clamp(.68rem,.85vw,.8rem); }
     .pod-1 .pod-avatar { width:clamp(32px,4.5vw,40px);height:clamp(32px,4.5vw,40px);font-size:clamp(.82rem,1.1vw,1rem); }
-    /* Timer — scale digits to fit the 1.2fr games column */
-    .hms-wrap .cd-digit { font-size:clamp(1.25rem,3.2vw,2rem) !important;padding:clamp(6px,1vw,10px) clamp(8px,1.4vw,14px) !important; }
-    .hms-sep { font-size:clamp(.9rem,1.5vw,1.5rem); }
   }
   @media (max-width:640px) {
     /* Full-page scroll, single column */
     main { height:auto !important;display:block !important;overflow:visible !important;padding:16px !important; }
     .main-grid { display:flex !important;flex-direction:column !important;gap:28px !important; }
     .col-left, .col-right { height:auto !important;overflow:visible !important; }
-    .col-center, .col-tabs { display:none !important; }
-    /* Games are what you act on — put them above the leaderboard. */
-    .col-right { order:-1 !important; }
-    /* One column, or the cards overflow the viewport and text collides. */
-    .games-columns { column-count:1 !important; }
-    /* Kickoff time and pick split need their own lines at this width. */
-    .game-bottom-row { flex-wrap:wrap !important;gap:4px 10px !important; }
+    /* Flatten the right column so its two pieces can be ordered individually
+       against the leaderboard: the week card is small and actionable so it
+       leads, the standings follow, and the recap — the longest block by far —
+       goes last rather than pushing the table off the bottom of the screen. */
+    .col-right { display:contents !important; }
+    .pk-card  { order:1 !important; }
+    .col-left { order:2 !important; }
+    .recap    { order:3 !important; }
+    /* No column height to fill once the page scrolls; let it size to its text. */
+    .recap    { flex:0 0 auto !important; }
     /* Leaderboard — simple table, no podium or score bars */
-    .podium-label, .podium-wrap { display:none !important; }
+    .podium-wrap { display:none !important; }
     #lb-track, #lb-thumb { display:none !important; }
     #lb-scroll { position:static !important;overflow:visible !important; }
     .score-bar { display:none !important; }
     .lb-row { padding:9px 0 !important; }
-    /* Games — simple list, no scrollbar or pick-distribution bars */
-    #games-track, #games-thumb { display:none !important; }
-    #games-scroll { position:static !important;overflow:visible !important; }
-    .game-row { padding:10px 12px !important; }
-    /* Bigger tap targets on phones. */
-    .pick-side { padding:12px 10px !important; }
-    .pick-abbr { font-size:.875rem !important; }
-    .pick-val  { font-size:.6875rem !important; }
-    .pick-dist { display:none !important; }
+    /* Let the recap run at full length rather than scroll in a short box. */
+    .recap-body { overflow-y:visible !important; }
   }
 </style>
 {% endblock %}
@@ -262,43 +184,11 @@
 </a>
 {% endif %}
 
-<!-- ── EMAIL DISPLAY ── -->
-{% if announcements %}
-<div id="email-section" style="margin-bottom:32px;border-bottom:1px solid var(--border);padding-bottom:20px;flex-shrink:0;" class="anim-up">
-  <!-- Header row -->
-  <div style="display:flex;align-items:center;gap:10px;">
-    <div style="width:26px;height:26px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.7rem;color:#fff;flex-shrink:0;">C</div>
-    <span style="font-size:.75rem;font-weight:700;color:var(--text);">Commissioner</span>
-    <span style="font-size:.6875rem;color:var(--muted);opacity:.6;">·</span>
-    <span id="email-date" style="font-size:.6875rem;color:var(--muted);">{{ announcements.0.created_at|date:"F j, Y" }}</span>
-    <div style="flex:1;"></div>
-    {% if announcements|length > 1 %}
-    <button id="email-prev" title="Older" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1rem;padding:2px 5px;line-height:1;transition:color .15s;">‹</button>
-    <span id="email-counter" style="font-size:.6rem;color:var(--muted);min-width:32px;text-align:center;">1 / {{ announcements|length }}</span>
-    <button id="email-next" title="Newer" disabled style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1rem;padding:2px 5px;line-height:1;transition:color .15s;opacity:.3;">›</button>
-    {% endif %}
-    <button id="email-collapse" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:.6rem;padding:3px 8px;border-radius:4px;letter-spacing:.06em;text-transform:uppercase;font-weight:600;transition:color .15s;">expand</button>
-  </div>
-
-  <!-- Body: collapsed by default -->
-  <div style="position:relative;margin-top:10px;">
-    <div id="email-body" style="overflow:hidden;max-height:5.6em;transition:max-height .35s ease;">
-      {% for ann in announcements %}
-      <div class="email-msg" style="{% if not forloop.first %}display:none;{% endif %}">
-        <div style="font-size:.8125rem;color:var(--muted2);line-height:1.7;">{{ ann.message|linebreaks }}</div>
-      </div>
-      {% endfor %}
-    </div>
-    <div id="email-fade" style="position:absolute;bottom:0;left:0;right:0;height:2em;background:linear-gradient(transparent,var(--bg));pointer-events:none;transition:opacity .25s;"></div>
-  </div>
-</div>
-{% endif %}
-
-<!-- ── MAIN DASHBOARD: leaderboard | chart | games ── -->
-<div class="main-grid anim-up" style="display:grid;grid-template-columns:1fr 2fr;gap:40px;align-items:stretch;">
+<!-- ── MAIN DASHBOARD: leaderboard | week card + Emails ── -->
+<div class="main-grid anim-up" style="display:grid;grid-template-columns:1fr 1.15fr;gap:40px;align-items:stretch;">
 
   <!-- LEFT: Podium + Leaderboard -->
-  <div class="col-left">
+  <div class="col-left" style="display:flex;flex-direction:column;">
     <!-- Podium -->
     <div id="home-podium-view">
       {% if leaderboard|length >= 3 %}
@@ -359,156 +249,80 @@
     </div>{# end relative wrapper #}
   </div><!-- end LEFT -->
 
-  <!-- Mobile tab switcher (hidden on desktop) -->
-  <div class="col-tabs">
-    <button id="mob-tab-chart" onclick="mobTab('chart')" style="flex:1;padding:9px;border:none;border-radius:7px;cursor:pointer;font-size:.875rem;font-weight:600;background:var(--accent);color:#fff;transition:all .15s;">Charts</button>
-    <button id="mob-tab-picks" onclick="mobTab('picks')" style="flex:1;padding:9px;border:none;border-radius:7px;cursor:pointer;font-size:.875rem;font-weight:600;background:transparent;color:var(--muted);transition:all .15s;">Picks</button>
-  </div>
+  <!-- RIGHT: one card for the week (clock + picks doorway), then PutnamBot -->
+  <div class="col-right" style="display:flex;flex-direction:column;min-height:0;">
 
-  <!-- CENTER: Picks + Games -->
-  <div class="col-right">
-  <!-- Past week games panel (always in DOM, shown when slider on past week) -->
-  <div id="past-week-games" style="display:none;flex:1;min-height:0;overflow-y:auto;"></div>
-  <div id="current-week-content" style="display:contents;">
-  {% if not settings.publish %}
-  <!-- ── STATE: Not published ── -->
-  <p style="font-size:.9375rem;font-weight:700;color:var(--text);margin:0 0 6px;">Picks aren't open yet</p>
-  <p style="font-size:.8125rem;color:var(--muted);line-height:1.65;margin:0 0 28px;">The commissioner is still setting up this week's games. Sit tight.</p>
-  {% if settings.weekly_recap %}
-  <div style="flex:1;margin-top:24px;padding-top:20px;border-top:1px solid var(--border);overflow-y:auto;">
-    <p style="font-size:.5625rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.14em;margin:0 0 12px;">Week {{ settings.week|add:"-1" }} Recap</p>
-    <div style="font-size:.9375rem;color:var(--muted2);line-height:1.9;">{{ settings.weekly_recap|linebreaks }}</div>
-  </div>
-  {% endif %}
-
-  {% else %}
-  <!-- ── STATE: Published ── -->
-
-  {% if settings.lock_picks %}
-  {% if next_game %}
-  <div class="timer-wrap">
-    <p class="timer-label" id="cd-label"
-       data-expired-label="{{ next_game.team1_abbrev }} vs {{ next_game.team2_abbrev }} · Underway">{{ next_game.team1_abbrev }} vs {{ next_game.team2_abbrev }} · Kickoff in:</p>
-    <div class="hms-wrap" id="cd-hms">
-      <div class="hms-col"><div class="cd-digit" id="cd-h">--</div><span class="hms-unit">hrs</span></div>
-      <span class="hms-sep">:</span>
-      <div class="hms-col"><div class="cd-digit" id="cd-m">--</div><span class="hms-unit">min</span></div>
-      <span class="hms-sep">:</span>
-      <div class="hms-col"><div class="cd-digit" id="cd-s">--</div><span class="hms-unit">sec</span></div>
+    {% if not settings.publish %}
+    <!-- Nothing to link to yet, so this one isn't a link. -->
+    <div class="pk-card">
+      <div class="pk-card-top">
+        <span class="pk-dot" style="background:var(--muted);opacity:.5;"></span>
+        <p class="pk-card-title">Picks aren't open yet</p>
+      </div>
+      <p class="pk-card-body">The commissioner is still setting up this week's games.</p>
+      <div class="pk-card-timer">{% include 'main/_countdown.html' with compact=True %}</div>
     </div>
-  </div>
-  {% endif %}
-  <div class="stat-indicator">
-    {% if graded_count == games|length and games|length > 0 %}
-    <span class="stat-check" style="color:#34d399;">&#10003;</span>
-    <span class="stat-val" style="color:#34d399;">{{ graded_count }} / {{ games|length }} games</span>
-    {% elif graded_count > 0 %}
-    <span class="stat-dot pulse" style="background:#fbbf24;"></span>
-    <span class="stat-val" style="color:#fbbf24;">{{ graded_count }} / {{ games|length }} games</span>
+
+    {% elif not settings.lock_picks %}
+    <a href="{% url 'main:picks' %}" class="pk-card">
+      <div class="pk-card-top">
+        <span class="pk-dot pulse" style="background:var(--warn);"></span>
+        <p class="pk-card-title">Week {{ settings.week }} picks are open</p>
+      </div>
+      <div class="pk-card-timer">{% include 'main/_countdown.html' with compact=True %}</div>
+      <div class="pk-card-cta">
+        <span class="pk-card-go">Make your picks →</span>
+        <span class="pk-card-stat">{{ picks_made }} / {{ total_games }} in</span>
+      </div>
+    </a>
+
     {% else %}
-    <span class="stat-dot" style="background:var(--muted);opacity:.4;"></span>
-    <span class="stat-val" style="color:var(--muted);">0 / {{ games|length }} games</span>
-    {% endif %}
-  </div>
-  {% else %}
-  <!-- Open: big countdown -->
-  <div class="timer-wrap">
-    <p class="timer-label" id="cd-label" data-expired-label="Picks are locking now">Picks lock in:</p>
-    <div class="hms-wrap" id="cd-hms">
-      <div class="hms-col"><div class="cd-digit" id="cd-h">--</div><span class="hms-unit">hrs</span></div>
-      <span class="hms-sep">:</span>
-      <div class="hms-col"><div class="cd-digit" id="cd-m">--</div><span class="hms-unit">min</span></div>
-      <span class="hms-sep">:</span>
-      <div class="hms-col"><div class="cd-digit" id="cd-s">--</div><span class="hms-unit">sec</span></div>
-    </div>
-  </div>
-  <div id="pick-status" class="stat-indicator"></div>
-  {% endif %}
-
-  <!-- Games list -->
-  <div id="current-week-games-wrap" style="flex:1;min-height:0;position:relative;">
-  <div id="games-track"><div id="games-thumb"></div></div>
-  <div id="games-scroll" class="games-scroll" style="position:absolute;left:0;right:8px;top:0;bottom:0;overflow-y:scroll;">
-  {% if not games %}
-  <p style="color:var(--muted);font-size:.8125rem;padding:16px 0;">No games this week.</p>
-  {% else %}
-  <div class="games-columns">
-  {% for game in games %}
-  {% with pick=picks_map|get_item:game.id game_id_str=game.id|stringformat:"s" %}
-  {% with dist=pick_dist|get_item:game_id_str %}
-  <div class="game-row">
-    <div style="flex:1;min-width:0;">
-      {% if not settings.lock_picks %}
-      <div class="pick-2up" role="radiogroup" aria-label="{{ game.team1_abbrev }} versus {{ game.team2_abbrev }}">
-        <input class="pick-radio" type="radio" name="game-{{ game.id }}" id="g{{ game.id }}-t1"
-               value="team1" data-game="{{ game.id }}"{% if pick and pick.choice == 'team1' %} checked{% endif %}>
-        <label class="pick-side" for="g{{ game.id }}-t1">
-          <span class="pick-abbr">{{ game.team1_abbrev }}</span>
-          <span class="pick-val">{{ game.points1 }}</span>
-        </label>
-        <input class="pick-radio" type="radio" name="game-{{ game.id }}" id="g{{ game.id }}-t2"
-               value="team2" data-game="{{ game.id }}"{% if pick and pick.choice == 'team2' %} checked{% endif %}>
-        <label class="pick-side" for="g{{ game.id }}-t2">
-          <span class="pick-abbr">{{ game.team2_abbrev }}</span>
-          <span class="pick-val">{{ game.points2 }}</span>
-        </label>
+    <a href="{% url 'main:picks' %}" class="pk-card">
+      <div class="pk-card-top">
+        <span class="pk-dot" style="background:var(--good);"></span>
+        <p class="pk-card-title">Week {{ settings.week }} is underway</p>
       </div>
-      <span id="pick-had-{{ game.id }}" hidden>{% if pick %}1{% else %}0{% endif %}</span>
-      {% else %}
-      <!-- Locked / graded display -->
-      <div class="game-teams-row">
-        <div class="game-team-side">
-          <span class="team-name" style="{% if pick and pick.choice == 'team1' %}text-decoration:underline;text-underline-offset:3px;text-decoration-thickness:1.5px;{% endif %}{% if game.winner == 'team1' %}color:#34d399;{% elif game.winner == 'team2' %}color:#f87171;{% endif %}">{{ game.team1_abbrev }}</span>
-          <span class="game-pts">{{ game.points1 }}</span>
-        </div>
-        <span class="vs-sep">{% if game.winner == 'team1' %}◀{% elif game.winner == 'team2' %}▶{% elif game.winner %}T{% else %}vs{% endif %}</span>
-        <div class="game-team-side">
-          <span class="game-pts">{{ game.points2 }}</span>
-          <span class="team-name" style="{% if pick and pick.choice == 'team2' %}text-decoration:underline;text-underline-offset:3px;text-decoration-thickness:1.5px;{% endif %}{% if game.winner == 'team2' %}color:#34d399;{% elif game.winner == 'team1' %}color:#f87171;{% endif %}">{{ game.team2_abbrev }}</span>
-        </div>
-      </div>
-      {% endif %}
-      <div class="game-sep"><div class="game-sep-line"></div></div>
-      {% if settings.lock_picks %}
-      <div class="game-bottom-row">
-        {% if not game.home_team %}
-        <span class="game-sep-text">{% if game.game_dt_iso %}<span data-utc-full="{{ game.game_dt_iso }}">{{ game.game_dt_iso }}</span> · {% endif %}@ {{ game.team1_abbrev }}</span>
-        <div class="game-dist-row">
-          {% if dist %}<span class="dist-pct-t1">{{ dist.team1_pct }}%</span>
-          <div class="game-pie" style="background:conic-gradient(rgba(59,130,246,.8) 0% {{ dist.team1_pct }}%,rgba(239,68,68,.7) {{ dist.team1_pct }}% 100%);"><div class="game-pie-hole"></div></div>
-          <span class="dist-pct-t2">{{ dist.team2_pct }}%</span>{% endif %}
-          {% if game.winner and pick %}<span class="game-check" style="{% if pick.choice == game.winner %}color:#22c55e;{% else %}color:#ef4444;{% endif %}">{% if pick.choice == game.winner %}✓{% else %}✗{% endif %}</span>{% endif %}
-        </div>
+      <div class="pk-card-timer">{% include 'main/_countdown.html' with compact=True %}</div>
+      <div class="pk-card-cta">
+        <span class="pk-card-go">See how you're doing →</span>
+        {% if graded_count %}
+        <span class="pk-card-stat">{{ my_correct }} right of {{ graded_count }} final</span>
         {% else %}
-        <div class="game-dist-row">
-          {% if dist %}<span class="dist-pct-t1">{{ dist.team1_pct }}%</span>
-          <div class="game-pie" style="background:conic-gradient(rgba(59,130,246,.8) 0% {{ dist.team1_pct }}%,rgba(239,68,68,.7) {{ dist.team1_pct }}% 100%);"><div class="game-pie-hole"></div></div>
-          <span class="dist-pct-t2">{{ dist.team2_pct }}%</span>{% endif %}
-          {% if game.winner and pick %}<span class="game-check" style="{% if pick.choice == game.winner %}color:#22c55e;{% else %}color:#ef4444;{% endif %}">{% if pick.choice == game.winner %}✓{% else %}✗{% endif %}</span>{% endif %}
-        </div>
-        <span class="game-sep-text">{% if game.game_dt_iso %}<span data-utc-full="{{ game.game_dt_iso }}">{{ game.game_dt_iso }}</span> · {% endif %}@ {{ game.team2_abbrev }}</span>
+        <span class="pk-card-stat">{{ total_games }} games to come</span>
         {% endif %}
       </div>
-      {% else %}
-      {% if game.game_dt_iso %}
-      <div style="display:flex;justify-content:{% if game.home_team %}flex-end{% else %}flex-start{% endif %};margin-top:2px;">
-        <span class="game-sep-text"><span data-utc-full="{{ game.game_dt_iso }}">{{ game.game_dt_iso }}</span> · @ {% if game.home_team %}{{ game.team2_abbrev }}{% else %}{{ game.team1_abbrev }}{% endif %}</span>
+    </a>
+    {% endif %}
+
+    <!-- Newest message in the Emails feed, always shown whatever state the week
+         is in. The archive is on /emails/; this stays inline so the latest word
+         to the league is on the page you land on. -->
+    <div class="recap">
+      <div class="recap-head">
+        {% if latest_email %}
+        {% if latest_email.author and latest_email.author.profile.is_bot %}
+        <div class="recap-avatar">🤖</div>
+        {% else %}
+        <div class="recap-avatar recap-avatar-person">{{ latest_email.display_name|first|upper }}</div>
+        {% endif %}
+        <span class="recap-name">{{ latest_email.display_name }}</span>
+        <span class="recap-dot">·</span>
+        <span class="recap-label">{{ latest_email.subject }}</span>
+        {% else %}
+        <div class="recap-avatar">✉</div>
+        <span class="recap-name">Emails</span>
+        {% endif %}
+        <a href="{% url 'main:emails' %}" class="recap-all">{% if email_count > 1 %}All {{ email_count }}{% else %}Open{% endif %} →</a>
       </div>
-      {% endif %}
+      {% if latest_email %}
+      <div class="recap-body">{{ latest_email.body|linebreaks }}</div>
+      {% else %}
+      <p class="recap-empty">Nothing here yet — PutnamBot files a recap once week
+        {{ settings.week }} is scored.</p>
       {% endif %}
     </div>
-  </div>
-  {% endwith %}
-  {% endwith %}
-  {% endfor %}
-  </div>{# end games columns wrapper #}
-  {% endif %}
-  </div>{# end games-scroll #}
-  </div>{# end games relative wrapper #}
 
-  {% endif %}{# end published #}
-  </div><!-- end current-week-content -->
-  </div><!-- end CENTER/GAMES -->
+  </div><!-- end RIGHT -->
 
 </div><!-- end main-grid -->
 
@@ -560,48 +374,6 @@
   });
 })();
 
-// Custom games scrollbar
-(function(){
-  const scroll = document.getElementById('games-scroll');
-  const thumb  = document.getElementById('games-thumb');
-  const track  = document.getElementById('games-track');
-  if (!scroll || !thumb || !track) return;
-  const THUMB_H = 36;
-  function updateThumb() {
-    const trackH    = track.clientHeight;
-    const scrollable = scroll.scrollHeight - scroll.clientHeight;
-    track.style.display = scrollable > 0 ? '' : 'none';
-    const pct       = scrollable > 0 ? scroll.scrollTop / scrollable : 0;
-    thumb.style.top = Math.min(pct * (trackH - THUMB_H), trackH - THUMB_H) + 'px';
-  }
-  scroll.addEventListener('scroll', updateThumb);
-  window.addEventListener('resize', updateThumb);
-  updateThumb();
-  thumb.addEventListener('mousedown', e => {
-    e.preventDefault();
-    const startY   = e.clientY;
-    const startTop = scroll.scrollTop;
-    const trackH   = track.clientHeight;
-    function onMove(e) {
-      const dy = e.clientY - startY;
-      const scrollable = scroll.scrollHeight - scroll.clientHeight;
-      scroll.scrollTop = startTop + (dy / (trackH - THUMB_H)) * scrollable;
-    }
-    function onUp() {
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
-    }
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
-  });
-  track.addEventListener('click', e => {
-    if (e.target === thumb) return;
-    const rect = track.getBoundingClientRect();
-    const pct  = (e.clientY - rect.top) / rect.height;
-    scroll.scrollTop = pct * scroll.scrollHeight;
-  });
-})();
-
 // Score bars
 (function(){
   const data = {{ leaderboard_json|safe }};
@@ -616,196 +388,17 @@
   });
 })();
 
-// Dist bars
-document.querySelectorAll('.dist-t1').forEach(el=>{
-  setTimeout(()=>{ el.style.width=el.dataset.w+'%'; }, 400);
-});
-
-const HOME_HIST_URL = '{% url "main:ajax_history" %}';
 const SITE_WEEK = {{ settings.week }};
 const LOCK_PICKS = {{ settings.lock_picks|yesno:"true,false" }};
 
 // Live leaderboard polling while games are being graded
 if (LOCK_PICKS) {
   setInterval(() => {
-    if (chartWeek !== SITE_WEEK) return;
     fetch(`{% url 'main:ajax_leaderboard' %}?week=${SITE_WEEK}`)
       .then(r => r.json())
       .then(data => { renderLeaderboard(data.entries); renderPodium(data.entries); });
   }, 30000);
 }
-
-// Countdown
-(function(){
-  const h=document.getElementById('cd-h'),m=document.getElementById('cd-m'),s=document.getElementById('cd-s');
-  if(!h) return;
-  const daysWrap=document.getElementById('cd-days-wrap');
-  const hmsWrap=document.getElementById('cd-hms-wrap');
-  const daysText=document.getElementById('cd-days-text');
-  const nextGameTs = {{ next_game_ts|default:"null" }};
-  function getTarget(){
-    if(nextGameTs) return new Date(nextGameTs);
-    const now=new Date();
-    const etOff=-5*60;
-    const etNow=new Date(now.getTime()+now.getTimezoneOffset()*60000+etOff*60000);
-    const d=etNow.getDay(),days=d===0?0:7-d;
-    const t=new Date(etNow); t.setDate(etNow.getDate()+days); t.setHours(13,0,0,0);
-    if(etNow>=t) t.setDate(t.getDate()+7);
-    return new Date(t.getTime()-etOff*60000);
-  }
-  function pad(n){return String(n).padStart(2,'0');}
-  const eh=document.getElementById('exp-cd-h'),em=document.getElementById('exp-cd-m'),es=document.getElementById('exp-cd-s');
-  const label=document.getElementById('cd-label');
-  const hms=document.getElementById('cd-hms');
-  let expired=false;
-  function markExpired(){
-    // A frozen, pulsing 00:00:00 reads as a broken clock. Once the target has
-    // passed, drop the digits and say what is actually happening.
-    if(expired) return;
-    expired=true;
-    if(hms) hms.style.display='none';
-    if(label&&label.dataset.expiredLabel) label.textContent=label.dataset.expiredLabel;
-  }
-  function tick(){
-    const diff=getTarget()-new Date();
-    if(diff<=0){ markExpired(); return; }
-    const hv=pad(Math.floor(diff/3600000));
-    const mv=pad(Math.floor(diff%3600000/60000));
-    const sv=pad(Math.floor(diff%60000/1000));
-    h.textContent=hv; m.textContent=mv; s.textContent=sv;
-    if(eh) eh.textContent=hv;
-    if(em) em.textContent=mv;
-    if(es) es.textContent=sv;
-  }
-  tick(); setInterval(tick,1000);
-})();
-
-// Inline pick autosave
-const SAVE_URL = '{% url "main:ajax_save_pick" %}';
-const CSRF = '{{ csrf_token }}';
-let picksMade = {{ picks_map|length }};
-const totalGames = {{ games|length }};
-
-function updatePickStatus() {
-  const el = document.getElementById('pick-status');
-  if (!el) return;
-  if (picksMade >= totalGames && totalGames > 0) {
-    el.innerHTML = '<span class="stat-check" style="color:#34d399;">&#10003;</span><span class="stat-val" style="color:#34d399;">'+picksMade+' / '+totalGames+' picks</span>';
-  } else if (picksMade > 0) {
-    el.innerHTML = '<span class="stat-dot pulse" style="background:#fbbf24;"></span><span class="stat-val" style="color:#fbbf24;">'+picksMade+' / '+totalGames+' picks</span>';
-  } else {
-    el.innerHTML = '<span class="stat-dot" style="background:var(--muted);opacity:.4;"></span><span class="stat-val" style="color:var(--muted);">0 / '+totalGames+' picks</span>';
-  }
-}
-updatePickStatus();
-
-// One delegated listener for every pick. The radio has already re-rendered
-// itself by the time this fires; all that is left is to persist the choice.
-// Games deliberately stay where they are — the old build reordered the list on
-// each pick, which moved the next game out from under you mid-tap.
-document.addEventListener('change', function (e) {
-  const radio = e.target.closest('.pick-radio');
-  if (!radio) return;
-
-  const gameId = radio.dataset.game;
-  const label = radio.nextElementSibling;
-  if (label) {
-    label.classList.remove('saved');
-    void label.offsetWidth;   // restart the animation on a repeat pick
-    label.classList.add('saved');
-  }
-
-  const hadEl = document.getElementById('pick-had-' + gameId);
-  const fd = new FormData();
-  fd.append('game_id', gameId);
-  fd.append('choice', radio.value);
-  fd.append('csrfmiddlewaretoken', CSRF);
-
-  fetch(SAVE_URL, { method: 'POST', body: fd })
-    .then(r => r.json())
-    .then(data => {
-      if (!data.ok) { showPickError(data.error || 'Could not save that pick.'); return; }
-      if (hadEl && hadEl.textContent === '0') {
-        hadEl.textContent = '1';
-        picksMade++;
-        updatePickStatus();
-      }
-    })
-    .catch(() => showPickError('Could not save that pick. Check your connection.'));
-});
-
-// A silently dropped pick is worse than a visible failure — say so.
-function showPickError(msg) {
-  let bar = document.getElementById('pick-error');
-  if (!bar) {
-    bar = document.createElement('div');
-    bar.id = 'pick-error';
-    bar.setAttribute('role', 'status');
-    bar.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);bottom:20px;z-index:200;' +
-      'background:var(--bad-fill);border:1px solid var(--bad);color:var(--bad);' +
-      'padding:9px 14px;border-radius:var(--radius-sm);font-size:.8125rem;font-weight:600;';
-    document.body.appendChild(bar);
-  }
-  bar.textContent = msg;
-  bar.style.display = '';
-  clearTimeout(bar._t);
-  bar._t = setTimeout(() => { bar.style.display = 'none'; }, 4000);
-}
-
-// Email nav + collapse
-(function(){
-  const msgs=Array.from(document.querySelectorAll('.email-msg'));
-  if(!msgs.length)return;
-  const total=msgs.length;
-  const dateEl=document.getElementById('email-date');
-  const counter=document.getElementById('email-counter');
-  const prevBtn=document.getElementById('email-prev');
-  const nextBtn=document.getElementById('email-next');
-  const colBtn=document.getElementById('email-collapse');
-  const body=document.getElementById('email-body');
-  const fade=document.getElementById('email-fade');
-  const dates=[];
-  {% for ann in announcements %}dates.push("{{ ann.created_at|date:'F j, Y' }}");{% endfor %}
-  let idx=0,expanded=false;
-  function showMsg(i){
-    msgs.forEach((m,j)=>m.style.display=j===i?'':'none');
-    if(dateEl)dateEl.textContent=dates[i]||'';
-    if(counter)counter.textContent=(i+1)+' / '+total;
-    if(prevBtn){prevBtn.disabled=i===total-1;prevBtn.style.opacity=i===total-1?'.3':'1';}
-    if(nextBtn){nextBtn.disabled=i===0;nextBtn.style.opacity=i===0?'.3':'1';}
-    if(body&&expanded)body.style.maxHeight=body.scrollHeight+'px';
-  }
-  if(prevBtn)prevBtn.addEventListener('click',()=>{if(idx<total-1){idx++;showMsg(idx);}});
-  if(nextBtn)nextBtn.addEventListener('click',()=>{if(idx>0){idx--;showMsg(idx);}});
-  function toggle(){
-    expanded=!expanded;
-    body.style.maxHeight=expanded?body.scrollHeight+'px':'5.6em';
-    if(fade)fade.style.opacity=expanded?'0':'1';
-    if(colBtn)colBtn.textContent=expanded?'collapse':'expand';
-    body.style.cursor='pointer';
-  }
-  if(body){
-    body.style.cursor='pointer';
-    body.addEventListener('click',()=>{ toggle(); });
-  }
-  if(colBtn)colBtn.addEventListener('click',(e)=>{ e.stopPropagation(); toggle(); });
-})();
-
-// Global nav slider — AJAX leaderboard update
-{% if week_links %}
-initNavSlider({
-  min: 1,
-  max: {{ settings.week }},
-  value: {{ settings.week }},
-  onChange: function(w) {
-    fetch(`{% url 'main:ajax_leaderboard' %}?week=${w}`)
-      .then(r=>r.json())
-      .then(data=>{ renderLeaderboard(data.entries); renderPodium(data.entries); });
-    if (w < {{ settings.week }}) renderPastWeekGames(w);
-    else restoreCurrentWeekGames();
-  }
-});
-{% endif %}
 
 function renderScoreBars(entries){
   if(!entries.length)return;
@@ -857,99 +450,6 @@ function renderLeaderboard(entries){
     const pct=scroll.scrollHeight>scroll.clientHeight?scroll.scrollTop/(scroll.scrollHeight-scroll.clientHeight):0;
     thumb.style.top=Math.min(pct*(track.clientHeight-THUMB_H),track.clientHeight-THUMB_H)+'px';
   }
-}
-
-function renderPastWeekGames(week) {
-  const el = document.getElementById('past-week-games');
-  const cwContent = document.getElementById('current-week-content');
-  const hdr = document.getElementById('col-right-week');
-  if (!el) return;
-  if (cwContent) cwContent.style.display = 'none';
-  el.style.display = 'flex';
-  el.style.flexDirection = 'column';
-  if (hdr) hdr.textContent = 'Week ' + week;
-  el.innerHTML = '<p style="color:var(--muted);font-size:.75rem;padding:8px 0 0;">Loading…</p>';
-  fetch(HOME_HIST_URL + '?week=' + week)
-    .then(r => r.json())
-    .then(data => {
-      if (!data.games || !data.games.length) { el.innerHTML = '<p style="color:var(--muted);font-size:.75rem;padding:8px 0;">No data.</p>'; return; }
-      const me = '{{ request.user.username|escapejs }}';
-      const myPlayer = data.players.find(p => p.username === me);
-      const sortedByDt = [...data.games].filter(g => g.game_dt_iso).sort((a,b) => a.game_dt_iso > b.game_dt_iso ? 1 : -1);
-      const lastGame = sortedByDt.length ? sortedByDt[sortedByDt.length-1] : data.games[data.games.length-1];
-      const timerLabel = lastGame ? `${lastGame.team1_abbrev} vs ${lastGame.team2_abbrev} · Last kickoff:` : 'Last kickoff:';
-      let html = `<div class="timer-wrap">
-        <p class="timer-label">${timerLabel}</p>
-        <div class="hms-wrap">
-          <div class="hms-col"><div class="cd-digit static">00</div><span class="hms-unit">hrs</span></div>
-          <span class="hms-sep">:</span>
-          <div class="hms-col"><div class="cd-digit static">00</div><span class="hms-unit">min</span></div>
-          <span class="hms-sep">:</span>
-          <div class="hms-col"><div class="cd-digit static">00</div><span class="hms-unit">sec</span></div>
-        </div>
-      </div>
-      <div class="stat-indicator">
-        <span class="stat-check" style="color:#34d399;">&#10003;</span>
-        <span class="stat-val" style="color:#34d399;">${data.games.length} / ${data.games.length} games</span>
-      </div>
-      <div class="games-columns">`;
-      for (const g of data.games) {
-        const t1w = g.winner === 'team1', t2w = g.winner === 'team2';
-        const t1c = t1w ? '#34d399' : t2w ? '#f87171' : 'var(--text)';
-        const t2c = t2w ? '#34d399' : t1w ? '#f87171' : 'var(--text)';
-        let t1n = 0, t2n = 0;
-        for (const p of data.players) { const pk = p.picks[String(g.id)]; if (pk) pk.choice === 'team1' ? t1n++ : t2n++; }
-        const tot = t1n + t2n;
-        const t1pct = tot > 0 ? Math.round(t1n/tot*100) : 0;
-        const t2pct = 100 - t1pct;
-        const myPick = myPlayer ? myPlayer.picks[String(g.id)] : null;
-        const myChoice = myPick ? myPick.choice : null;
-        const myCorrect = myPick ? myPick.correct : null;
-        const t1ul = myChoice === 'team1' ? 'text-decoration:underline;text-underline-offset:3px;text-decoration-thickness:1.5px;' : '';
-        const t2ul = myChoice === 'team2' ? 'text-decoration:underline;text-underline-offset:3px;text-decoration-thickness:1.5px;' : '';
-        const arrow = t1w ? '◀' : t2w ? '▶' : 'T';
-        const check = myCorrect !== null ? `<span class="game-check" style="color:${myCorrect?'#22c55e':'#ef4444'};">${myCorrect?'✓':'✗'}</span>` : '';
-        const homeAbbrev = g.home_team ? g.team2_abbrev : g.team1_abbrev;
-        const dtSpan = g.game_dt_iso ? `<span data-utc-full="${g.game_dt_iso}">${g.game_dt_iso}</span> · ` : '';
-        html += `<div class="game-row"><div style="flex:1;min-width:0;">
-          <div class="game-teams-row">
-            <div class="game-team-side">
-              <span class="team-name" style="${t1ul}color:${t1c};">${g.team1_abbrev}</span>
-              <span class="game-pts">${g.points1}</span>
-            </div>
-            <span class="vs-sep">${arrow}</span>
-            <div class="game-team-side">
-              <span class="game-pts">${g.points2}</span>
-              <span class="team-name" style="${t2ul}color:${t2c};">${g.team2_abbrev}</span>
-            </div>
-          </div>
-          <div class="game-sep"><div class="game-sep-line"></div></div>
-          <div class="game-bottom-row">
-            ${!g.home_team ? `<span class="game-sep-text">${dtSpan}@ ${homeAbbrev}</span>` : ''}
-            <div class="game-dist-row">
-              <span class="dist-pct-t1">${t1pct}%</span>
-              <div class="game-pie" style="background:conic-gradient(rgba(59,130,246,.8) 0% ${t1pct}%,rgba(239,68,68,.7) ${t1pct}% 100%);"><div class="game-pie-hole"></div></div>
-              <span class="dist-pct-t2">${t2pct}%</span>
-              ${check}
-            </div>
-            ${g.home_team ? `<span class="game-sep-text">${dtSpan}@ ${homeAbbrev}</span>` : ''}
-          </div>
-        </div></div>`;
-      }
-      html += '</div>';
-      el.innerHTML = html;
-      if (typeof initUtcDates === 'function') initUtcDates(el);
-    })
-    .catch(() => { el.innerHTML = '<p style="color:var(--muted);font-size:.75rem;padding:8px 0;">Failed to load.</p>'; });
-}
-
-function restoreCurrentWeekGames() {
-  const el = document.getElementById('past-week-games');
-  const cwContent = document.getElementById('current-week-content');
-  const hdr = document.getElementById('col-right-week');
-  if (el) el.style.display = 'none';
-  if (cwContent) cwContent.style.display = 'contents';
-  if (hdr) hdr.textContent = 'Week {{ settings.week }}';
 }
 
 function renderPodium(entries){

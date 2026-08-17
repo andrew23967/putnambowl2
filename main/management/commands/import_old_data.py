@@ -16,7 +16,7 @@ import json
 from django.core.management.base import BaseCommand
 from django.db import transaction
 from django.contrib.auth.models import User
-from main.models import Game, Pick, WeeklyLeaderboard, SeasonRecord, Announcement
+from main.models import Game, Pick, WeeklyLeaderboard, SeasonRecord
 from main.history_import import normalise_game
 
 
@@ -173,10 +173,9 @@ class Command(BaseCommand):
             )
             self.stdout.write(f'  Imported leaderboard week {week}')
 
-        # Import announcements
-        cur.execute("SELECT * FROM main_announcement")
-        for row in cur.fetchall():
-            Announcement.objects.get_or_create(message=row['message'])
+        # The old site's announcements are deliberately not imported: the site
+        # has no announcement model any more, and that content is superseded by
+        # the Emails feed.
 
         conn.close()
 

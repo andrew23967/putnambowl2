@@ -22,8 +22,7 @@ try:
         """
         global _schedule_cache
         if year is None:
-            today = date.today()
-            year = today.year if today.month >= 9 else today.year - 1
+            year = current_season_year()
 
         cached = _schedule_cache.get(year)
         if cached and (time.monotonic() - cached[0]) < SCHEDULE_TTL_SECONDS:
@@ -74,9 +73,27 @@ def standings():
         return [f'<p>Could not load standings: {e}</p>']
 
 
-def _season_year():
+def current_season_year():
+    """The nflverse season year for "now" — the one true definition.
+
+    A season is labelled by the year it kicks off in, so January and February
+    belong to the previous year's season. The cutoff is **August**, not
+    September: next season's schedule is published well before week 1, and
+    August is exactly when the commissioner sets the season up. With a September
+    cutoff, every scrape run in August silently pulled *last* season — which is
+    how a week ended up holding a schedule eleven months in the past and a
+    countdown with nothing left to count to.
+
+    This rule was copy-pasted into six places (here twice, `auto`, and three
+    spots in `views`), so fixing any one of them fixed nothing. Call this
+    instead of writing the comparison again.
+    """
     today = date.today()
-    return today.year if today.month >= 9 else today.year - 1
+    return today.year if today.month >= 8 else today.year - 1
+
+
+# Older name, kept because it is used throughout this module.
+_season_year = current_season_year
 
 
 def scrape_nfl_data_py(week, year=None):

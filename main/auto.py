@@ -2,7 +2,7 @@ import logging
 from datetime import datetime, timezone, timedelta
 
 from django.contrib.auth.models import User
-from django.db.models import Q, Prefetch
+from django.db.models import Q, Prefetch, Min
 
 from .models import SiteSettings, Game, Pick, WeeklyLeaderboard
 from .teams import ABBREV_TO_TEAM, TEAM_ABBREV
@@ -26,9 +26,8 @@ def _calculate_points(underdog_ml, favorite_ml):
 
 
 def _current_season_year():
-    from datetime import date
-    today = date.today()
-    return today.year if today.month >= 9 else today.year - 1
+    """Season year for "now" — see scrape.current_season_year for the rule."""
+    return scrape_module.current_season_year()
 
 
 def _next_weekday_hour(weekday, hour, minute=0):
@@ -254,7 +253,16 @@ def do_scrape_and_publish(settings, year=None):
         )
         added += 1
 
-    first_dt = scrape_module.get_first_game_dt(week=settings.week, year=year)
+    # Lock against the earliest kickoff actually stored for the week, not the
+    # week's true first game. With a scrape day filter set — a Sunday-only league
+    # — the Thursday nighter never enters the slate, and pinning the lock to it
+    # shut picks 2.7 days before the first game anyone could pick. The dashboard's
+    # Scrape button has always computed it this way; now both paths agree.
+    first_dt = Game.objects.filter(
+        week=settings.week, game_dt__isnull=False
+    ).aggregate(Min('game_dt'))['game_dt__min']
+    if first_dt is None:
+        first_dt = scrape_module.get_first_game_dt(week=settings.week, year=year)
     settings.first_game_dt = first_dt
     if settings.lock_mode == 'offset' and first_dt and settings.auto_lock_offset_minutes:
         settings.auto_lock_dt = first_dt - timedelta(minutes=settings.auto_lock_offset_minutes)
@@ -357,6 +365,13 @@ def do_advance_week(settings):
         settings.weekly_recap = recap
         settings.save()
         WeeklyLeaderboard.objects.filter(week=completed_week).update(recap=recap)
+        try:
+            from .email_utils import record_recap_email
+            record_recap_email(completed_week, recap)
+        except Exception as e:
+            # A recap that fails to reach the feed must not abort the advance.
+            log.error('Recording recap to the Emails feed failed: %s', e)
+            print(f'[recap] feed write failed: {e}', flush=True)
 
     log.info('Auto: advanced to week %s', settings.week)
 

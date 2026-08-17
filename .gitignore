@@ -2,6 +2,8 @@
 *.pyc
 __pycache__/
 db.sqlite3
+# Snapshots taken before destructive changes (rescrapes, migrations).
+db.sqlite3.bak-*
 staticfiles/
 .venv/
 venv/

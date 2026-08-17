@@ -41,6 +41,69 @@ def _format_lock_dt(lock_dt, tz_str='UTC'):
     return f'{local.strftime("%A")} at {hour}:{minute} {ampm} {tz_label}'
 
 
+def record_site_email(subject, body, recipient_count, author=None, sent_at=None,
+                      slug=None):
+    """Put a message the site sent into the Emails feed.
+
+    Recorded at send time rather than ingested back out of the mailbox, so the
+    site's own mail appears even when inbound polling is unconfigured or broken.
+
+    `slug` makes the synthetic Message-ID stable and unique, which is what stops
+    a re-send — a regenerated recap, say — from creating a second row.
+    """
+    from .models import LeagueEmail
+
+    sent_at = sent_at or datetime.now(timezone.utc)
+    site_url = getattr(django_settings, 'SITE_URL', 'localhost')
+    domain = site_url.split('//')[-1].strip('/') or 'putnambowl.local'
+    key = slug or sent_at.strftime('%Y%m%d%H%M%S')
+    message_id = f'<site-{key}@{domain}>'
+
+    obj, created = LeagueEmail.objects.update_or_create(
+        message_id=message_id,
+        defaults={
+            'author': author,
+            'from_name': getattr(author, 'username', '') or 'PutnamBowl',
+            'from_email': getattr(django_settings, 'RESEND_FROM', '') or '',
+            'subject': subject,
+            'body': body,
+            'source': LeagueEmail.SOURCE_SITE,
+            'sent_at': sent_at,
+            'recipient_count': recipient_count,
+        },
+    )
+    print(f'[email] recorded to feed ({"new" if created else "updated"}): {subject}',
+          flush=True)
+    return obj
+
+
+# PutnamBot signs its own work. The feed shows an author either way, but the mail
+# that goes out has no such framing, so it says so in the body.
+PUTNAMBOT_SIGNOFF = (
+    "——\n"
+    "I'm PutnamBot, the AI commissioner of this league. This recap is mine — "
+    "I write one after every week is scored."
+)
+
+
+def record_recap_email(week, recap_text, recipient_count=0, subject=None):
+    """Record one of PutnamBot's recaps in the Emails feed.
+
+    Keyed on the week, so regenerating a recap replaces its row instead of
+    stacking up duplicates.
+    """
+    if not (recap_text or '').strip():
+        return None
+    author = User.objects.filter(username='putnambot').first()
+    return record_site_email(
+        subject=subject or f'Week {week} recap',
+        body=f'{recap_text.strip()}\n\n{PUTNAMBOT_SIGNOFF}',
+        recipient_count=recipient_count,
+        author=author,
+        slug=f'recap-w{week}' if week else 'season-preview',
+    )
+
+
 def send_picks_published_email(site_settings):
     """Send weekly picks-live notification to all non-bot users with an email address."""
     api_key = getattr(django_settings, 'RESEND_API_KEY', '')
@@ -85,6 +148,13 @@ def send_picks_published_email(site_settings):
         f'\nMake your picks: {picks_url}'
         f'{recap_section}'
         f'\n\n──\nPutnamBowl'
+    )
+
+    # Into the feed before the send thread starts: the page should show what the
+    # league was told even if Resend then fails on every address.
+    record_site_email(
+        subject=subject, body=body, recipient_count=len(recipients),
+        slug=f'picks-live-w{week}',
     )
 
     def _send():

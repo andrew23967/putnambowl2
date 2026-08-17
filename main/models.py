@@ -138,15 +138,65 @@ class WeeklyLeaderboard(models.Model):
         return f'Week {self.week} Leaderboard'
 
 
-class Announcement(models.Model):
-    message = models.TextField()
-    created_at = models.DateTimeField(auto_now_add=True)
+class LeagueEmail(models.Model):
+    """A message in the site's Emails feed.
+
+    Two ways a row gets here:
+
+    * **Ingested** — the commissioner (or any member with
+      ``profile.email_posts_enabled``) mails the league and copies the site
+      address. ``main/inbound_email.py`` verifies it and stores it.
+    * **Recorded** — the site sent it itself, written at send time by
+      ``email_utils``. No round trip through the mailbox, so our own mail shows
+      up even if ingestion is misconfigured.
+
+    Bodies are plain text and rendered escaped. Accepting HTML mail would need a
+    real sanitiser, which is a separate decision.
+    """
+    SOURCE_INBOUND = 'inbound'
+    SOURCE_SITE = 'site'
+    SOURCE_CHOICES = [
+        (SOURCE_INBOUND, 'Received from a member'),
+        (SOURCE_SITE, 'Sent by the site'),
+    ]
+
+    author = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='league_emails',
+        help_text='The member whose address it came from, when one matched.',
+    )
+    # Kept even when author is null so a rejected or orphaned sender is auditable.
+    from_email = models.EmailField(blank=True, default='')
+    from_name = models.CharField(max_length=120, blank=True, default='')
+    subject = models.CharField(max_length=300, blank=True, default='')
+    body = models.TextField(blank=True, default='')
+    source = models.CharField(max_length=10, choices=SOURCE_CHOICES, default=SOURCE_INBOUND)
+    # Date header for inbound, send time for our own. received_at is when we
+    # stored it; the two differ when a poll runs well after delivery.
+    sent_at = models.DateTimeField()
+    received_at = models.DateTimeField(auto_now_add=True)
+    # RFC 5322 Message-ID. Unique so re-polling the same mailbox cannot double-post.
+    message_id = models.CharField(max_length=400, unique=True)
+    # How many league members were on it — both the "went to everyone" evidence
+    # and what the page shows.
+    recipient_count = models.IntegerField(default=0)
+    published = models.BooleanField(
+        default=True, help_text='Uncheck to hide from the site without deleting.'
+    )
 
     class Meta:
-        ordering = ['-created_at']
+        ordering = ['-sent_at']
+        indexes = [models.Index(fields=['-sent_at'])]
 
     def __str__(self):
-        return self.message[:50]
+        who = self.author.username if self.author else (self.from_email or 'unknown')
+        return f'{who}: {self.subject[:50]}'
+
+    @property
+    def display_name(self):
+        if self.author:
+            return self.author.profile.real_name or self.author.username
+        return self.from_name or self.from_email
 
 
 class Message(models.Model):

@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Game, Pick, SiteSettings, WeeklyLeaderboard, Announcement, Bug, SeasonRecord
+from .models import Game, Pick, SiteSettings, WeeklyLeaderboard, LeagueEmail, Bug, SeasonRecord
 
 
 @admin.register(SiteSettings)
@@ -26,9 +26,13 @@ class WeeklyLeaderboardAdmin(admin.ModelAdmin):
     list_display = ['week']
 
 
-@admin.register(Announcement)
-class AnnouncementAdmin(admin.ModelAdmin):
-    list_display = ['message', 'created_at']
+@admin.register(LeagueEmail)
+class LeagueEmailAdmin(admin.ModelAdmin):
+    list_display = ['sent_at', 'author', 'from_email', 'subject', 'source',
+                    'recipient_count', 'published']
+    list_filter = ['published', 'source']
+    search_fields = ['subject', 'body', 'from_email', 'author__username']
+    readonly_fields = ['received_at', 'message_id']
 
 
 @admin.register(Bug)

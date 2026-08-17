@@ -28,6 +28,13 @@ class Profile(models.Model):
     )
     bot_underdog_pct = models.IntegerField(default=50)
     preseason_submitted = models.BooleanField(default=False)
+    # Whether mail from this member's address gets published to the site's Emails
+    # feed. Commissioner-controlled from the Accounts dashboard, and off by
+    # default: turning it on is granting someone write access to the home page.
+    email_posts_enabled = models.BooleanField(
+        default=False,
+        help_text="Publish this member's league-wide emails on the site.",
+    )
 
     def __str__(self):
         return self.user.username

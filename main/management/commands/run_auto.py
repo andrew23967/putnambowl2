@@ -15,6 +15,12 @@ class Command(BaseCommand):
                 from main.auto import auto_tick
                 from main.models import SiteSettings
                 from main import sim as sim_module
+                from main import inbound_email
+                # Deliberately outside auto_tick(): that returns immediately when
+                # auto_enabled is off, and league mail should still be collected
+                # by a league running its weeks by hand. Self-contained and
+                # best-effort, so a mailbox outage cannot stall the tick.
+                inbound_email.fetch()
                 auto_tick()
                 interval = sim_module.get_tick_interval() or SiteSettings.get().tick_interval
             except Exception as exc:

@@ -1,0 +1,91 @@
+{% extends 'base.html' %}
+{% block title %}Emails — PutnamBowl{% endblock %}
+
+{% block extra_head %}
+<style>
+  /* A column of prose, so it gets a reading measure rather than the full grid. */
+  .em-wrap { max-width:760px;margin:0 auto; }
+
+  .em-head { margin-bottom:26px; }
+  .em-title { font-size:1.15rem;font-weight:800;color:var(--text);margin:0;letter-spacing:-.02em; }
+  .em-sub { font-size:.8125rem;color:var(--muted);margin:8px 0 0;line-height:1.6; }
+
+  .em-msg { padding:22px 0;border-top:1px solid var(--border); }
+  .em-msg:first-of-type { border-top:none;padding-top:4px; }
+
+  .em-from { display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap; }
+  .em-avatar {
+    width:24px;height:24px;border-radius:50%;flex-shrink:0;
+    display:flex;align-items:center;justify-content:center;
+    font-size:.7rem;font-weight:800;color:#fff;background:var(--accent);
+  }
+  .em-avatar-bot { background:var(--fill-2);font-size:.8rem; }
+  .em-author { font-size:.8125rem;font-weight:700;color:var(--text); }
+  .em-dot { font-size:.6875rem;color:var(--muted);opacity:.6; }
+  .em-meta { font-size:.6875rem;color:var(--muted); }
+  /* Filled, not accent-on-accent-tint: --accent is the player's own theme colour
+     and the dark end of that range disappears against its own tint. */
+  .em-tag {
+    font-size:.5625rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+    padding:2px 7px;border-radius:99px;background:var(--accent);color:var(--on-accent);
+  }
+  .em-subject { font-size:.9375rem;font-weight:700;color:var(--text);margin:0 0 10px;letter-spacing:-.01em; }
+  .em-body { font-size:.9375rem;color:var(--muted2);line-height:1.85; }
+  .em-body p { margin:0 0 14px; }
+  .em-body p:last-child { margin-bottom:0; }
+
+  .em-empty { padding:28px 0;font-size:.8125rem;color:var(--muted);line-height:1.7; }
+  .em-empty code { font-size:.75rem;color:var(--muted2); }
+
+  .em-back {
+    display:inline-block;margin-top:30px;padding-top:18px;border-top:1px solid var(--border);
+    font-size:.75rem;font-weight:700;color:var(--muted2);text-decoration:none;width:100%;
+  }
+  .em-back:hover { color:var(--text); }
+
+  @media (max-width:640px) {
+    main { padding:16px !important; }
+    .em-body { font-size:.875rem;line-height:1.8; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="em-wrap anim-up">
+
+  <div class="em-head">
+    <h1 class="em-title">Emails</h1>
+    <p class="em-sub">Everything sent to the league — the commissioner's mail, and
+      PutnamBot's weekly recaps. Newest first.</p>
+  </div>
+
+  {% for msg in emails %}
+  <article class="em-msg">
+    <div class="em-from">
+      {% if msg.author and msg.author.profile.is_bot %}
+      <div class="em-avatar em-avatar-bot">🤖</div>
+      {% else %}
+      <div class="em-avatar">{{ msg.display_name|first|upper }}</div>
+      {% endif %}
+      <span class="em-author">{{ msg.display_name }}</span>
+      <span class="em-dot">·</span>
+      <span class="em-meta" data-utc-full="{{ msg.sent_at|date:'c' }}">{{ msg.sent_at|date:"F j, Y" }}</span>
+      {% if msg.recipient_count %}
+      <span class="em-dot">·</span>
+      <span class="em-meta">{{ msg.recipient_count }} recipient{{ msg.recipient_count|pluralize }}</span>
+      {% endif %}
+      {% if forloop.first %}<span class="em-tag">Latest</span>{% endif %}
+    </div>
+    <p class="em-subject">{{ msg.subject }}</p>
+    <div class="em-body">{{ msg.body|linebreaks }}</div>
+  </article>
+  {% empty %}
+  <p class="em-empty">Nothing here yet. PutnamBot files a recap once a week has been
+    scored, and mail the commissioner sends to the league shows up here once
+    inbound email is set up — see <code>main/inbound_email.py</code>.</p>
+  {% endfor %}
+
+  <a href="{% url 'main:home' %}" class="em-back">← Back to the leaderboard</a>
+
+</div>
+{% endblock %}

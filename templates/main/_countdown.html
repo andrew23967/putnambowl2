@@ -1,0 +1,92 @@
+{% comment %}
+The week's clock, shared by the home page and the picks page.
+
+Counts to the picks lock first, then to each remaining kickoff, advancing itself
+as each milestone passes — so it never needs a reload to stay truthful. Expects
+`countdown_json` and `countdown_idle` in the context (see views._countdown).
+
+Include once per page. Pass `compact` to shrink the digits:
+  {% include 'main/_countdown.html' with compact=True %}
+{% endcomment %}
+<div class="timer-wrap{% if compact %} timer-compact{% endif %}" id="cd-wrap"
+     data-idle-label="{{ countdown_idle }}">
+  <p class="timer-label" id="cd-label">{{ countdown_idle }}</p>
+  <div class="hms-wrap" id="cd-hms" style="display:none;">
+    <div class="hms-col"><div class="cd-digit" id="cd-h">--</div><span class="hms-unit" id="cd-u1">hrs</span></div>
+    <span class="hms-sep">:</span>
+    <div class="hms-col"><div class="cd-digit" id="cd-m">--</div><span class="hms-unit" id="cd-u2">min</span></div>
+    <span class="hms-sep">:</span>
+    <div class="hms-col"><div class="cd-digit" id="cd-s">--</div><span class="hms-unit" id="cd-u3">sec</span></div>
+  </div>
+</div>
+<script type="application/json" id="cd-data">{{ countdown_json|safe }}</script>
+<script>
+(function(){
+  const wrap  = document.getElementById('cd-wrap');
+  const data  = document.getElementById('cd-data');
+  const label = document.getElementById('cd-label');
+  const hms   = document.getElementById('cd-hms');
+  const h = document.getElementById('cd-h'),
+        m = document.getElementById('cd-m'),
+        s = document.getElementById('cd-s');
+  const u1 = document.getElementById('cd-u1'),
+        u2 = document.getElementById('cd-u2'),
+        u3 = document.getElementById('cd-u3');
+  if (!wrap || !data || !label || !hms) return;
+
+  let milestones = [];
+  try { milestones = JSON.parse(data.textContent || '[]'); } catch (e) { milestones = []; }
+
+  // Longest a game could still be in progress. Past this it has ended, so an
+  // ungraded game is waiting on the grader — saying "Underway" off nothing but a
+  // passed kickoff was wrong for every game that had already finished.
+  const GAME_WINDOW_MS = 4*60*60*1000;
+
+  function pad(n){ return String(n).padStart(2,'0'); }
+
+  // Under a day, count h:m:s. Over it, swap the units to d:h:m — an early-week
+  // lock is otherwise reported as a four-figure hour count, which just reads as
+  // a bug. Seconds are no use at that range anyway.
+  function render(diff){
+    const useDays = diff >= 86400000;
+    const parts = useDays
+      ? [Math.floor(diff/86400000), Math.floor(diff%86400000/3600000), Math.floor(diff%3600000/60000)]
+      : [Math.floor(diff/3600000),  Math.floor(diff%3600000/60000),    Math.floor(diff%60000/1000)];
+    const units = useDays ? ['days','hrs','min'] : ['hrs','min','sec'];
+    h.textContent = pad(parts[0]);
+    m.textContent = pad(parts[1]);
+    s.textContent = pad(parts[2]);
+    if (u1) u1.textContent = units[0];
+    if (u2) u2.textContent = units[1];
+    if (u3) u3.textContent = units[2];
+  }
+
+  function tick(){
+    const now = Date.now();
+    const next = milestones.find(ms => ms.ts > now);
+
+    if (next) {
+      label.textContent = next.label;
+      hms.style.display = '';
+      render(next.ts - now);
+      return;
+    }
+
+    // Nothing ahead. A frozen, pulsing 00:00:00 reads as a broken clock, so drop
+    // the digits and describe where the week actually stands.
+    hms.style.display = 'none';
+    const games = milestones.filter(ms => ms.kind === 'game');
+    const last = games.length ? games[games.length-1] : null;
+    if (last) {
+      label.textContent = (now - last.ts > GAME_WINDOW_MS && last.stale)
+        ? last.stale
+        : last.expired;
+    } else {
+      label.textContent = wrap.dataset.idleLabel || '';
+    }
+  }
+
+  tick();
+  setInterval(tick, 1000);
+})();
+</script>

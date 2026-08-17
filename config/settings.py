@@ -122,3 +122,19 @@ RESEND_API_KEY = env('RESEND_API_KEY', default='')
 RESEND_FROM = env('RESEND_FROM', default='onboarding@resend.dev')
 SITE_URL = env('SITE_URL', default='http://localhost:8000')
 GEMINI_API_KEY = env('GEMINI_API_KEY', default='')
+
+# ── Inbound email (the Emails feed) ─────────────────────────────────────────
+# Mail the commissioner sends to the league, copied to this mailbox, is polled by
+# the worker and published on the site. Unset host/user/password disables it
+# entirely — nothing is ingested and nothing errors. See main/inbound_email.py.
+IMAP_HOST = env('IMAP_HOST', default='')
+IMAP_PORT = env.int('IMAP_PORT', default=993)
+IMAP_USER = env('IMAP_USER', default='')
+IMAP_PASSWORD = env('IMAP_PASSWORD', default='')
+IMAP_FOLDER = env('IMAP_FOLDER', default='INBOX')
+IMAP_MARK_SEEN = env('IMAP_MARK_SEEN', default='true')
+# Optional: a list address that on its own proves a message went league-wide.
+LEAGUE_LIST_ADDRESS = env('LEAGUE_LIST_ADDRESS', default='')
+# Only turn this off against a local test mailbox. With it off, a forged From
+# header is enough to publish to the home page.
+INBOUND_REQUIRE_AUTH = env('INBOUND_REQUIRE_AUTH', default='true')

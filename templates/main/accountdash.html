@@ -34,7 +34,8 @@
        data-is-bot="{{ p.profile.is_bot|yesno:'true,false' }}"
        data-bot-pct="{{ p.profile.bot_underdog_pct }}"
        data-bot-strategy="{{ p.profile.bot_strategy }}"
-       data-preseason="{{ p.profile.preseason_submitted|yesno:'true,false' }}">
+       data-preseason="{{ p.profile.preseason_submitted|yesno:'true,false' }}"
+       data-email-posts="{{ p.profile.email_posts_enabled|yesno:'true,false' }}">
     <div class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold"
          style="background:{{ p.profile.theme }};color:#fff;flex-shrink:0;">
       {{ p.username|first|upper }}
@@ -79,6 +80,10 @@
       <label class="flex items-center gap-2 text-sm cursor-pointer" style="color:var(--text);"><input id="f-is-staff" type="checkbox"> Staff (admin)</label>
       <label class="flex items-center gap-2 text-sm cursor-pointer" style="color:var(--text);"><input id="f-is-bot" type="checkbox"> Bot account</label>
       <label class="flex items-center gap-2 text-sm cursor-pointer" style="color:var(--text);"><input id="f-preseason" type="checkbox"> Preseason submitted</label>
+      <label class="flex items-center gap-2 text-sm cursor-pointer" style="color:var(--text);"
+             title="Publish this member's league-wide emails on the site. Their mail must still pass authentication and be copied to the league.">
+        <input id="f-email-posts" type="checkbox"> Publish their emails
+      </label>
     </div>
     <div class="grid grid-cols-2 gap-3">
       <div>
@@ -145,6 +150,7 @@ document.querySelectorAll('.player-row').forEach(row => {
     document.getElementById('f-bot-pct').value = d.botPct;
     document.getElementById('f-bot-strategy').value = d.botStrategy || 'random';
     document.getElementById('f-preseason').checked = d.preseason === 'true';
+    document.getElementById('f-email-posts').checked = d.emailPosts === 'true';
     document.getElementById('f-real-name').value = d.realName;
     document.getElementById('f-bio').value = d.bio;
     document.getElementById('f-theme').value = d.theme;
@@ -192,6 +198,7 @@ async function savePlayer() {
   if (document.getElementById('f-is-staff').checked) body.append('is_staff','on');
   if (document.getElementById('f-is-bot').checked) body.append('is_bot','on');
   if (document.getElementById('f-preseason').checked) body.append('preseason_submitted','on');
+  if (document.getElementById('f-email-posts').checked) body.append('email_posts_enabled','on');
   const r = await fetch(`/dashboard/accounts/edit/${uid}/`, {method:'POST', body});
   const data = await r.json();
   if (data.ok) { toast('Saved!'); closeModal(); setTimeout(() => location.reload(), 800); }
