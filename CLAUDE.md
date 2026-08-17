@@ -210,16 +210,29 @@ no recap, so the old text stays live while the counter moves on).
 
 Rows arrive two ways:
 
-- **Recorded at send time** — `email_utils.record_site_email()` /
-  `record_recap_email()`. The site's own mail appears even if ingestion is
-  broken. Keyed on a stable slug, so regenerating a recap replaces its row
-  instead of stacking duplicates. PutnamBot's recaps carry `PUTNAMBOT_SIGNOFF`,
-  because the mail that goes out has no author chrome to identify it.
+- **Recorded at send time** — `email_utils.record_site_email()`. The site's own
+  mail appears even if ingestion is broken. Keyed on a stable slug, so a re-send
+  replaces its row instead of stacking duplicates. PutnamBot's recaps carry
+  `PUTNAMBOT_SIGNOFF`, because the mail that goes out has no author chrome.
 - **Ingested** — `main/inbound_email.py` polls IMAP from the worker.
 
 Anything writing `settings.weekly_recap` should also update the matching
-`WeeklyLeaderboard` row **and** call `record_recap_email` — see
-`do_advance_week` and `generate_recap`.
+`WeeklyLeaderboard` row **and** put the recap in the feed.
+
+### Recaps are emailed, and exactly once
+
+`send_recap_email()` mails the league *and* records; `record_recap_email()` only
+records. Use the first on the normal path — `do_advance_week`, the manual advance,
+`start_new_season` — and the second for corrections like `generate_recap`, where
+the league has already had that recap in their inbox.
+
+Sending happens only when the feed row is **newly created**, which makes the slug
+the idempotency key: advancing a week twice, or a retried worker tick, cannot mail
+the league the same recap again. `main/tests.py` covers that.
+
+Worth knowing why this exists: recaps used to be recorded and never sent, reaching
+an inbox only second-hand as a "Last Week" section inside the next "picks are
+live" mail — while PutnamBot's own intro promised "a comprehensive recap".
 
 ### Inbound mail: four gates, and one that matters
 

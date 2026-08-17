@@ -366,12 +366,12 @@ def do_advance_week(settings):
         settings.save()
         WeeklyLeaderboard.objects.filter(week=completed_week).update(recap=recap)
         try:
-            from .email_utils import record_recap_email
-            record_recap_email(completed_week, recap)
+            from .email_utils import send_recap_email
+            send_recap_email(completed_week, recap)
         except Exception as e:
-            # A recap that fails to reach the feed must not abort the advance.
-            log.error('Recording recap to the Emails feed failed: %s', e)
-            print(f'[recap] feed write failed: {e}', flush=True)
+            # A recap that fails to send must not abort the advance.
+            log.error('Sending the recap failed: %s', e)
+            print(f'[recap] send/record failed: {e}', flush=True)
 
     log.info('Auto: advanced to week %s', settings.week)
 

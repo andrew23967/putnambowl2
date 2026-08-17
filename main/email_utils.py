@@ -103,7 +103,7 @@ def record_site_email(subject, body, recipient_count, author=None, sent_at=None,
     )
     print(f'[email] recorded to feed ({"new" if created else "updated"}): {subject}',
           flush=True)
-    return obj
+    return obj, created
 
 
 # PutnamBot signs its own work. The feed shows an author either way, but the mail
@@ -115,14 +115,26 @@ PUTNAMBOT_SIGNOFF = (
 )
 
 
+def league_recipients():
+    """Everyone who should get league mail: real members with an address."""
+    return list(
+        User.objects.exclude(email='').exclude(email__isnull=True)
+        .exclude(profile__is_bot=True)
+        .values_list('email', flat=True)
+    )
+
+
 def record_recap_email(week, recap_text, recipient_count=0, subject=None):
-    """Record one of PutnamBot's recaps in the Emails feed.
+    """Record one of PutnamBot's recaps in the Emails feed, without sending it.
 
     Keyed on the week, so regenerating a recap replaces its row instead of
-    stacking up duplicates.
+    stacking up duplicates. Returns (obj, created).
+
+    For the normal path use `send_recap_email` — this is for corrections, where
+    the league has already been mailed and should not be mailed again.
     """
     if not (recap_text or '').strip():
-        return None
+        return None, False
     author = User.objects.filter(username='putnambot').first()
     return record_site_email(
         subject=subject or f'Week {week} recap',
@@ -131,6 +143,71 @@ def record_recap_email(week, recap_text, recipient_count=0, subject=None):
         author=author,
         slug=f'recap-w{week}' if week else 'season-preview',
     )
+
+
+def send_recap_email(week, recap_text, subject=None):
+    """Mail one of PutnamBot's recaps to the league, and record it in the feed.
+
+    PutnamBot's own intro promises "a comprehensive recap" by email, and for a
+    while it didn't send one: recaps were recorded to the feed and only ever
+    reached an inbox second-hand, as a "Last Week" section inside the next
+    "picks are live" mail.
+
+    Sends only when the feed row is newly created. The slug makes that check
+    idempotent, so advancing a week twice — or a retried worker tick — cannot
+    mail the league the same recap again.
+    """
+    if not (recap_text or '').strip():
+        return False
+
+    recipients = league_recipients()
+    obj, created = record_recap_email(week, recap_text, recipient_count=len(recipients),
+                                      subject=subject)
+    if obj is None:
+        return False
+    if not created:
+        print(f'[email] recap "{obj.subject}" already sent — not resending', flush=True)
+        return False
+
+    api_key = getattr(django_settings, 'RESEND_API_KEY', '')
+    if not api_key:
+        print('[email] RESEND_API_KEY not set — recap recorded but not emailed',
+              flush=True)
+        return False
+    if not recipients:
+        print('[email] no recipients with an address — recap recorded but not emailed',
+              flush=True)
+        return False
+
+    from_email = getattr(django_settings, 'RESEND_FROM', 'onboarding@resend.dev')
+    inbox = getattr(django_settings, 'IMAP_USER', '') or ''
+    site_url = getattr(django_settings, 'SITE_URL', 'http://localhost:8000')
+    body = (f'{obj.body}\n\n'
+            f'Standings and the full archive: {site_url.rstrip("/")}/emails/')
+
+    def _send():
+        try:
+            import resend
+            resend.api_key = api_key
+        except Exception as e:
+            print(f'[email] FAILED to init resend: {e}', flush=True)
+            return
+        sent = 0
+        for address in recipients:
+            try:
+                payload = {'from': from_email, 'to': [address],
+                           'subject': obj.subject, 'text': body}
+                if inbox:
+                    payload['reply_to'] = [inbox]
+                resend.Emails.send(payload)
+                sent += 1
+            except Exception as e:
+                print(f'[email] recap FAILED for one recipient: {e}', flush=True)
+        print(f'[email] recap "{obj.subject}" sent to {sent}/{len(recipients)}',
+              flush=True)
+
+    threading.Thread(target=_send, daemon=True).start()
+    return True
 
 
 def send_picks_published_email(site_settings):

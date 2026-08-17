@@ -258,6 +258,78 @@ class InboundEmailTests(TestCase):
         self.assertNotIn('previous thread', obj.body)
 
 
+class RecapEmailTests(TestCase):
+    """PutnamBot's intro promises a recap by email, and for a while nothing sent
+    one — recaps only reached an inbox second-hand, inside the next "picks are
+    live" mail. Sending must also happen exactly once per recap."""
+
+    def setUp(self):
+        from main import email_utils
+        from main.models import LeagueEmail
+        self.email_utils = email_utils
+        self.LeagueEmail = LeagueEmail
+
+        self.calls = []
+        self.addCleanup(setattr, email_utils, 'league_recipients',
+                        email_utils.league_recipients)
+        email_utils.league_recipients = lambda: ['a@example.com', 'b@example.com']
+
+        User.objects.create_user('putnambot')
+
+    def _send(self, week, text, **kw):
+        """Run send_recap_email with the actual Resend call stubbed out."""
+        import threading
+        real_thread = threading.Thread
+
+        def fake_thread(target=None, **kwargs):
+            self.calls.append(target)
+
+            class _T:
+                def start(inner):
+                    pass
+            return _T()
+
+        threading.Thread = fake_thread
+        try:
+            with self.settings(RESEND_API_KEY='re_test'):
+                return self.email_utils.send_recap_email(week, text, **kw)
+        finally:
+            threading.Thread = real_thread
+
+    def test_recap_is_recorded_and_a_send_is_started(self):
+        self.assertTrue(self._send(3, 'Week 3 belonged to the underdogs.'))
+        row = self.LeagueEmail.objects.get(subject='Week 3 recap')
+        self.assertEqual(row.recipient_count, 2)
+        self.assertIn("I'm PutnamBot", row.body)
+        self.assertEqual(len(self.calls), 1, 'one send should have been queued')
+
+    def test_the_same_recap_is_never_sent_twice(self):
+        """Advancing a week twice, or a retried worker tick, must not mail the
+        league the same recap again."""
+        self._send(3, 'Week 3 belonged to the underdogs.')
+        self.assertFalse(self._send(3, 'Week 3 belonged to the underdogs.'))
+        self.assertEqual(self.LeagueEmail.objects.filter(subject='Week 3 recap').count(), 1)
+        self.assertEqual(len(self.calls), 1, 'must not queue a second send')
+
+    def test_season_preview_uses_its_own_slug(self):
+        self._send(None, 'Welcome to the new season.', subject='Season preview')
+        row = self.LeagueEmail.objects.get(subject='Season preview')
+        self.assertIn('season-preview', row.message_id)
+
+    def test_empty_recap_does_nothing(self):
+        self.assertFalse(self._send(3, '   '))
+        self.assertEqual(self.LeagueEmail.objects.count(), 0)
+        self.assertEqual(self.calls, [])
+
+    def test_regenerating_records_without_sending(self):
+        self._send(3, 'first attempt')
+        before = len(self.calls)
+        self.email_utils.record_recap_email(3, 'a corrected write-up')
+        row = self.LeagueEmail.objects.get(subject='Week 3 recap')
+        self.assertIn('a corrected write-up', row.body)
+        self.assertEqual(len(self.calls), before, 'a correction must not re-mail')
+
+
 class PickEmailHandleTests(TestCase):
     """The submission path: what gets saved and what the sender is told.
 

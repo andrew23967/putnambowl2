@@ -1059,8 +1059,8 @@ def pickdash(request):
             settings.weekly_recap = recap
             settings.save()
             WeeklyLeaderboard.objects.filter(week=completed_week).update(recap=recap)
-            from .email_utils import record_recap_email
-            record_recap_email(completed_week, recap)
+            from .email_utils import send_recap_email
+            send_recap_email(completed_week, recap)
 
         messages.success(request, f'Advanced to week {settings.week}.')
 
@@ -1098,8 +1098,8 @@ def pickdash(request):
         from .auto import build_intro
         settings.weekly_recap = build_intro()
         settings.save()
-        from .email_utils import record_recap_email
-        record_recap_email(None, settings.weekly_recap, subject='Season preview')
+        from .email_utils import send_recap_email
+        send_recap_email(None, settings.weekly_recap, subject='Season preview')
         for p in User.objects.select_related('profile').all():
             p.profile.preseason_submitted = False
             p.profile.save()
@@ -1196,6 +1196,8 @@ def generate_recap(request):
     # Keep the archive in step with the live copy, the same way do_advance_week
     # does. Without this the feed would keep serving the superseded text.
     WeeklyLeaderboard.objects.filter(week=last_week).update(recap=recap)
+    # Record but deliberately do not send: regenerating is a correction, and the
+    # league has already had this week's recap in their inbox.
     from .email_utils import record_recap_email
     record_recap_email(last_week, recap)
     return JsonResponse({'recap': recap})
