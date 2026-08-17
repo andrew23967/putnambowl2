@@ -194,10 +194,25 @@ def league_recipients():
     )
 
 
-def record_recap_email(week, recap_text, recipient_count=0, subject=None):
+def recap_slug(week, year=None):
+    """Stable id for a recap, unique per season.
+
+    The season year is part of it, and that is load-bearing. Without it the slug
+    was just `recap-w3` / `season-preview`, so the row already existed the next
+    time round — and since sending is gated on the row being new, **week 1 of
+    season two would silently never be emailed**. Starting a new season also
+    failed to send its preview for exactly this reason.
+    """
+    if year is None:
+        from . import scrape
+        year = scrape.current_season_year()
+    return f'recap-{year}-w{week}' if week else f'season-preview-{year}'
+
+
+def record_recap_email(week, recap_text, recipient_count=0, subject=None, year=None):
     """Record one of PutnamBot's recaps in the Emails feed, without sending it.
 
-    Keyed on the week, so regenerating a recap replaces its row instead of
+    Keyed per season and week, so regenerating a recap replaces its row instead of
     stacking up duplicates. Returns (obj, created).
 
     For the normal path use `send_recap_email` — this is for corrections, where
@@ -211,11 +226,11 @@ def record_recap_email(week, recap_text, recipient_count=0, subject=None):
         body=f'{recap_text.strip()}\n\n{PUTNAMBOT_SIGNOFF}',
         recipient_count=recipient_count,
         author=author,
-        slug=f'recap-w{week}' if week else 'season-preview',
+        slug=recap_slug(week, year),
     )
 
 
-def send_recap_email(week, recap_text, subject=None):
+def send_recap_email(week, recap_text, subject=None, year=None):
     """Mail one of PutnamBot's recaps to the league, and record it in the feed.
 
     PutnamBot's own intro promises "a comprehensive recap" by email, and for a
@@ -232,7 +247,7 @@ def send_recap_email(week, recap_text, subject=None):
 
     recipients = league_recipients()
     obj, created = record_recap_email(week, recap_text, recipient_count=len(recipients),
-                                      subject=subject)
+                                      subject=subject, year=year)
     if obj is None:
         return False
     if not created:

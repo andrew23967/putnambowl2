@@ -334,6 +334,26 @@ class RecapEmailTests(TestCase):
         row = self.LeagueEmail.objects.get(subject='Season preview')
         self.assertIn('season-preview', row.message_id)
 
+    def test_next_season_sends_again(self):
+        """The slug carries the season year, and that is load-bearing. Keyed on
+        the week alone, the row already existed next time round — so week 1 of
+        season two was silently never emailed, and a new season's preview
+        wouldn't send either."""
+        self.assertTrue(self._send(1, 'Week 1 of 2026.', year=2026))
+        self.assertFalse(self._send(1, 'Week 1 of 2026.', year=2026),
+                         'same season and week must not resend')
+        self.assertTrue(self._send(1, 'Week 1 of 2027.', year=2027),
+                        'a new season must send again')
+        self.assertEqual(len(self.calls), 2)
+
+    def test_next_season_preview_sends_again(self):
+        self.assertTrue(self._send(None, 'Welcome to 2026.',
+                                   subject='Season preview', year=2026))
+        self.assertFalse(self._send(None, 'Welcome to 2026.',
+                                    subject='Season preview', year=2026))
+        self.assertTrue(self._send(None, 'Welcome to 2027.',
+                                   subject='Season preview', year=2027))
+
     def test_empty_recap_does_nothing(self):
         self.assertFalse(self._send(3, '   '))
         self.assertEqual(self.LeagueEmail.objects.count(), 0)
