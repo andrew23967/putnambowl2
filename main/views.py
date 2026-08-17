@@ -916,8 +916,16 @@ def pickdash(request):
         current_games.delete()
 
     elif 'toggle_publish' in request.POST:
+        # Publishing is what the league is waiting to hear about, and for most
+        # weeks this button is how it happens: the Scrape button does not publish,
+        # and only mails when the week was already published. So flipping this on
+        # sent nothing at all, which is the whole point of the ballot.
+        was_published = settings.publish
         settings.publish = not settings.publish
         settings.save()
+        if settings.publish and not was_published:
+            from .email_utils import send_picks_published_email
+            send_picks_published_email(settings)
 
     elif 'toggle_lock' in request.POST:
         settings.lock_picks = not settings.lock_picks

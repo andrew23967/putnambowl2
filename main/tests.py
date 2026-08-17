@@ -612,6 +612,53 @@ class EmailSwitchTests(TestCase):
         self.assertIn('factual weekly recap', prompt)
 
 
+class PublishTogglePicksLiveTests(TestCase):
+    """Flipping Publish on is how a week normally goes live, and it used to send
+    nothing: the Scrape button does not publish, and only mails when the week was
+    already published. The league heard nothing, ballot included."""
+
+    def setUp(self):
+        from main import email_utils
+        self.email_utils = email_utils
+        self.sent = []
+        self.addCleanup(setattr, email_utils, 'send_picks_published_email',
+                        email_utils.send_picks_published_email)
+        # Patched where views looks it up: it imports inside the branch.
+        email_utils.send_picks_published_email = lambda s: self.sent.append(s.week)
+
+        self.boss = User.objects.create_user('boss', password='pw', is_staff=True,
+                                             is_superuser=True)
+        self.settings_obj = SiteSettings.get()
+        self.settings_obj.week = 4
+        self.settings_obj.publish = False
+        self.settings_obj.save()
+        make_game(week=4)
+        self.client.login(username='boss', password='pw')
+
+    def _toggle(self):
+        return self.client.post('/dashboard/picks/', {'toggle_publish': '1'})
+
+    def test_publishing_mails_the_league(self):
+        self._toggle()
+        self.settings_obj.refresh_from_db()
+        self.assertTrue(self.settings_obj.publish)
+        self.assertEqual(self.sent, [4])
+
+    def test_unpublishing_mails_nobody(self):
+        self.settings_obj.publish = True
+        self.settings_obj.save()
+        self._toggle()
+        self.settings_obj.refresh_from_db()
+        self.assertFalse(self.settings_obj.publish)
+        self.assertEqual(self.sent, [])
+
+    def test_only_the_transition_sends(self):
+        self._toggle()          # off -> on, sends
+        self._toggle()          # on -> off, silent
+        self._toggle()          # off -> on, sends again
+        self.assertEqual(self.sent, [4, 4])
+
+
 class RelayTests(TestCase):
     """The site holds the real membership; the Google Group does not, since most of
     the league is not in it. So one message to the group must reach everyone."""
