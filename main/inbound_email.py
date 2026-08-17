@@ -38,7 +38,7 @@ import imaplib
 import logging
 import math
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from email.header import decode_header, make_header
 from email.utils import getaddresses, parsedate_to_datetime
 
@@ -50,6 +50,10 @@ from .models import LeagueEmail
 log = logging.getLogger(__name__)
 
 MAX_BODY_CHARS = 20000
+
+# How far back each poll looks. Bounded so the work per tick stays constant, but
+# wide enough to survive the worker being down for a few days.
+INBOUND_WINDOW_DAYS = 7
 
 # Trailing quoted replies and signatures, so a thread does not grow a copy of
 # itself every time someone hits reply.
@@ -289,11 +293,19 @@ def fetch(limit=25):
         with imaplib.IMAP4_SSL(host, port) as imap:
             imap.login(user, password)
             imap.select(folder)
-            typ, data = imap.search(None, 'UNSEEN')
+            # Search a recent window rather than UNSEEN. This is a real mailbox a
+            # person can open, and reading a message in the web client clears its
+            # unread flag — which, with an UNSEEN search, meant the poller would
+            # skip that message for ever. Re-reading is free because message_id is
+            # unique, so an already-stored message is simply recognised.
+            since = (datetime.now(timezone.utc) - timedelta(days=INBOUND_WINDOW_DAYS))
+            typ, data = imap.search(None, 'SINCE', since.strftime('%d-%b-%Y'))
             if typ != 'OK':
                 log.warning('[inbound] search failed: %s', typ)
                 return 0, 0
-            ids = (data[0] or b'').split()[:limit]
+            # Newest first, so a backlog longer than the limit still gets the
+            # messages that matter.
+            ids = list(reversed((data[0] or b'').split()))[:limit]
             for num in ids:
                 typ, payload = imap.fetch(num, '(BODY.PEEK[])')
                 if typ != 'OK' or not payload or not isinstance(payload[0], tuple):

@@ -73,6 +73,14 @@
       {% if msg.recipient_count %}
       <span class="em-dot">·</span>
       <span class="em-meta">{{ msg.recipient_count }} recipient{{ msg.recipient_count|pluralize }}</span>
+      {% elif msg.source == 'inbound' %}
+      {% comment %}
+        Sent to the list address: the group expands after we see it, so there is
+        no recipient count to report — "0 recipients" would be a lie.
+        NB {# #} is single-line only; a two-line one renders as visible text.
+      {% endcomment %}
+      <span class="em-dot">·</span>
+      <span class="em-meta">to the league</span>
       {% endif %}
       {% if forloop.first %}<span class="em-tag">Latest</span>{% endif %}
     </div>

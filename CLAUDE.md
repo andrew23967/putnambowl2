@@ -236,6 +236,16 @@ Polling lives in `run_auto` **outside `auto_tick()`**, which returns early when
 `auto_enabled` is off — a league running its weeks by hand still gets its mail.
 Bodies are plain text rendered escaped; HTML mail would need a real sanitiser.
 
+The poll searches a **recent window (`SINCE`), not `UNSEEN`**. That mailbox is a
+real inbox a person can open, and reading a message in the web client clears its
+unread flag — with an `UNSEEN` search the poller then skipped it for ever.
+Re-reading costs nothing because `message_id` is unique, so the window is safely
+idempotent. Don't "optimise" it back to `UNSEEN`.
+
+Setup gotcha worth knowing: the sender must be a **member of the Google Group**,
+or Google holds the post for moderation and the site never sees it — which looks
+identical to nothing happening, since there is no rejection to log.
+
 Test without a mailbox: `python manage.py fetch_emails --file message.eml`.
 
 There is no `Announcement` model. It and its dashboard page were removed when the
