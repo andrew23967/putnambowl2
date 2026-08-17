@@ -199,12 +199,6 @@ def ingest_message(raw_bytes):
     author = members.get(from_email)
     if author is None:
         return None, f'sender {from_email} is not a league member'
-    if not author.profile.email_posts_enabled:
-        return None, f'{author.username} does not have email posting enabled'
-
-    went, recipient_count, why = _went_to_the_league(msg, from_email, members)
-    if not went:
-        return None, f'not a league-wide email ({why})'
 
     try:
         sent_at = parsedate_to_datetime(msg.get('Date'))
@@ -216,6 +210,31 @@ def ingest_message(raw_bytes):
     body = _trim(_plain_body(msg))
     if not body:
         return None, 'empty body'
+
+    went, recipient_count, why = _went_to_the_league(msg, from_email, members)
+
+    # Addressed to us rather than to the league: a private submission, so read it
+    # as picks. Deliberately before the publishing flag — setting your own picks
+    # needs no privilege, and this mail is never published either way.
+    if not went:
+        from . import pick_email
+        try:
+            outcome = pick_email.handle(author, body, reply_to=from_email)
+        except Exception as e:
+            log.exception('[inbound] pick parsing failed')
+            return None, f'pick parsing failed for {author.username}: {e}'
+        # Recorded so the same email is not re-parsed on the next poll, but kept
+        # out of the feed — picks are private until the week locks.
+        LeagueEmail.objects.create(
+            author=author, from_email=from_email, from_name=_decode(from_name),
+            subject=_decode(msg.get('Subject')) or '(no subject)',
+            body=body, source=LeagueEmail.SOURCE_INBOUND, sent_at=sent_at,
+            message_id=message_id[:400], recipient_count=0, published=False,
+        )
+        return None, outcome
+
+    if not author.profile.email_posts_enabled:
+        return None, f'{author.username} does not have email posting enabled'
 
     obj = LeagueEmail.objects.create(
         author=author,

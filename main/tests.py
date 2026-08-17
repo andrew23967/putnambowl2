@@ -227,10 +227,13 @@ class InboundEmailTests(TestCase):
         self.assertIsNone(obj)
         self.assertIn('not a league member', reason)
 
-    def test_private_note_to_the_site_only_is_rejected(self):
+    def test_private_note_to_the_site_only_is_never_published(self):
+        """Mail addressed to us rather than the league is a private submission —
+        it is read as picks (see PickEmailRoutingTests) and must never reach the
+        feed, whatever else happens to it."""
         obj, reason = self.ingest(self._raw(to=['league@putnambowl.com']))
         self.assertIsNone(obj)
-        self.assertIn('not a league-wide email', reason)
+        self.assertEqual(self.LeagueEmail.objects.filter(published=True).count(), 0)
 
     def test_list_address_alone_satisfies_league_wide(self):
         with self.settings(LEAGUE_LIST_ADDRESS='league@putnambowl.com'):
@@ -253,6 +256,251 @@ class InboundEmailTests(TestCase):
         self.assertIsNotNone(obj, reason)
         self.assertEqual(obj.body, 'Reminder: picks close tonight.')
         self.assertNotIn('previous thread', obj.body)
+
+
+class PickEmailParseTests(TestCase):
+    """Members mail their picks in prose. A wrong pick silently sabotages someone's
+    week, so the parser decides only what it can read with certainty and defers
+    the rest rather than guessing."""
+
+    def setUp(self):
+        from main import pick_email
+        self.parse = pick_email.parse_deterministic
+        s = SiteSettings.get()
+        s.week = 5
+        s.save()
+        self.kc = make_game(week=5, team1='Kansas City Chiefs',
+                            team2='Los Angeles Chargers')
+        self.phi = make_game(week=5, team1='Philadelphia Eagles',
+                             team2='Dallas Cowboys')
+        self.no = make_game(week=5, team1='New Orleans Saints',
+                            team2='Carolina Panthers')
+        self.games = [self.kc, self.phi, self.no]
+
+    def test_abbreviations_and_mascots(self):
+        picks, _ = self.parse('KC, Eagles, Panthers', self.games)
+        self.assertEqual(picks[self.kc.id], 'team1')
+        self.assertEqual(picks[self.phi.id], 'team1')
+        self.assertEqual(picks[self.no.id], 'team2')
+
+    def test_prose_around_the_picks(self):
+        picks, _ = self.parse(
+            "Hi, sorry this is late. I'll take the Chiefs this week, give me "
+            "Philadelphia, and I like the Panthers for the upset. Thanks!",
+            self.games)
+        self.assertEqual(picks[self.kc.id], 'team1')
+        self.assertEqual(picks[self.phi.id], 'team1')
+        self.assertEqual(picks[self.no.id], 'team2')
+
+    def test_over_phrasing_picks_the_first_team(self):
+        picks, ambiguous = self.parse(
+            'Chargers over KC, Cowboys beat the Eagles', self.games)
+        self.assertEqual(picks[self.kc.id], 'team2')
+        self.assertEqual(picks[self.phi.id], 'team2')
+        self.assertEqual(ambiguous, [])
+
+    def test_both_teams_named_without_a_verb_is_deferred_not_guessed(self):
+        picks, ambiguous = self.parse('not sure about KC vs the Chargers yet',
+                                      self.games)
+        self.assertNotIn(self.kc.id, picks)
+        self.assertIn(self.kc, ambiguous)
+
+    def test_the_word_no_is_not_a_saints_pick(self):
+        """'NO' is New Orleans; 'no' is English. Matching the word would have
+        registered a Saints pick for anyone who wrote a sentence with 'no' in it."""
+        picks, _ = self.parse('no idea on that one, but give me the Eagles',
+                              self.games)
+        self.assertNotIn(self.no.id, picks)
+        self.assertEqual(picks[self.phi.id], 'team1')
+
+    def test_uppercase_NO_is_a_saints_pick(self):
+        picks, _ = self.parse('NO and KC please', self.games)
+        self.assertEqual(picks[self.no.id], 'team1')
+        self.assertEqual(picks[self.kc.id], 'team1')
+
+    def test_substrings_do_not_match(self):
+        picks, _ = self.parse('I will send these later, no notice needed',
+                              self.games)
+        self.assertEqual(picks, {})
+
+    def test_unmentioned_games_are_left_alone(self):
+        picks, _ = self.parse('just the Eagles for now', self.games)
+        self.assertEqual(set(picks), {self.phi.id})
+
+    def test_city_only_phrasing(self):
+        """"Give me Philadelphia" is as common as naming the mascot."""
+        picks, _ = self.parse('Philadelphia and Kansas City', self.games)
+        self.assertEqual(picks[self.phi.id], 'team1')
+        self.assertEqual(picks[self.kc.id], 'team1')
+
+    def test_a_team_named_as_the_loser_is_not_picked(self):
+        """"Chargers over Denver" used to pick Denver, because Denver was the only
+        team named in its own game. Naming a loser now picks its opponent."""
+        den = make_game(week=5, team1='Denver Broncos', team2='Las Vegas Raiders')
+        picks, _ = self.parse('Chargers over Denver', self.games + [den])
+        self.assertEqual(picks[self.kc.id], 'team2', 'Chargers win their game')
+        self.assertEqual(picks[den.id], 'team2', 'Denver lost, so the Raiders')
+
+    def test_negation_picks_the_opponent(self):
+        picks, _ = self.parse("not taking the Chiefs this week", self.games)
+        self.assertEqual(picks[self.kc.id], 'team2')
+
+    def test_contradiction_is_deferred(self):
+        picks, ambiguous = self.parse('Chiefs, actually not the Chiefs',
+                                      self.games)
+        self.assertNotIn(self.kc.id, picks)
+        self.assertIn(self.kc, ambiguous)
+
+    def test_shared_cities_are_not_resolved_arbitrarily(self):
+        """Two teams share New York and two share Los Angeles, so the city alone
+        cannot decide a game — better unresolved than wrong."""
+        jets = make_game(week=5, team1='New York Jets', team2='New York Giants')
+        picks, _ = self.parse('I want New York', [jets])
+        self.assertEqual(picks, {})
+
+
+class PickEmailHandleTests(TestCase):
+    """The whole submission path: what gets saved, and what the sender is told."""
+
+    def setUp(self):
+        from main import pick_email
+        self.pick_email = pick_email
+        self.sent = []
+        self.addCleanup(setattr, pick_email, 'send_reply', pick_email.send_reply)
+        pick_email.send_reply = lambda to, subject, body: (
+            self.sent.append((to, subject, body)) or True)
+
+        self.user = User.objects.create_user('gramps', email='gramps@example.com')
+        self.user.profile.real_name = 'Bill'
+        self.user.profile.save()
+
+        self.settings = SiteSettings.get()
+        self.settings.week = 5
+        self.settings.publish = True
+        self.settings.lock_picks = False
+        self.settings.save()
+
+        self.kc = make_game(week=5, team1='Kansas City Chiefs',
+                            team2='Los Angeles Chargers', points1=1.0, points2=2.4)
+        self.phi = make_game(week=5, team1='Philadelphia Eagles',
+                             team2='Dallas Cowboys', points1=1.0, points2=3.1)
+
+    def test_saves_picks_and_reports_them_back(self):
+        outcome = self.pick_email.handle(self.user, 'KC and the Cowboys please')
+        self.assertEqual(Pick.objects.filter(user=self.user).count(), 2)
+        self.assertEqual(Pick.objects.get(user=self.user, game=self.kc).choice, 'team1')
+        self.assertEqual(Pick.objects.get(user=self.user, game=self.phi).choice, 'team2')
+
+        to, subject, body = self.sent[0]
+        self.assertEqual(to, 'gramps@example.com')
+        self.assertIn('Week 5', subject)
+        self.assertIn('Bill', body)
+        # The reply must state the picks, not just a count.
+        self.assertIn('Kansas City Chiefs over Los Angeles Chargers', body)
+        self.assertIn('Dallas Cowboys over Philadelphia Eagles', body)
+        self.assertIn('2 of 2 games', body)
+        self.assertIn('saved 2/2', outcome)
+
+    def test_partial_submission_saves_what_it_understood_and_asks_about_the_rest(self):
+        self.pick_email.handle(self.user, 'just KC for now')
+        self.assertEqual(Pick.objects.filter(user=self.user).count(), 1)
+        body = self.sent[0][2]
+        self.assertIn('could not tell who you wanted', body)
+        self.assertIn('Philadelphia Eagles vs Dallas Cowboys', body)
+        self.assertIn('1 of 2 games', body)
+
+    def test_resending_updates_rather_than_duplicates(self):
+        self.pick_email.handle(self.user, 'KC')
+        self.pick_email.handle(self.user, 'Chargers actually')
+        self.assertEqual(Pick.objects.filter(user=self.user).count(), 1)
+        self.assertEqual(Pick.objects.get(user=self.user, game=self.kc).choice, 'team2')
+
+    def test_locked_week_saves_nothing_and_says_so(self):
+        self.settings.lock_picks = True
+        self.settings.save()
+        outcome = self.pick_email.handle(self.user, 'KC and the Cowboys')
+        self.assertEqual(Pick.objects.filter(user=self.user).count(), 0)
+        self.assertIn('locked', self.sent[0][2])
+        self.assertIn('locked', outcome)
+
+    def test_unpublished_week_saves_nothing_and_says_so(self):
+        self.settings.publish = False
+        self.settings.save()
+        self.pick_email.handle(self.user, 'KC')
+        self.assertEqual(Pick.objects.filter(user=self.user).count(), 0)
+        self.assertIn("isn't open for picks yet", self.sent[0][2])
+
+    def test_unreadable_message_saves_nothing_and_says_so(self):
+        self.pick_email.handle(self.user, 'hi hope you are well, talk soon')
+        self.assertEqual(Pick.objects.filter(user=self.user).count(), 0)
+        self.assertIn('could not work out any picks', self.sent[0][2])
+
+
+class PickEmailRoutingTests(TestCase):
+    """Mail to the list publishes; mail direct to the mailbox submits picks. A
+    submission must never reach the feed — picks are private until lock."""
+
+    def setUp(self):
+        from main import inbound_email, pick_email
+        from main.models import LeagueEmail
+        self.ingest = inbound_email.ingest_message
+        self.LeagueEmail = LeagueEmail
+        self.addCleanup(setattr, pick_email, 'send_reply', pick_email.send_reply)
+        self.sent = []
+        pick_email.send_reply = lambda to, subject, body: (
+            self.sent.append((to, subject, body)) or True)
+
+        self.user = User.objects.create_user('gramps', email='gramps@example.com')
+        # Deliberately WITHOUT email_posts_enabled: submitting picks needs no
+        # publishing privilege.
+        self.user.profile.save()
+        for i in range(4):
+            User.objects.create_user(f'member{i}', email=f'm{i}@example.com')
+
+        s = SiteSettings.get()
+        s.week = 5
+        s.publish = True
+        s.lock_picks = False
+        s.save()
+        self.game = make_game(week=5, team1='Kansas City Chiefs',
+                             team2='Los Angeles Chargers')
+
+    def _raw(self, to, body, msgid='<p1@example.com>'):
+        return '\r\n'.join([
+            f'From: Bill <gramps@example.com>',
+            f'To: {to}',
+            'Subject: my picks',
+            f'Message-ID: {msgid}',
+            'Date: Mon, 22 Sep 2025 10:00:00 +0000',
+            'Authentication-Results: mx.example.com; dmarc=pass',
+            'Content-Type: text/plain; charset="utf-8"',
+            '', body,
+        ]).encode()
+
+    def test_direct_email_submits_picks_and_is_not_published(self):
+        obj, reason = self.ingest(self._raw('putnambowl.league@gmail.com', 'KC please'))
+        self.assertIsNone(obj, 'a pick submission must not become a feed post')
+        self.assertIn('saved 1/1', reason)
+        self.assertEqual(Pick.objects.get(user=self.user, game=self.game).choice, 'team1')
+        self.assertEqual(self.LeagueEmail.objects.filter(published=True).count(), 0)
+        # Stored unpublished so the next poll does not parse it again.
+        self.assertEqual(self.LeagueEmail.objects.filter(published=False).count(), 1)
+        self.assertTrue(self.sent)
+
+    def test_the_same_submission_is_not_processed_twice(self):
+        self.ingest(self._raw('putnambowl.league@gmail.com', 'KC please'))
+        obj, reason = self.ingest(self._raw('putnambowl.league@gmail.com', 'KC please'))
+        self.assertIsNone(obj)
+        self.assertEqual(reason, 'already ingested')
+        self.assertEqual(len(self.sent), 1, 'must not reply twice to one email')
+
+    def test_list_email_still_needs_the_publishing_flag(self):
+        with self.settings(LEAGUE_LIST_ADDRESS='league@putnambowl.com'):
+            obj, reason = self.ingest(
+                self._raw('league@putnambowl.com', 'week 5 is live everyone'))
+        self.assertIsNone(obj)
+        self.assertIn('does not have email posting enabled', reason)
+        self.assertEqual(Pick.objects.count(), 0)
 
 
 class GradeScopeTests(TestCase):

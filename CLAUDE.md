@@ -246,6 +246,44 @@ Setup gotcha worth knowing: the sender must be a **member of the Google Group**,
 or Google holds the post for moderation and the site never sees it — which looks
 identical to nothing happening, since there is no rejection to log.
 
+## Picks by email
+
+Mail sent **directly to the mailbox** rather than to the list is read as a pick
+submission by `main/pick_email.py` — for members who find the site awkward. The
+routing is purely the recipient: list address → publish to the feed, direct → parse
+picks. No Google Group membership is involved, because no group is.
+
+**This needs no permission flag.** Setting your own picks is something every
+member can already do on the site; `email_posts_enabled` gates *publishing*,
+which writes to a shared surface, and must not be reused here. A submission is
+stored `published=False` so the next poll doesn't re-parse it, and never appears
+in the feed — picks stay private until the week locks.
+
+### Never guess a pick
+
+Two passes: a deterministic matcher first, then Gemini on whatever is left.
+Unlike `ai_picks.choose_picks()`, which falls back to random because a bot with no
+picks is worse than one with arbitrary picks, **here the opposite holds** — a
+wrong pick silently sabotages someone's week. Unresolved games are left unpicked
+and asked about in the reply.
+
+The matcher marks each team mention for or against, because a pick'em game is a
+binary choice: naming the loser decides it too. "Chargers over Denver" picks the
+Chargers *and* the Broncos' opponent. Getting this wrong is not theoretical — the
+first version picked Denver, and "not taking the Bills" picked Buffalo.
+
+Aliases cover full name, abbreviation, mascot and city, but only where a fragment
+identifies exactly one team — derived from the team list, so New York and Los
+Angeles are correctly excluded. Two-letter abbreviations that are English words
+match only in upper case: lower-case `no` is the word, `NO` is New Orleans.
+
+Every submission gets a reply listing exactly what was recorded and what could not
+be read. That reply is the real backstop against a misparse, so don't remove it.
+
+Note `resend` is in `requirements.txt` but is often **not installed in the local
+venv**, so replies (and the "picks are live" mail) log a failure locally and only
+send in production.
+
 Test without a mailbox: `python manage.py fetch_emails --file message.eml`.
 
 There is no `Announcement` model. It and its dashboard page were removed when the
