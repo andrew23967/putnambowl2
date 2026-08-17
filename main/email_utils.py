@@ -162,6 +162,25 @@ PUTNAMBOT_SIGNOFF = (
 )
 
 
+def picks_address():
+    """The tagged address that means "these are my picks".
+
+    Gmail delivers `user+picks@gmail.com` to `user@gmail.com` and keeps the tag in
+    the headers, so one mailbox serves both purposes and the league needs no
+    mailing list. Ballots and confirmations set Reply-To to this, which is what
+    makes replying to one unambiguous — including for someone whose plain mail is
+    published, where a reply would otherwise broadcast their picks.
+    """
+    mailbox = getattr(django_settings, 'SMTP_USER', '') or \
+        getattr(django_settings, 'IMAP_USER', '') or ''
+    tag = getattr(django_settings, 'PICKS_ADDRESS_TAG', 'picks') or 'picks'
+    if not mailbox or '@' not in mailbox or not tag:
+        return mailbox
+    local, domain = mailbox.rsplit('@', 1)
+    local = local.split('+', 1)[0]
+    return f'{local}+{tag}@{domain}'
+
+
 def outbound_suppressed():
     """True when nothing should actually leave the building.
 
@@ -291,9 +310,8 @@ def send_recap_email(week, recap_text, subject=None, year=None):
     idempotent, so advancing a week twice — or a retried worker tick — cannot
     mail the league the same recap again.
 
-    Delivered per member from the accounts, **not** to `LEAGUE_LIST_ADDRESS`. The
-    group is only how the commissioner's own mail reaches the site; most of the
-    league is not in it, so a recap posted there would miss most of its audience.
+    Delivered per member from the accounts, which are the league's membership.
+    There is no mailing list to post to.
     """
     if not (recap_text or '').strip():
         return False
@@ -311,11 +329,7 @@ def send_recap_email(week, recap_text, subject=None, year=None):
     body = (f'{obj.body}\n\n'
             f'The full archive: {site_url.rstrip("/")}/emails/')
 
-    # Per member, never to LEAGUE_LIST_ADDRESS. Posting to the group would be one
-    # send instead of nineteen, but most of the league is not in the group — it is
-    # only how the commissioner's own mail reaches the site — so a recap sent there
-    # would quietly miss most of the people it is for. The recipient list here
-    # comes from the accounts, which is the real membership.
+    # Per member, from the accounts. There is no list: the site is the mailer.
     if not recipients:
         print('[email] no recipients with an address — recap recorded but not emailed',
               flush=True)
@@ -389,10 +403,10 @@ def send_picks_published_email(site_settings):
     from_email = getattr(django_settings, 'RESEND_FROM', 'onboarding@resend.dev')
     picks_url = f'{site_url.rstrip("/")}/picks/'
 
-    # Replies must land in the mailbox the worker polls, not wherever RESEND_FROM
-    # points — otherwise an edited ballot goes to an address nobody reads and the
-    # member hears nothing back.
-    inbox = getattr(django_settings, 'IMAP_USER', '') or ''
+    # Replies go to the tagged picks address, so an edited ballot is unambiguously
+    # a pick submission — including from someone whose plain mail is published,
+    # where a reply would otherwise be broadcast to the league as an announcement.
+    inbox = picks_address()
 
     from .models import Game
     games = list(Game.objects.filter(week=week))
@@ -438,8 +452,11 @@ def send_picks_published_email(site_settings):
     # Sent individually, a reply can only go back to the mailbox.
     if smtp_ready():
         def _send_each():
+            # Reply-To is the tagged picks address, so replying to the ballot
+            # submits picks rather than being read as an announcement.
             sent = sum(1 for a in recipients
-                       if send_via_mailbox(a, subject, body)[0])
+                       if send_via_mailbox(a, subject, body,
+                                           reply_to=inbox or None)[0])
             print(f'[email] picks-live sent to {sent}/{len(recipients)} '
                   f'for week {week}', flush=True)
         threading.Thread(target=_send_each, daemon=True).start()

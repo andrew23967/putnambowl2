@@ -192,10 +192,14 @@ def send_reply(to_email, subject, body, in_reply_to=None):
     the mailbox it is a genuine reply — same address they wrote to, threaded — so
     it lands in the conversation they started.
     """
-    from .email_utils import outbound_suppressed, send_via_mailbox, smtp_ready
+    from .email_utils import (outbound_suppressed, picks_address,
+                              send_via_mailbox, smtp_ready)
 
     if smtp_ready():
-        ok, _ = send_via_mailbox(to_email, subject, body, in_reply_to=in_reply_to)
+        # Corrections come back to the tagged address, so a follow-up is read as
+        # picks and never as something to publish.
+        ok, _ = send_via_mailbox(to_email, subject, body, in_reply_to=in_reply_to,
+                                 reply_to=picks_address() or None)
         if ok:
             return True
         # Fall through to Resend rather than losing the confirmation entirely.
@@ -210,7 +214,7 @@ def send_reply(to_email, subject, body, in_reply_to=None):
               f'not sent', flush=True)
         return False
     from_email = getattr(django_settings, 'RESEND_FROM', 'onboarding@resend.dev')
-    inbox = getattr(django_settings, 'IMAP_USER', '') or ''
+    inbox = picks_address() or ''
     try:
         import resend
         resend.api_key = api_key

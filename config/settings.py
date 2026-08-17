@@ -135,8 +135,13 @@ IMAP_USER = env('IMAP_USER', default='')
 IMAP_PASSWORD = env('IMAP_PASSWORD', default='')
 IMAP_FOLDER = env('IMAP_FOLDER', default='INBOX')
 IMAP_MARK_SEEN = env('IMAP_MARK_SEEN', default='true')
-# Optional: a list address that on its own proves a message went league-wide.
-LEAGUE_LIST_ADDRESS = env('LEAGUE_LIST_ADDRESS', default='')
+# Gmail delivers user+tag@gmail.com to user@gmail.com and keeps the tag in the
+# headers, which gives one mailbox two purposes without a mailing list: mail to
+# the plain address from someone allowed to publish is a league announcement,
+# mail to the +tag address is a pick submission. Ballots set Reply-To to the
+# tagged address, so replying to one submits picks even for the commissioner —
+# whose announcements would otherwise be published, picks and all.
+PICKS_ADDRESS_TAG = env('PICKS_ADDRESS_TAG', default='picks')
 # Only turn this off against a local test mailbox. With it off, a forged From
 # header is enough to publish to the home page.
 INBOUND_REQUIRE_AUTH = env('INBOUND_REQUIRE_AUTH', default='true')

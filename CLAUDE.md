@@ -285,16 +285,38 @@ Worth knowing why this exists: recaps used to be recorded and never sent, reachi
 an inbox only second-hand as a "Last Week" section inside the next "picks are
 live" mail — while PutnamBot's own intro promised "a comprehensive recap".
 
-### Inbound mail: four gates, and one that matters
+### One mailbox, no mailing list
 
-A message is published only if authentication passed, the sender is a member,
-that member has `profile.email_posts_enabled`, and it went league-wide (list
-address, or half the other members copied). **The authentication check is the
-only real security boundary** — `From` is trivially forged, so with
-`INBOUND_REQUIRE_AUTH` off, anyone knowing the commissioner's address can post
-to the home page. Every rejection is logged with its reason; silent drops make
-inbound mail impossible to debug. `main/tests.py` covers all four gates plus
-dedupe and reply trimming.
+Everything goes through `putnambowl.league@gmail.com`. There is no Google Group in
+the flow — the site holds the membership, so the commissioner sends one email and
+`relay_to_league` forwards it to everyone.
+
+Two gates first: **authentication** (SPF/DKIM/DMARC from
+`Authentication-Results`) and **the sender being a known member**. The auth check
+is the only real security boundary — `From` is trivially forged, so with
+`INBOUND_REQUIRE_AUTH` off, anyone knowing the commissioner's address can post to
+the home page.
+
+Then `_is_pick_submission` decides what the message *is*:
+
+| Sent to | Sender's `email_posts_enabled` | Treated as |
+|---|---|---|
+| `…+picks@gmail.com` | either | pick submission |
+| the plain address | on | announcement → published **and relayed** |
+| the plain address | off | pick submission |
+
+So the flag means "this member's emails get published", and off — the default, and
+most of the league — means "their emails are picks".
+
+**The `+picks` tag is not decoration.** Gmail delivers `user+tag@` to `user@` and
+keeps the tag in the headers. The commissioner is set to publish, so without the
+tag a reply to their own ballot would broadcast their picks to the whole league.
+Ballots and confirmations set `Reply-To` to the tagged address, which makes
+replying unambiguous for everyone. Don't remove it to "simplify".
+
+Every rejection is logged with its reason; silent drops make inbound mail
+impossible to debug. `main/tests.py` covers both gates, the routing table above,
+the ballot-reply footgun, dedupe and reply trimming.
 
 Polling lives in `run_auto` **outside `auto_tick()`**, which returns early when
 `auto_enabled` is off — a league running its weeks by hand still gets its mail.

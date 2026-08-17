@@ -1,26 +1,34 @@
-"""Ingest league mail from an IMAP mailbox into the Emails feed.
+"""Ingest league mail from the league mailbox into the Emails feed.
 
-The commissioner mails the league and copies the site address; this pulls those
-messages in so they appear on the site.
+Everyone writes to one address. There is no mailing list: the site holds the
+membership, so the commissioner sends one email here and `relay_to_league`
+forwards it to every member.
 
 Why IMAP rather than a provider webhook: it behaves identically in development
 and production, needs no public URL or tunnel, works with any mailbox, and the
 `run_auto` worker already runs on a tick.
 
-## The rules a message must pass
+## Who may publish, and what a message means
 
-Publishing to the home page is a privilege, so all four hold or the message is
-dropped with a logged reason:
+Two gates before anything happens:
 
 1. **Authentication passes.** SPF/DKIM/DMARC, read from the receiving server's
    `Authentication-Results` header. This is the only real security boundary here
    — `From` is trivially forged, so without it anyone who knows the
    commissioner's address could publish to the site.
 2. **The sender is a known member**, matched case-insensitively on `User.email`.
-3. **That member has `profile.email_posts_enabled`.** Off by default.
-4. **It went to the league, not just to us.** Either it was addressed to
-   `LEAGUE_LIST_ADDRESS`, or enough other members' addresses appear in To/Cc.
-   Without this a private note to the site inbox would land on the home page.
+
+Then `_is_pick_submission` decides what the message *is*:
+
+* Mail to the tagged **`+picks`** address is always a pick submission.
+* Otherwise the sender's `profile.email_posts_enabled` decides — on means publish
+  and relay to the league, off means read it as picks. Off by default, so most of
+  the league sends picks and only the commissioner announces.
+
+The tag override exists for a specific footgun: the commissioner *is* set to
+publish, so without it a reply to their own ballot would broadcast their picks to
+the whole league. Ballots set `Reply-To` to the tagged address, so replying is
+unambiguous for everyone.
 
 Every rejection is logged with its reason. Silent drops are what make inbound
 mail miserable to debug.
@@ -29,14 +37,13 @@ mail miserable to debug.
 
     IMAP_HOST, IMAP_PORT (default 993), IMAP_USER, IMAP_PASSWORD
     IMAP_FOLDER          (default INBOX)
-    IMAP_MARK_SEEN       (default true — stop re-reading the same mail)
-    LEAGUE_LIST_ADDRESS  (optional; satisfies rule 4 on its own)
-    INBOUND_REQUIRE_AUTH (default true — only turn off against a local mailbox)
+    IMAP_MARK_SEEN        (default true — stop re-reading the same mail)
+    PICKS_ADDRESS_TAG     (default "picks" — the +tag meaning "these are my picks")
+    INBOUND_REQUIRE_AUTH  (default true — only turn off against a local mailbox)
 """
 import email
 import imaplib
 import logging
-import math
 import re
 from datetime import datetime, timedelta, timezone
 from email.header import decode_header, make_header
@@ -146,31 +153,33 @@ def _league_addresses():
     }
 
 
-def _went_to_the_league(msg, sender_email, members):
-    """Rule 4. Returns (ok, recipient_count, reason)."""
-    recipients = {
-        addr.strip().lower()
-        for _, addr in getaddresses(
-            (msg.get_all('To') or []) + (msg.get_all('Cc') or []))
-        if addr
-    }
+def _addressed_to(msg):
+    """Every address this message was sent to, including the delivery envelope.
 
-    list_address = (_conf('LEAGUE_LIST_ADDRESS', '') or '').strip().lower()
-    if list_address and list_address in recipients:
-        return True, len(recipients & set(members)), f'addressed to {list_address}'
+    Delivered-To matters: it carries the tagged address even when a client rewrote
+    the visible To.
+    """
+    headers = ((msg.get_all('To') or []) + (msg.get_all('Cc') or [])
+               + (msg.get_all('Delivered-To') or []))
+    return {addr.strip().lower() for _, addr in getaddresses(headers) if addr}
 
-    matched = (recipients & set(members)) - {sender_email}
-    others = len(members) - 1  # everyone but the sender
-    # Half the other members, and never fewer than one. With a small league the
-    # threshold collapses to 1, which is the right behaviour rather than a bug:
-    # "everyone else" is one person.
-    needed = max(1, math.ceil(others / 2))
-    if len(matched) >= needed:
-        return True, len(matched), f'{len(matched)}/{others} members copied'
-    return False, len(matched), (
-        f'only {len(matched)} of {others} members copied, needed {needed}'
-        + ('' if not list_address else f'; not sent to {list_address}')
-    )
+
+def _is_pick_submission(msg, author):
+    """Picks, or an announcement for the league? Returns (is_picks, reason).
+
+    The account's `email_posts_enabled` flag decides — it is what "publish this
+    member's email" means — with one override: anything sent to the tagged picks
+    address is picks regardless. That override is what lets the commissioner, whose
+    plain mail is published, reply to a ballot without broadcasting their picks.
+    """
+    from .email_utils import picks_address
+
+    tagged = (picks_address() or '').strip().lower()
+    if tagged and tagged in _addressed_to(msg):
+        return True, f'addressed to {tagged}'
+    if not author.profile.email_posts_enabled:
+        return True, f'{author.username} is not set to publish by email'
+    return False, f'{author.username} is set to publish by email'
 
 
 def ingest_message(raw_bytes):
@@ -212,12 +221,9 @@ def ingest_message(raw_bytes):
     if not body:
         return None, 'empty body'
 
-    went, recipient_count, why = _went_to_the_league(msg, from_email, members)
+    is_picks, why = _is_pick_submission(msg, author)
 
-    # Addressed to us rather than to the league: a private submission, so read it
-    # as picks. Deliberately before the publishing flag — setting your own picks
-    # needs no privilege, and this mail is never published either way.
-    if not went:
+    if is_picks:
         from . import pick_email
         try:
             # The untrimmed body on purpose: people reply by editing inside the
@@ -238,10 +244,7 @@ def ingest_message(raw_bytes):
             body=body, source=LeagueEmail.SOURCE_INBOUND, sent_at=sent_at,
             message_id=message_id[:400], recipient_count=0, published=False,
         )
-        return None, outcome
-
-    if not author.profile.email_posts_enabled:
-        return None, f'{author.username} does not have email posting enabled'
+        return None, f'{outcome} ({why})'
 
     obj = LeagueEmail.objects.create(
         author=author,
@@ -252,24 +255,18 @@ def ingest_message(raw_bytes):
         source=LeagueEmail.SOURCE_INBOUND,
         sent_at=sent_at,
         message_id=message_id[:400],
-        recipient_count=recipient_count,
+        recipient_count=len(_addressed_to(msg) & set(members)),
     )
 
-    # Forward it on. The site holds the real membership; the group does not, so
-    # one message to the group reaches the site and the site reaches everyone.
-    # Safe to do here because message_id is unique — ingest runs once per email,
-    # so the relay cannot fire twice for the same message.
+    # Forward it on. The site holds the membership, so the commissioner sends one
+    # email and everyone receives it — no mailing list to maintain. Safe here
+    # because message_id is unique: ingest runs once per email, so the relay
+    # cannot fire twice for the same message.
     relayed = 0
     try:
         from .email_utils import relay_to_league
-        addressed = {
-            addr.strip().lower()
-            for _, addr in getaddresses(
-                (msg.get_all('To') or []) + (msg.get_all('Cc') or []))
-            if addr
-        }
         relayed = relay_to_league(
-            obj, sender_email=from_email, already_copied=addressed,
+            obj, sender_email=from_email, already_copied=_addressed_to(msg),
             author_name=_decode(from_name) or author.username,
         )
     except Exception as e:
@@ -315,9 +312,9 @@ def verify():
         f'{sum(1 for u in members.values() if u.profile.email_posts_enabled)} '
         f'allowed to publish by email',
     ]
-    list_address = (_conf('LEAGUE_LIST_ADDRESS', '') or '').strip()
-    notes.append(f'list address: {list_address}' if list_address
-                 else 'no LEAGUE_LIST_ADDRESS — falling back to counting copied members')
+    from .email_utils import picks_address
+    notes.append(f'announcements to: {user}')
+    notes.append(f'picks to:         {picks_address()}')
     if not str(_conf('INBOUND_REQUIRE_AUTH', 'true')).lower() in ('1', 'true', 'yes'):
         notes.append('WARNING: INBOUND_REQUIRE_AUTH is off — a forged From header '
                      'is enough to publish to the site')

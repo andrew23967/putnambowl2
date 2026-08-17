@@ -158,32 +158,45 @@ class AutoLockRespectsDayFilterTests(TestCase):
 
 
 class InboundEmailTests(TestCase):
-    """Publishing to the home page by email needs every gate to hold. The one
-    that matters is authentication: From is trivially forged, so without it
-    anyone knowing the commissioner's address could post to the site."""
+    """One mailbox does both jobs, and no mailing list is involved. The account's
+    publish flag decides whether mail is an announcement or a pick submission, and
+    the tagged +picks address overrides it. The gate that actually matters is
+    authentication: From is trivially forged, so without it anyone knowing the
+    commissioner's address could post to the site."""
+
+    MAILBOX = 'putnambowl.league@gmail.com'
+    PICKS = 'putnambowl.league+picks@gmail.com'
 
     def setUp(self):
         from main.models import LeagueEmail
         self.LeagueEmail = LeagueEmail
-        from main import inbound_email
+        from main import inbound_email, pick_email
         self.ingest = inbound_email.ingest_message
+
+        # Keep the relay and any confirmation out of these tests.
+        from main import email_utils
+        self.addCleanup(setattr, email_utils, 'relay_to_league',
+                        email_utils.relay_to_league)
+        email_utils.relay_to_league = lambda *a, **kw: 0
+        self.addCleanup(setattr, pick_email, 'send_reply', pick_email.send_reply)
+        pick_email.send_reply = lambda *a, **kw: True
+        self.addCleanup(setattr, pick_email, '_ask_model', pick_email._ask_model)
+        pick_email._ask_model = lambda text, games: '{}'
 
         self.boss = User.objects.create_user('boss', email='boss@example.com')
         self.boss.profile.email_posts_enabled = True
         self.boss.profile.save()
-        # Enough other members that "half the league" is a real threshold.
         self.members = []
         for i in range(4):
             u = User.objects.create_user(f'member{i}', email=f'm{i}@example.com')
             self.members.append(u)
-        # A bot has no address and must not count toward the league total.
         bot = User.objects.create_user('bot_x')
         bot.profile.is_bot = True
         bot.profile.save()
 
     def _raw(self, sender='boss@example.com', to=None, auth='dmarc=pass',
              subject='Week 3', body='Get your picks in.', msgid='<a@example.com>'):
-        to = to if to is not None else [m.email for m in self.members]
+        to = to if to is not None else [self.MAILBOX]
         lines = [
             f'From: The Commissioner <{sender}>',
             f'To: {", ".join(to)}',
@@ -196,54 +209,58 @@ class InboundEmailTests(TestCase):
         lines += ['Content-Type: text/plain; charset="utf-8"', '', body]
         return '\r\n'.join(lines).encode()
 
-    def test_league_wide_email_from_an_enabled_member_is_published(self):
-        obj, reason = self.ingest(self._raw())
+    def _ingest(self, *a, **kw):
+        with self.settings(SMTP_USER=self.MAILBOX, IMAP_USER=self.MAILBOX,
+                           PICKS_ADDRESS_TAG='picks'):
+            return self.ingest(self._raw(*a, **kw))
+
+    def test_email_from_a_publishing_member_is_published(self):
+        obj, reason = self._ingest()
         self.assertIsNotNone(obj, reason)
         self.assertEqual(obj.author, self.boss)
         self.assertEqual(obj.subject, 'Week 3')
         self.assertEqual(obj.body, 'Get your picks in.')
-        self.assertEqual(obj.recipient_count, 4)
         self.assertTrue(obj.published)
 
+    def test_a_publishing_member_replying_to_a_ballot_is_not_published(self):
+        """The footgun this design exists to avoid. The commissioner's plain mail
+        is published, so a ballot reply would have broadcast their picks to the
+        league. Ballots set Reply-To to the tagged address, which routes it to the
+        pick parser instead."""
+        obj, reason = self._ingest(to=[self.PICKS], body='KC and the Eagles')
+        self.assertIsNone(obj)
+        self.assertEqual(self.LeagueEmail.objects.filter(published=True).count(), 0)
+        self.assertIn('+picks', reason)
+
     def test_forged_sender_without_passing_auth_is_rejected(self):
-        obj, reason = self.ingest(self._raw(auth='dmarc=fail'))
+        obj, reason = self._ingest(auth='dmarc=fail')
         self.assertIsNone(obj)
         self.assertIn('authentication failed', reason)
 
     def test_missing_auth_header_is_rejected(self):
-        obj, reason = self.ingest(self._raw(auth=None))
+        obj, reason = self._ingest(auth=None)
         self.assertIsNone(obj)
         self.assertIn('authentication', reason)
 
-    def test_member_without_the_flag_is_rejected(self):
+    def test_member_without_the_flag_submits_picks_rather_than_publishing(self):
+        """Turning the flag off does not reject their mail — it means their mail is
+        picks, which is what most of the league sends."""
         self.boss.profile.email_posts_enabled = False
         self.boss.profile.save()
-        obj, reason = self.ingest(self._raw())
+        obj, reason = self._ingest()
         self.assertIsNone(obj)
-        self.assertIn('email posting enabled', reason)
+        self.assertEqual(self.LeagueEmail.objects.filter(published=True).count(), 0)
+        self.assertIn('not set to publish', reason)
 
     def test_unknown_sender_is_rejected(self):
-        obj, reason = self.ingest(self._raw(sender='stranger@example.com'))
+        obj, reason = self._ingest(sender='stranger@example.com')
         self.assertIsNone(obj)
         self.assertIn('not a league member', reason)
 
-    def test_private_note_to_the_site_only_is_never_published(self):
-        """Mail addressed to us rather than the league is a private submission —
-        it is read as picks (see PickEmailRoutingTests) and must never reach the
-        feed, whatever else happens to it."""
-        obj, reason = self.ingest(self._raw(to=['league@putnambowl.com']))
-        self.assertIsNone(obj)
-        self.assertEqual(self.LeagueEmail.objects.filter(published=True).count(), 0)
-
-    def test_list_address_alone_satisfies_league_wide(self):
-        with self.settings(LEAGUE_LIST_ADDRESS='league@putnambowl.com'):
-            obj, reason = self.ingest(self._raw(to=['league@putnambowl.com']))
-        self.assertIsNotNone(obj, reason)
-
     def test_same_message_is_not_ingested_twice(self):
-        first, _ = self.ingest(self._raw())
+        first, _ = self._ingest()
         self.assertIsNotNone(first)
-        second, reason = self.ingest(self._raw())
+        second, reason = self._ingest()
         self.assertIsNone(second)
         self.assertEqual(reason, 'already ingested')
         self.assertEqual(self.LeagueEmail.objects.count(), 1)
@@ -252,7 +269,7 @@ class InboundEmailTests(TestCase):
         body = ('Reminder: picks close tonight.\r\n\r\n'
                 'On Mon, 22 Sep 2025 at 09:00, someone wrote:\r\n'
                 '> the entire previous thread\r\n')
-        obj, reason = self.ingest(self._raw(body=body))
+        obj, reason = self._ingest(body=body)
         self.assertIsNotNone(obj, reason)
         self.assertEqual(obj.body, 'Reminder: picks close tonight.')
         self.assertNotIn('previous thread', obj.body)
@@ -598,15 +615,17 @@ class RelayTests(TestCase):
         self.assertIn('The Commissioner', body)
 
     def test_a_pick_submission_is_not_relayed(self):
-        """Direct mail is private picks — forwarding it to the league would leak
-        someone's picks before lock."""
+        """Mail to the tagged address is private picks — forwarding it would leak
+        someone's picks to the league before lock."""
         from main import pick_email
         self.addCleanup(setattr, pick_email, 'send_reply', pick_email.send_reply)
         pick_email.send_reply = lambda *a, **kw: True
         self.addCleanup(setattr, pick_email, '_ask_model', pick_email._ask_model)
         pick_email._ask_model = lambda text, games: '{}'
 
-        self.ingest(self._raw('mailbox@gmail.com'))
+        with self.settings(SMTP_USER='mailbox@gmail.com',
+                           PICKS_ADDRESS_TAG='picks'):
+            self.ingest(self._raw('mailbox+picks@gmail.com'))
         self.assertEqual(self.forwarded, [])
 
 
@@ -678,13 +697,15 @@ class PickEmailRoutingTests(TestCase):
         self.assertEqual(reason, 'already ingested')
         self.assertEqual(len(self.sent), 1, 'must not reply twice to one email')
 
-    def test_list_email_still_needs_the_publishing_flag(self):
-        with self.settings(LEAGUE_LIST_ADDRESS='league@putnambowl.com'):
-            obj, reason = self.ingest(
-                self._raw('league@putnambowl.com', 'week 5 is live everyone'))
+    def test_a_member_without_the_flag_has_their_mail_read_as_picks(self):
+        """The flag decides. Off — as it is for most of the league — means their
+        mail is a pick submission, not something to publish."""
+        obj, reason = self.ingest(
+            self._raw('putnambowl.league@gmail.com', 'the Chiefs please'))
         self.assertIsNone(obj)
-        self.assertIn('does not have email posting enabled', reason)
-        self.assertEqual(Pick.objects.count(), 0)
+        self.assertIn('not set to publish', reason)
+        self.assertEqual(self.LeagueEmail.objects.filter(published=True).count(), 0)
+        self.assertEqual(Pick.objects.filter(user=self.user).count(), 1)
 
 
 class GradeScopeTests(TestCase):
