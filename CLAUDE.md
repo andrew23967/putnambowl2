@@ -242,9 +242,24 @@ conversation they started rather than as a stray message.
   group message could broadcast their picks to the whole league.
 - **Pick confirmations** always go straight to the member. Never the list.
 
-A corollary worth remembering: because the group is not the membership, mail the
-commissioner sends *to the group* reaches the site's feed but not most members'
-inboxes. The site is the thing that reaches everyone.
+### The site is the league's mailer
+
+Because the group is not the membership, `email_utils.relay_to_league()` forwards
+every published league email on to every member. The commissioner sends one
+message; the site reaches everyone. It runs from the publish branch of
+`ingest_message`, which is safe to relay from because `message_id` is unique —
+ingest happens once per email, so the relay cannot fire twice.
+
+It skips the sender, the site's own mailbox, and anyone already on the original
+To/Cc, so nobody is mailed twice when some members are copied directly.
+
+`Reply-To` is set to the **original sender, not the mailbox**. A reply arriving in
+our mailbox would be read as a *pick submission* — that is what direct mail means
+— so pointing replies at the commissioner both avoids that collision and is what
+someone hitting reply expects.
+
+Pick submissions are never relayed: that would publish someone's picks to the
+league before lock. `main/tests.py` asserts it.
 
 ### Nothing is sent while tests run
 

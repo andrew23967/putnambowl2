@@ -41,6 +41,53 @@ def _format_lock_dt(lock_dt, tz_str='UTC'):
     return f'{local.strftime("%A")} at {hour}:{minute} {ampm} {tz_label}'
 
 
+def relay_to_league(league_email, sender_email, already_copied=(), author_name=''):
+    """Forward a league-wide email on to every member.
+
+    The site holds the real membership, the Google Group does not — most of the
+    league is not in it. So one message to the group reaches the site, and the site
+    reaches everyone. That is what makes this the league's mailer rather than just
+    its archive.
+
+    Skips the sender, and anyone already on the original To/Cc, so nobody gets it
+    twice when the commissioner copies some people directly.
+
+    `Reply-To` is the original sender, not the site's mailbox — deliberately. A
+    reply landing back in our mailbox would be read as a *pick submission*, since
+    that is what direct mail means; pointing replies at the commissioner both
+    avoids that and is what someone hitting reply expects.
+    """
+    copied = {a.lower() for a in already_copied if a}
+    copied.add((sender_email or '').lower())
+    mailbox = (getattr(django_settings, 'SMTP_USER', '') or '').lower()
+    if mailbox:
+        copied.add(mailbox)
+
+    recipients = [a for a in league_recipients() if a.lower() not in copied]
+    if not recipients:
+        print('[relay] nobody to forward to — everyone was already copied',
+              flush=True)
+        return 0
+
+    site_url = getattr(django_settings, 'SITE_URL', 'http://localhost:8000')
+    who = author_name or sender_email
+    body = (f'{league_email.body}\n\n'
+            f'—\n'
+            f'Sent to the league by {who} via PutnamBowl. '
+            f'Reply to reach {sender_email}.\n'
+            f'{site_url.rstrip("/")}/emails/')
+
+    def _send():
+        sent = sum(1 for a in recipients
+                   if send_via_mailbox(a, league_email.subject, body,
+                                       reply_to=sender_email)[0])
+        print(f'[relay] "{league_email.subject}" forwarded to '
+              f'{sent}/{len(recipients)} member(s)', flush=True)
+
+    threading.Thread(target=_send, daemon=True).start()
+    return len(recipients)
+
+
 def build_ballot(games):
     """The week's games as a list to edit down, one line per game.
 
@@ -138,7 +185,7 @@ def smtp_ready():
     ))
 
 
-def send_via_mailbox(to, subject, body, in_reply_to=None):
+def send_via_mailbox(to, subject, body, in_reply_to=None, reply_to=None):
     """Send from the league mailbox over SMTP.
 
     Preferred over Resend, and the reason is not cosmetic: Resend's sandbox sender
@@ -167,6 +214,8 @@ def send_via_mailbox(to, subject, body, in_reply_to=None):
     msg['From'] = user
     msg['To'] = to
     msg['Subject'] = subject
+    if reply_to:
+        msg['Reply-To'] = reply_to
     if in_reply_to:
         msg['In-Reply-To'] = in_reply_to
         msg['References'] = in_reply_to

@@ -508,6 +508,108 @@ class PickEmailHandleTests(TestCase):
         self.assertIn('model unavailable', outcome)
 
 
+class RelayTests(TestCase):
+    """The site holds the real membership; the Google Group does not, since most of
+    the league is not in it. So one message to the group must reach everyone."""
+
+    def setUp(self):
+        from main import email_utils, inbound_email
+        self.email_utils = email_utils
+        self.ingest = inbound_email.ingest_message
+
+        self.forwarded = []
+        self.addCleanup(setattr, email_utils, 'send_via_mailbox',
+                        email_utils.send_via_mailbox)
+        email_utils.send_via_mailbox = lambda to, subject, body, **kw: (
+            self.forwarded.append((to, subject, body, kw.get('reply_to')))
+            or (True, 'sent'))
+
+        # Run the relay inline so the test does not depend on thread timing.
+        import threading
+        real_thread = threading.Thread
+        self.addCleanup(setattr, threading, 'Thread', real_thread)
+
+        def inline(target=None, **kwargs):
+            class _T:
+                def start(inner):
+                    target()
+            return _T()
+        threading.Thread = inline
+
+        self.boss = User.objects.create_user('boss', email='boss@example.com')
+        self.boss.profile.email_posts_enabled = True
+        self.boss.profile.real_name = 'The Commissioner'
+        self.boss.profile.save()
+        for i in range(4):
+            User.objects.create_user(f'member{i}', email=f'm{i}@example.com')
+        bot = User.objects.create_user('bot_x')
+        bot.profile.is_bot = True
+        bot.profile.save()
+
+    def _raw(self, to, msgid='<r1@example.com>'):
+        return '\r\n'.join([
+            'From: The Commissioner <boss@example.com>',
+            f'To: {to}',
+            'Subject: Week 1 is live',
+            f'Message-ID: {msgid}',
+            'Date: Mon, 22 Sep 2025 10:00:00 +0000',
+            'Authentication-Results: mx.example.com; dmarc=pass',
+            'Content-Type: text/plain; charset="utf-8"',
+            '', 'Picks are open, get them in.',
+        ]).encode()
+
+    def test_group_email_is_forwarded_to_every_member(self):
+        with self.settings(LEAGUE_LIST_ADDRESS='league@putnambowl.com',
+                           SMTP_USER='mailbox@gmail.com'):
+            obj, reason = self.ingest(self._raw('league@putnambowl.com'))
+
+        self.assertIsNotNone(obj, reason)
+        got = sorted(to for to, *_ in self.forwarded)
+        self.assertEqual(got, ['m0@example.com', 'm1@example.com',
+                               'm2@example.com', 'm3@example.com'])
+        self.assertIn('relayed to 4', reason)
+
+    def test_the_sender_and_the_mailbox_are_not_forwarded_to(self):
+        with self.settings(LEAGUE_LIST_ADDRESS='league@putnambowl.com',
+                           SMTP_USER='boss@example.com'):
+            self.ingest(self._raw('league@putnambowl.com'))
+        self.assertNotIn('boss@example.com', [to for to, *_ in self.forwarded])
+
+    def test_already_copied_members_are_not_forwarded_to(self):
+        """Nobody gets it twice when some are copied directly."""
+        with self.settings(LEAGUE_LIST_ADDRESS='league@putnambowl.com'):
+            self.ingest(self._raw(
+                'league@putnambowl.com, m0@example.com, m1@example.com'))
+        got = sorted(to for to, *_ in self.forwarded)
+        self.assertEqual(got, ['m2@example.com', 'm3@example.com'])
+
+    def test_replies_go_to_the_commissioner_not_the_mailbox(self):
+        """A reply landing in our mailbox would be parsed as a pick submission."""
+        with self.settings(LEAGUE_LIST_ADDRESS='league@putnambowl.com'):
+            self.ingest(self._raw('league@putnambowl.com'))
+        for _, _, _, reply_to in self.forwarded:
+            self.assertEqual(reply_to, 'boss@example.com')
+
+    def test_the_forward_says_who_sent_it(self):
+        with self.settings(LEAGUE_LIST_ADDRESS='league@putnambowl.com'):
+            self.ingest(self._raw('league@putnambowl.com'))
+        body = self.forwarded[0][2]
+        self.assertIn('Picks are open, get them in.', body)
+        self.assertIn('The Commissioner', body)
+
+    def test_a_pick_submission_is_not_relayed(self):
+        """Direct mail is private picks — forwarding it to the league would leak
+        someone's picks before lock."""
+        from main import pick_email
+        self.addCleanup(setattr, pick_email, 'send_reply', pick_email.send_reply)
+        pick_email.send_reply = lambda *a, **kw: True
+        self.addCleanup(setattr, pick_email, '_ask_model', pick_email._ask_model)
+        pick_email._ask_model = lambda text, games: '{}'
+
+        self.ingest(self._raw('mailbox@gmail.com'))
+        self.assertEqual(self.forwarded, [])
+
+
 class PickEmailRoutingTests(TestCase):
     """Mail to the list publishes; mail direct to the mailbox submits picks. A
     submission must never reach the feed — picks are private until lock."""

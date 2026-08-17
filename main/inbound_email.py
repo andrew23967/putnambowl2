@@ -254,7 +254,30 @@ def ingest_message(raw_bytes):
         message_id=message_id[:400],
         recipient_count=recipient_count,
     )
-    return obj, f'published ({why})'
+
+    # Forward it on. The site holds the real membership; the group does not, so
+    # one message to the group reaches the site and the site reaches everyone.
+    # Safe to do here because message_id is unique — ingest runs once per email,
+    # so the relay cannot fire twice for the same message.
+    relayed = 0
+    try:
+        from .email_utils import relay_to_league
+        addressed = {
+            addr.strip().lower()
+            for _, addr in getaddresses(
+                (msg.get_all('To') or []) + (msg.get_all('Cc') or []))
+            if addr
+        }
+        relayed = relay_to_league(
+            obj, sender_email=from_email, already_copied=addressed,
+            author_name=_decode(from_name) or author.username,
+        )
+    except Exception as e:
+        # The message is already on the site; a relay failure must not undo that.
+        log.exception('[relay] forwarding failed')
+        print(f'[relay] forwarding failed: {e}', flush=True)
+
+    return obj, f'published ({why}), relayed to {relayed}'
 
 
 def verify():
