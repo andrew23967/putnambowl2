@@ -129,15 +129,23 @@ def record_site_email(subject, body, recipient_count, author=None, sent_at=None,
     Recorded at send time rather than ingested back out of the mailbox, so the
     site's own mail appears even when inbound polling is unconfigured or broken.
 
-    `slug` makes the synthetic Message-ID stable and unique, which is what stops
-    a re-send — a regenerated recap, say — from creating a second row.
+    A `slug` makes the Message-ID stable, so re-recording the same thing replaces
+    its row instead of adding another — a regenerated week 3 recap should update
+    week 3's entry. Without one, every call gets a fresh unique id and therefore
+    its own row.
+
+    Note this is a *storage* key only. It used to gate sending too, and that was a
+    mistake: it silently blocked real emails — a season preview, and week 1 of any
+    second season — to prevent a duplicate that never actually happened.
     """
+    import uuid
+
     from .models import LeagueEmail
 
     sent_at = sent_at or datetime.now(timezone.utc)
     site_url = getattr(django_settings, 'SITE_URL', 'localhost')
     domain = site_url.split('//')[-1].strip('/') or 'putnambowl.local'
-    key = slug or sent_at.strftime('%Y%m%d%H%M%S')
+    key = slug or uuid.uuid4().hex
     message_id = f'<site-{key}@{domain}>'
 
     obj, created = LeagueEmail.objects.update_or_create(
@@ -268,21 +276,22 @@ def league_recipients():
 
 
 def recap_slug(week, year=None):
-    """Stable id for a recap, unique per season.
+    """Storage key for a *weekly* recap: one row per season and week.
 
-    The season year is part of it, and that is load-bearing. Without it the slug
-    was just `recap-w3` / `season-preview`, so the row already existed the next
-    time round — and since sending is gated on the row being new, **week 1 of
-    season two would silently never be emailed**. Starting a new season also
-    failed to send its preview for exactly this reason.
+    So regenerating week 3's recap replaces week 3's entry rather than leaving two
+    versions in the feed. A season preview gets no slug — there is no natural "one
+    per" for it, and every start of a season is its own event.
     """
+    if not week:
+        return None
     if year is None:
         from . import scrape
         year = scrape.current_season_year()
-    return f'recap-{year}-w{week}' if week else f'season-preview-{year}'
+    return f'recap-{year}-w{week}'
 
 
-def record_recap_email(week, recap_text, recipient_count=0, subject=None, year=None):
+def record_recap_email(week, recap_text, recipient_count=0, subject=None, year=None,
+                       slug=None):
     """Record one of PutnamBot's recaps in the Emails feed, without sending it.
 
     Keyed per season and week, so regenerating a recap replaces its row instead of
@@ -299,11 +308,11 @@ def record_recap_email(week, recap_text, recipient_count=0, subject=None, year=N
         body=f'{recap_text.strip()}\n\n{PUTNAMBOT_SIGNOFF}',
         recipient_count=recipient_count,
         author=author,
-        slug=recap_slug(week, year),
+        slug=slug or recap_slug(week, year),
     )
 
 
-def send_recap_email(week, recap_text, subject=None, year=None):
+def send_recap_email(week, recap_text, subject=None, year=None, slug=None):
     """Mail one of PutnamBot's recaps to the league, and record it in the feed.
 
     PutnamBot's own intro promises "a comprehensive recap" by email, and for a
@@ -311,9 +320,12 @@ def send_recap_email(week, recap_text, subject=None, year=None):
     reached an inbox second-hand, as a "Last Week" section inside the next
     "picks are live" mail.
 
-    Sends only when the feed row is newly created. The slug makes that check
-    idempotent, so advancing a week twice — or a retried worker tick — cannot
-    mail the league the same recap again.
+    Called, it sends. It used to send only when the feed row was newly created, on
+    the theory that advancing a week twice shouldn't mail the league twice — but
+    that guard silently swallowed real emails instead: a new season's preview, and
+    week 1 of any second season. The duplicate it guarded against never happened;
+    the missed sends did, twice. The only switch now is `email_recap` on the Emails
+    page.
 
     Delivered per member from the accounts, which are the league's membership.
     There is no mailing list to post to.
@@ -324,18 +336,15 @@ def send_recap_email(week, recap_text, subject=None, year=None):
     from .models import SiteSettings
     if not SiteSettings.get().email_recap:
         # Still recorded, so it shows on the site; just not mailed.
-        record_recap_email(week, recap_text, subject=subject, year=year)
+        record_recap_email(week, recap_text, subject=subject, year=year, slug=slug)
         print('[email] recap email switched off on the Emails page — recorded only',
               flush=True)
         return False
 
     recipients = league_recipients()
-    obj, created = record_recap_email(week, recap_text, recipient_count=len(recipients),
-                                      subject=subject, year=year)
+    obj, _ = record_recap_email(week, recap_text, recipient_count=len(recipients),
+                                subject=subject, year=year, slug=slug)
     if obj is None:
-        return False
-    if not created:
-        print(f'[email] recap "{obj.subject}" already sent — not resending', flush=True)
         return False
 
     site_url = getattr(django_settings, 'SITE_URL', 'http://localhost:8000')

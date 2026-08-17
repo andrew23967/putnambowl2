@@ -355,38 +355,39 @@ class RecapEmailTests(TestCase):
         self.assertEqual(sorted(sent_to), ['a@example.com', 'b@example.com'])
         self.assertNotIn('league@example.com', sent_to)
 
-    def test_the_same_recap_is_never_sent_twice(self):
-        """Advancing a week twice, or a retried worker tick, must not mail the
-        league the same recap again."""
-        self._send(3, 'Week 3 belonged to the underdogs.')
-        self.assertFalse(self._send(3, 'Week 3 belonged to the underdogs.'))
-        self.assertEqual(self.LeagueEmail.objects.filter(subject='Week 3 recap').count(), 1)
-        self.assertEqual(len(self.calls), 1, 'must not queue a second send')
-
-    def test_season_preview_uses_its_own_slug(self):
-        self._send(None, 'Welcome to the new season.', subject='Season preview')
-        row = self.LeagueEmail.objects.get(subject='Season preview')
-        self.assertIn('season-preview', row.message_id)
-
-    def test_next_season_sends_again(self):
-        """The slug carries the season year, and that is load-bearing. Keyed on
-        the week alone, the row already existed next time round — so week 1 of
-        season two was silently never emailed, and a new season's preview
-        wouldn't send either."""
-        self.assertTrue(self._send(1, 'Week 1 of 2026.', year=2026))
-        self.assertFalse(self._send(1, 'Week 1 of 2026.', year=2026),
-                         'same season and week must not resend')
-        self.assertTrue(self._send(1, 'Week 1 of 2027.', year=2027),
-                        'a new season must send again')
+    def test_calling_it_sends_every_time(self):
+        """It used to send only when the feed row was new, to avoid a hypothetical
+        duplicate. That guard swallowed real emails instead — a new season's
+        preview, and week 1 of any second season — so it is gone. Called, it
+        sends."""
+        self.assertTrue(self._send(3, 'Week 3 belonged to the underdogs.'))
+        self.assertTrue(self._send(3, 'Week 3 belonged to the underdogs.'),
+                        'a second call must still send')
         self.assertEqual(len(self.calls), 2)
 
-    def test_next_season_preview_sends_again(self):
-        self.assertTrue(self._send(None, 'Welcome to 2026.',
-                                   subject='Season preview', year=2026))
-        self.assertFalse(self._send(None, 'Welcome to 2026.',
-                                    subject='Season preview', year=2026))
-        self.assertTrue(self._send(None, 'Welcome to 2027.',
-                                   subject='Season preview', year=2027))
+    def test_a_weekly_recap_keeps_one_row_per_week(self):
+        """Sending always, but the feed should not fill up with versions of the
+        same week — regenerating replaces week 3's entry."""
+        self._send(3, 'first write-up', year=2026)
+        self._send(3, 'a better write-up', year=2026)
+        rows = self.LeagueEmail.objects.filter(subject='Week 3 recap')
+        self.assertEqual(rows.count(), 1)
+        self.assertIn('a better write-up', rows.first().body)
+
+    def test_each_season_preview_is_its_own_row(self):
+        """Every start of a season is its own event, so there is no natural "one
+        per" to key it on — starting two in a calendar year must not collide."""
+        self._send(None, 'Welcome to the season.', subject='Season preview')
+        self._send(None, 'Welcome again.', subject='Season preview')
+        self.assertEqual(
+            self.LeagueEmail.objects.filter(subject='Season preview').count(), 2)
+        self.assertEqual(len(self.calls), 2)
+
+    def test_next_season_week_one_sends(self):
+        self.assertTrue(self._send(1, 'Week 1 of 2026.', year=2026))
+        self.assertTrue(self._send(1, 'Week 1 of 2027.', year=2027))
+        self.assertEqual(
+            self.LeagueEmail.objects.filter(subject='Week 1 recap').count(), 2)
 
     def test_empty_recap_does_nothing(self):
         self.assertFalse(self._send(3, '   '))
