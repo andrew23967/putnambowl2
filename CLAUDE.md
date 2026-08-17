@@ -259,26 +259,38 @@ which writes to a shared surface, and must not be reused here. A submission is
 stored `published=False` so the next poll doesn't re-parse it, and never appears
 in the feed — picks stay private until the week locks.
 
-### Never guess a pick
+The intended flow needs no typing: `email_utils.build_ballot()` puts a line per
+game in the "picks are live" mail — `Bills (1.0) / Dolphins (2.4)` — and the member
+deletes the team they don't want. That mail sets `reply_to` to `IMAP_USER`, since
+replies must reach the polled mailbox rather than wherever `RESEND_FROM` points.
 
-Two passes: a deterministic matcher first, then Gemini on whatever is left.
+The **untrimmed** body goes to the parser on purpose: people reply by editing
+inside the quoted original, so the answers often sit below the `On … wrote:` line
+that `_trim()` removes.
+
+### One Gemini call, no hand-rolled parsing
+
+Don't reintroduce a regex matcher. There was one — ~200 lines of alias tables,
+case rules and negation patterns — and it had three bugs: it picked the team named
+as the **loser** ("Chargers over Denver" chose Denver), it read the English word
+"no" as New Orleans, and it ignored "give me Philadelphia". Every fix added more
+special cases. Understanding "not taking the Bills" is what the model is for.
+
+What is *not* delegated is trusting the answer: the reply is validated against the
+real slate through `ai_picks._parse`, so only ids from this week and only
+`team1`/`team2` survive. A hallucinated team cannot become a pick.
+
 Unlike `ai_picks.choose_picks()`, which falls back to random because a bot with no
-picks is worse than one with arbitrary picks, **here the opposite holds** — a
-wrong pick silently sabotages someone's week. Unresolved games are left unpicked
-and asked about in the reply.
+picks is worse than one with arbitrary picks, **here the opposite holds** — a wrong
+pick silently sabotages someone's week. Anything unanswered stays unpicked.
 
-The matcher marks each team mention for or against, because a pick'em game is a
-binary choice: naming the loser decides it too. "Chargers over Denver" picks the
-Chargers *and* the Broncos' opponent. Getting this wrong is not theoretical — the
-first version picked Denver, and "not taking the Bills" picked Buffalo.
+`extract_picks()` distinguishes "the model found nothing" from "the model was
+unreachable", because the sender is told different things: the second case must not
+read as "you made no picks" when they are waiting on a confirmation.
 
-Aliases cover full name, abbreviation, mascot and city, but only where a fragment
-identifies exactly one team — derived from the team list, so New York and Los
-Angeles are correctly excluded. Two-letter abbreviations that are English words
-match only in upper case: lower-case `no` is the word, `NO` is New Orleans.
-
-Every submission gets a reply listing exactly what was recorded and what could not
-be read. That reply is the real backstop against a misparse, so don't remove it.
+Every submission gets a reply listing exactly what was recorded and what was not.
+That reply is the real backstop against a misparse, so don't remove it. Tests stub
+`_ask_model`, which is what makes the plumbing deterministically testable.
 
 Note `resend` is in `requirements.txt` but is often **not installed in the local
 venv**, so replies (and the "picks are live" mail) log a failure locally and only

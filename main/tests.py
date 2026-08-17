@@ -258,109 +258,13 @@ class InboundEmailTests(TestCase):
         self.assertNotIn('previous thread', obj.body)
 
 
-class PickEmailParseTests(TestCase):
-    """Members mail their picks in prose. A wrong pick silently sabotages someone's
-    week, so the parser decides only what it can read with certainty and defers
-    the rest rather than guessing."""
-
-    def setUp(self):
-        from main import pick_email
-        self.parse = pick_email.parse_deterministic
-        s = SiteSettings.get()
-        s.week = 5
-        s.save()
-        self.kc = make_game(week=5, team1='Kansas City Chiefs',
-                            team2='Los Angeles Chargers')
-        self.phi = make_game(week=5, team1='Philadelphia Eagles',
-                             team2='Dallas Cowboys')
-        self.no = make_game(week=5, team1='New Orleans Saints',
-                            team2='Carolina Panthers')
-        self.games = [self.kc, self.phi, self.no]
-
-    def test_abbreviations_and_mascots(self):
-        picks, _ = self.parse('KC, Eagles, Panthers', self.games)
-        self.assertEqual(picks[self.kc.id], 'team1')
-        self.assertEqual(picks[self.phi.id], 'team1')
-        self.assertEqual(picks[self.no.id], 'team2')
-
-    def test_prose_around_the_picks(self):
-        picks, _ = self.parse(
-            "Hi, sorry this is late. I'll take the Chiefs this week, give me "
-            "Philadelphia, and I like the Panthers for the upset. Thanks!",
-            self.games)
-        self.assertEqual(picks[self.kc.id], 'team1')
-        self.assertEqual(picks[self.phi.id], 'team1')
-        self.assertEqual(picks[self.no.id], 'team2')
-
-    def test_over_phrasing_picks_the_first_team(self):
-        picks, ambiguous = self.parse(
-            'Chargers over KC, Cowboys beat the Eagles', self.games)
-        self.assertEqual(picks[self.kc.id], 'team2')
-        self.assertEqual(picks[self.phi.id], 'team2')
-        self.assertEqual(ambiguous, [])
-
-    def test_both_teams_named_without_a_verb_is_deferred_not_guessed(self):
-        picks, ambiguous = self.parse('not sure about KC vs the Chargers yet',
-                                      self.games)
-        self.assertNotIn(self.kc.id, picks)
-        self.assertIn(self.kc, ambiguous)
-
-    def test_the_word_no_is_not_a_saints_pick(self):
-        """'NO' is New Orleans; 'no' is English. Matching the word would have
-        registered a Saints pick for anyone who wrote a sentence with 'no' in it."""
-        picks, _ = self.parse('no idea on that one, but give me the Eagles',
-                              self.games)
-        self.assertNotIn(self.no.id, picks)
-        self.assertEqual(picks[self.phi.id], 'team1')
-
-    def test_uppercase_NO_is_a_saints_pick(self):
-        picks, _ = self.parse('NO and KC please', self.games)
-        self.assertEqual(picks[self.no.id], 'team1')
-        self.assertEqual(picks[self.kc.id], 'team1')
-
-    def test_substrings_do_not_match(self):
-        picks, _ = self.parse('I will send these later, no notice needed',
-                              self.games)
-        self.assertEqual(picks, {})
-
-    def test_unmentioned_games_are_left_alone(self):
-        picks, _ = self.parse('just the Eagles for now', self.games)
-        self.assertEqual(set(picks), {self.phi.id})
-
-    def test_city_only_phrasing(self):
-        """"Give me Philadelphia" is as common as naming the mascot."""
-        picks, _ = self.parse('Philadelphia and Kansas City', self.games)
-        self.assertEqual(picks[self.phi.id], 'team1')
-        self.assertEqual(picks[self.kc.id], 'team1')
-
-    def test_a_team_named_as_the_loser_is_not_picked(self):
-        """"Chargers over Denver" used to pick Denver, because Denver was the only
-        team named in its own game. Naming a loser now picks its opponent."""
-        den = make_game(week=5, team1='Denver Broncos', team2='Las Vegas Raiders')
-        picks, _ = self.parse('Chargers over Denver', self.games + [den])
-        self.assertEqual(picks[self.kc.id], 'team2', 'Chargers win their game')
-        self.assertEqual(picks[den.id], 'team2', 'Denver lost, so the Raiders')
-
-    def test_negation_picks_the_opponent(self):
-        picks, _ = self.parse("not taking the Chiefs this week", self.games)
-        self.assertEqual(picks[self.kc.id], 'team2')
-
-    def test_contradiction_is_deferred(self):
-        picks, ambiguous = self.parse('Chiefs, actually not the Chiefs',
-                                      self.games)
-        self.assertNotIn(self.kc.id, picks)
-        self.assertIn(self.kc, ambiguous)
-
-    def test_shared_cities_are_not_resolved_arbitrarily(self):
-        """Two teams share New York and two share Los Angeles, so the city alone
-        cannot decide a game — better unresolved than wrong."""
-        jets = make_game(week=5, team1='New York Jets', team2='New York Giants')
-        picks, _ = self.parse('I want New York', [jets])
-        self.assertEqual(picks, {})
-
-
 class PickEmailHandleTests(TestCase):
-    """The whole submission path: what gets saved, and what the sender is told."""
+    """The submission path: what gets saved and what the sender is told.
+
+    Gemini reads the message, so the model is stubbed here — these cover the
+    plumbing around it, which is what can be tested deterministically: validating
+    its answer against the real slate, saving, and the confirmation.
+    """
 
     def setUp(self):
         from main import pick_email
@@ -369,6 +273,10 @@ class PickEmailHandleTests(TestCase):
         self.addCleanup(setattr, pick_email, 'send_reply', pick_email.send_reply)
         pick_email.send_reply = lambda to, subject, body: (
             self.sent.append((to, subject, body)) or True)
+
+        self.addCleanup(setattr, pick_email, '_ask_model', pick_email._ask_model)
+        self.model_reply = None
+        pick_email._ask_model = lambda text, games: self.model_reply
 
         self.user = User.objects.create_user('gramps', email='gramps@example.com')
         self.user.profile.real_name = 'Bill'
@@ -386,7 +294,9 @@ class PickEmailHandleTests(TestCase):
                              team2='Dallas Cowboys', points1=1.0, points2=3.1)
 
     def test_saves_picks_and_reports_them_back(self):
+        self.model_reply = f'{{"{self.kc.id}": "team1", "{self.phi.id}": "team2"}}'
         outcome = self.pick_email.handle(self.user, 'KC and the Cowboys please')
+
         self.assertEqual(Pick.objects.filter(user=self.user).count(), 2)
         self.assertEqual(Pick.objects.get(user=self.user, game=self.kc).choice, 'team1')
         self.assertEqual(Pick.objects.get(user=self.user, game=self.phi).choice, 'team2')
@@ -401,17 +311,41 @@ class PickEmailHandleTests(TestCase):
         self.assertIn('2 of 2 games', body)
         self.assertIn('saved 2/2', outcome)
 
-    def test_partial_submission_saves_what_it_understood_and_asks_about_the_rest(self):
+    def test_partial_answer_saves_what_it_got_and_asks_about_the_rest(self):
+        self.model_reply = f'{{"{self.kc.id}": "team1"}}'
         self.pick_email.handle(self.user, 'just KC for now')
+
         self.assertEqual(Pick.objects.filter(user=self.user).count(), 1)
         body = self.sent[0][2]
         self.assertIn('could not tell who you wanted', body)
-        self.assertIn('Philadelphia Eagles vs Dallas Cowboys', body)
+        self.assertIn('Philadelphia Eagles  /  Dallas Cowboys', body)
         self.assertIn('1 of 2 games', body)
 
-    def test_resending_updates_rather_than_duplicates(self):
+    def test_a_hallucinated_game_id_is_discarded(self):
+        """Reading the message is delegated; trusting the answer is not."""
+        self.model_reply = f'{{"999": "team1", "{self.kc.id}": "team2"}}'
+        self.pick_email.handle(self.user, 'the Chargers')
+
+        self.assertEqual(Pick.objects.filter(user=self.user).count(), 1)
+        self.assertEqual(Pick.objects.get(user=self.user).game, self.kc)
+
+    def test_a_nonsense_choice_is_discarded(self):
+        self.model_reply = f'{{"{self.kc.id}": "the Chiefs"}}'
+        self.pick_email.handle(self.user, 'chiefs')
+        self.assertEqual(Pick.objects.filter(user=self.user).count(), 0)
+
+    def test_prose_around_the_json_is_tolerated(self):
+        self.model_reply = (f'Sure! Here are the picks:\n```json\n'
+                            f'{{"{self.kc.id}": "team1"}}\n```')
         self.pick_email.handle(self.user, 'KC')
+        self.assertEqual(Pick.objects.get(user=self.user, game=self.kc).choice, 'team1')
+
+    def test_resending_updates_rather_than_duplicates(self):
+        self.model_reply = f'{{"{self.kc.id}": "team1"}}'
+        self.pick_email.handle(self.user, 'KC')
+        self.model_reply = f'{{"{self.kc.id}": "team2"}}'
         self.pick_email.handle(self.user, 'Chargers actually')
+
         self.assertEqual(Pick.objects.filter(user=self.user).count(), 1)
         self.assertEqual(Pick.objects.get(user=self.user, game=self.kc).choice, 'team2')
 
@@ -431,9 +365,20 @@ class PickEmailHandleTests(TestCase):
         self.assertIn("isn't open for picks yet", self.sent[0][2])
 
     def test_unreadable_message_saves_nothing_and_says_so(self):
+        self.model_reply = '{}'
         self.pick_email.handle(self.user, 'hi hope you are well, talk soon')
         self.assertEqual(Pick.objects.filter(user=self.user).count(), 0)
         self.assertIn('could not work out any picks', self.sent[0][2])
+
+    def test_model_unavailable_is_reported_not_silently_swallowed(self):
+        """A missing key must not look like "you made no picks" — the sender is
+        waiting on a confirmation that would otherwise never arrive."""
+        self.model_reply = None
+        outcome = self.pick_email.handle(self.user, 'KC and the Cowboys')
+
+        self.assertEqual(Pick.objects.filter(user=self.user).count(), 0)
+        self.assertIn('unavailable', self.sent[0][2])
+        self.assertIn('model unavailable', outcome)
 
 
 class PickEmailRoutingTests(TestCase):
@@ -464,6 +409,10 @@ class PickEmailRoutingTests(TestCase):
         s.save()
         self.game = make_game(week=5, team1='Kansas City Chiefs',
                              team2='Los Angeles Chargers')
+
+        self.addCleanup(setattr, pick_email, '_ask_model', pick_email._ask_model)
+        pick_email._ask_model = lambda text, games: (
+            f'{{"{self.game.id}": "team1"}}')
 
     def _raw(self, to, body, msgid='<p1@example.com>'):
         return '\r\n'.join([

@@ -207,7 +207,8 @@ def ingest_message(raw_bytes):
     except Exception:
         sent_at = datetime.now(timezone.utc)
 
-    body = _trim(_plain_body(msg))
+    full_body = _plain_body(msg)
+    body = _trim(full_body)
     if not body:
         return None, 'empty body'
 
@@ -219,7 +220,10 @@ def ingest_message(raw_bytes):
     if not went:
         from . import pick_email
         try:
-            outcome = pick_email.handle(author, body, reply_to=from_email)
+            # The untrimmed body on purpose: people reply by editing inside the
+            # quoted original, so the edited ballot is often below the "On ...
+            # wrote:" line that _trim() cuts off.
+            outcome = pick_email.handle(author, full_body, reply_to=from_email)
         except Exception as e:
             log.exception('[inbound] pick parsing failed')
             return None, f'pick parsing failed for {author.username}: {e}'

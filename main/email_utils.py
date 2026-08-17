@@ -41,6 +41,35 @@ def _format_lock_dt(lock_dt, tz_str='UTC'):
     return f'{local.strftime("%A")} at {hour}:{minute} {ampm} {tz_label}'
 
 
+def build_ballot(games):
+    """The week's games as a list to edit down, one line per game.
+
+    Members reply having deleted the team they don't want, which leaves the winner
+    — no typing, which is the point for anyone who finds the site awkward.
+    `pick_email.parse_ballot` reads the result line by line.
+
+    Favourite first, matching the team1/team2 convention, with the points so the
+    underdog premium is visible while choosing.
+    """
+    if not games:
+        return ''
+    lines = [
+        '── Reply with your picks ──────────────────────────',
+        '',
+        "Reply to this email and delete the team you DON'T want from each",
+        'line, leaving the one you think will win. Send it back and I will',
+        'record them. You do not have to do them all at once.',
+        '',
+    ]
+    for game in games:
+        lines.append(f'  {game.team1} ({game.points1})  /  {game.team2} ({game.points2})')
+    lines += [
+        '',
+        'The second team in each line is the underdog and worth more.',
+    ]
+    return '\n'.join(lines)
+
+
 def record_site_email(subject, body, recipient_count, author=None, sent_at=None,
                       slug=None):
     """Put a message the site sent into the Emails feed.
@@ -126,8 +155,20 @@ def send_picks_published_email(site_settings):
     week = site_settings.week
     site_url = getattr(django_settings, 'SITE_URL', 'http://localhost:8000')
     from_email = getattr(django_settings, 'RESEND_FROM', 'onboarding@resend.dev')
-    # Picks are made inline on the home page; /picks/ is the legacy form.
-    picks_url = f'{site_url.rstrip("/")}/home/'
+    picks_url = f'{site_url.rstrip("/")}/picks/'
+
+    # Replies must land in the mailbox the worker polls, not wherever RESEND_FROM
+    # points — otherwise an edited ballot goes to an address nobody reads and the
+    # member hears nothing back.
+    inbox = getattr(django_settings, 'IMAP_USER', '') or ''
+
+    from .models import Game
+    games = list(Game.objects.filter(week=week))
+    games.sort(key=lambda g: (g.game_dt is None, g.game_dt, g.id))
+    ballot = build_ballot(games) if inbox else ''
+    if games and not inbox:
+        print('[email] IMAP_USER not set — sending without a reply-by-email '
+              'ballot, since replies would go nowhere', flush=True)
 
     lock_line = ''
     if site_settings.auto_lock_dt:
@@ -142,10 +183,12 @@ def send_picks_published_email(site_settings):
         recap_section = f'\n── Last Week ─────────────────────────────────\n\n{site_settings.weekly_recap}\n'
 
     subject = f'Week {week} picks are live'
+    ballot_section = f'\n{ballot}\n' if ballot else ''
     body = (
         f'Week {week} picks are up.\n\n'
         f'{lock_line}'
-        f'\nMake your picks: {picks_url}'
+        f'\nMake your picks on the site: {picks_url}\n'
+        f'{ballot_section}'
         f'{recap_section}'
         f'\n\n──\nPutnamBowl'
     )
@@ -170,12 +213,15 @@ def send_picks_published_email(site_settings):
         sent = 0
         for address in recipients:
             try:
-                resend.Emails.send({
+                payload = {
                     'from': from_email,
                     'to': [address],
                     'subject': subject,
                     'text': body,
-                })
+                }
+                if inbox:
+                    payload['reply_to'] = [inbox]
+                resend.Emails.send(payload)
                 sent += 1
             except Exception as e:
                 print(f'[email] FAILED for one recipient: {e}', flush=True)
