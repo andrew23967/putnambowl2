@@ -743,6 +743,61 @@ def seasons(request):
 
 
 @staff_member_required
+def emaildash(request):
+    """Which emails go out, and what PutnamBot is told to write.
+
+    Only the *instructions* are editable. Each prompt's data — standings, results,
+    and the output format rules — is appended by the code and shown here read-only,
+    so it cannot be edited away by accident.
+    """
+    from django.conf import settings as django_settings
+
+    from . import auto
+    from .email_utils import league_recipients, picks_address, smtp_ready
+
+    settings = SiteSettings.get()
+
+    if request.method == 'POST':
+        if 'save_switches' in request.POST:
+            for field in ('email_picks_live', 'email_ballot', 'email_recap',
+                          'email_confirmations', 'email_relay'):
+                setattr(settings, field, request.POST.get(field) == 'on')
+            settings.save()
+            messages.success(request, 'Email settings saved.')
+        elif 'save_prompts' in request.POST:
+            settings.recap_prompt = request.POST.get('recap_prompt', '').strip()
+            settings.intro_prompt = request.POST.get('intro_prompt', '').strip()
+            settings.save()
+            messages.success(request, 'Prompts saved.')
+        elif 'reset_prompts' in request.POST:
+            settings.recap_prompt = ''
+            settings.intro_prompt = ''
+            settings.save()
+            messages.success(request, 'Prompts reset to the built-in defaults.')
+        return redirect('main:emaildash')
+
+    # Preview the data block against the most recently completed week, so what is
+    # shown is real rather than illustrative.
+    preview_week = max(settings.week - 1, 1)
+    data_block, _ = auto.recap_data_block(preview_week)
+
+    return render(request, 'main/emaildash.html', {
+        'settings': settings,
+        'recipients': league_recipients(),
+        'mailbox': getattr(django_settings, 'SMTP_USER', '') or '',
+        'picks_address': picks_address(),
+        'smtp_ready': smtp_ready(),
+        'recap_prompt': settings.recap_prompt or auto.DEFAULT_RECAP_PROMPT,
+        'intro_prompt': settings.intro_prompt or auto.DEFAULT_INTRO_PROMPT,
+        'recap_is_default': not settings.recap_prompt,
+        'intro_is_default': not settings.intro_prompt,
+        'preview_week': preview_week,
+        'data_block': data_block,
+        'format_rules': auto.RECAP_FORMAT_RULES,
+    })
+
+
+@staff_member_required
 def accountdash(request):
     from main.teams import TEAMS
     players = sorted(

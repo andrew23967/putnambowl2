@@ -49,6 +49,91 @@ def _this_or_next_weekday_hour(weekday, hour, minute=0):
     return (now + timedelta(days=days_ahead)).replace(hour=hour, minute=minute, second=0, microsecond=0)
 
 
+DEFAULT_RECAP_PROMPT = (
+    "You are the commissioner of a private NFL pick'em fantasy league called "
+    "PutnamBowl.\n"
+    "Write a factual weekly recap for Week {week} in 3 short paragraphs. Report "
+    "what happened: who won, who lost, the scores, and how people's picks went. "
+    "Straightforward and informative — no jokes, no sarcasm, no filler."
+)
+
+DEFAULT_INTRO_PROMPT = (
+    "You are PutnamBot, the AI commissioner of a private NFL pick'em fantasy "
+    "league called PutnamBowl.\n"
+    "Write a short, welcoming introduction for the new season in 2 short "
+    "paragraphs. Introduce yourself, say you will email when picks are live and "
+    "post a recap after each week, and wish everyone luck."
+)
+
+# Appended after the editable instructions and the data, never editable. Without
+# it the model may answer in markdown, which the plain-text emails render raw.
+RECAP_FORMAT_RULES = (
+    'Write the recap now. Plain text only, no markdown, no headers.'
+)
+
+
+def recap_data_block(week):
+    """The facts a recap is written from: standings, league average, results.
+
+    Always appended to the prompt regardless of what the commissioner edited on
+    the Emails page — the instructions are theirs, the data is not optional.
+    Returned separately so that page can show exactly what gets included.
+    """
+    games = list(Game.objects.filter(week=week).prefetch_related(
+        Prefetch('picks', queryset=Pick.objects.select_related('user'))
+    ))
+    if not games:
+        return None, None
+
+    player_scores = {}
+    game_lines = []
+    for g in games:
+        t1, t2 = g.team1, g.team2
+        winner = t1 if g.winner == 'team1' else (t2 if g.winner == 'team2' else 'Tie')
+        pick_strs = []
+        for pick in g.picks.all():
+            pts = pick.points_earned if pick.is_correct else 0
+            player_scores[pick.user.username] = round(
+                player_scores.get(pick.user.username, 0) + pts, 1
+            )
+            pick_strs.append(f"{pick.user.username}→{pick.choice or 'no pick'}")
+        game_lines.append(
+            f'{t1} ({g.points1}pts) vs {t2} ({g.points2}pts) — winner: {winner} '
+            f'| picks: {", ".join(pick_strs)}'
+        )
+
+    ranked = sorted(player_scores.items(), key=lambda x: -x[1])
+    if not ranked:
+        return None, None
+
+    league_avg = round(sum(s for _, s in ranked) / len(ranked), 1)
+    standings_str = '\n'.join(
+        f'{i + 1}. {name}: {pts} pts' for i, (name, pts) in enumerate(ranked))
+    block = (
+        f'Week {week} results:\n\n'
+        f'Standings (points earned this week):\n{standings_str}\n\n'
+        f'League average: {league_avg} pts\n\n'
+        f'Games:\n' + '\n'.join(game_lines)
+    )
+    return block, ranked
+
+
+def build_recap_prompt(week, instructions=None):
+    """Editable instructions, then the data, then the format rules."""
+    from .models import SiteSettings
+
+    block, _ = recap_data_block(week)
+    if block is None:
+        return None
+    if instructions is None:
+        instructions = (SiteSettings.get().recap_prompt or '').strip()
+    instructions = instructions or DEFAULT_RECAP_PROMPT
+    # replace() not format(): the text is user-edited, and a stray brace should
+    # not raise.
+    instructions = instructions.replace('{week}', str(week))
+    return f'{instructions}\n\n{block}\n\n{RECAP_FORMAT_RULES}'
+
+
 def build_recap(week):
     """Generate recap text for the given week using Gemini. Falls back to template if unavailable."""
     games = list(Game.objects.filter(week=week).prefetch_related(
@@ -77,23 +162,7 @@ def build_recap(week):
         return None
 
     league_avg = round(sum(s for _, s in ranked) / len(ranked), 1)
-    standings_str = '\n'.join(f'{i+1}. {name}: {pts} pts' for i, (name, pts) in enumerate(ranked))
-    games_str = '\n'.join(game_lines)
-
-    prompt = f"""You are the commissioner of a private NFL pick'em fantasy league called PutnamBowl.
-Write a factual weekly recap for Week {week} in 3 short paragraphs. Report what happened: who won, who lost, the scores, and how people's picks went. Straightforward and informative — no jokes, no sarcasm, no filler.
-
-Week {week} results:
-
-Standings (points earned this week):
-{standings_str}
-
-League average: {league_avg} pts
-
-Games:
-{games_str}
-
-Write the recap now. Plain text only, no markdown, no headers."""
+    prompt = build_recap_prompt(week)
 
     try:
         from django.conf import settings as django_settings
@@ -125,10 +194,19 @@ Write the recap now. Plain text only, no markdown, no headers."""
     return f"{p1}\n\n{p2}"
 
 
+def build_intro_prompt(instructions=None):
+    """Editable instructions plus the format rules. A season intro has no data."""
+    from .models import SiteSettings
+
+    if instructions is None:
+        instructions = (SiteSettings.get().intro_prompt or '').strip()
+    instructions = instructions or DEFAULT_INTRO_PROMPT
+    return f'{instructions}\n\n{RECAP_FORMAT_RULES}'
+
+
 def build_intro():
     """Generate a PutnamBot season intro. Falls back to a static message if Gemini unavailable."""
-    prompt = """You are PutnamBot, the AI commissioner of a private NFL pick'em fantasy league called PutnamBowl.
-Write a short introduction (2-3 sentences) to kick off the new season. Introduce yourself by name, explain that you will be managing the league, sending weekly emails when picks are published, and writing weekly recaps after each week's games. Keep it straightforward and professional."""
+    prompt = build_intro_prompt()
 
     try:
         from django.conf import settings as django_settings

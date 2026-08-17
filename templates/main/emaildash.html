@@ -1,0 +1,198 @@
+{% extends 'base.html' %}
+{% block title %}Emails — PutnamBowl{% endblock %}
+
+{% block extra_head %}
+<style>
+  .ed-wrap { max-width:880px;margin:0 auto; }
+  .ed-title { font-size:1.05rem;font-weight:800;color:var(--text);margin:0;letter-spacing:-.02em; }
+  .ed-sub { font-size:.75rem;color:var(--muted);margin:6px 0 0;line-height:1.6; }
+
+  .ed-card {
+    background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+    padding:18px 20px;margin-top:18px;
+  }
+  .ed-head { font-size:.6875rem;font-weight:700;color:var(--muted);text-transform:uppercase;
+             letter-spacing:.1em;margin:0 0 14px; }
+
+  /* Switch rows */
+  .ed-row { display:flex;align-items:flex-start;gap:12px;padding:11px 0;border-top:1px solid var(--border); }
+  .ed-row:first-of-type { border-top:none;padding-top:0; }
+  .ed-row input[type=checkbox] { margin-top:3px;flex-shrink:0;width:15px;height:15px;cursor:pointer; }
+  .ed-row-text { flex:1;min-width:0; }
+  .ed-row-name { font-size:.875rem;font-weight:600;color:var(--text);display:block;cursor:pointer; }
+  .ed-row-why { font-size:.75rem;color:var(--muted);line-height:1.55;margin:3px 0 0; }
+  .ed-when { font-size:.6875rem;color:var(--muted2);margin:4px 0 0;font-variant-numeric:tabular-nums; }
+
+  .ed-btn {
+    background:var(--accent);color:var(--on-accent);border:none;cursor:pointer;
+    font-size:.75rem;font-weight:700;padding:9px 15px;border-radius:var(--radius-sm);
+    margin-top:16px;transition:filter .15s;
+  }
+  .ed-btn:hover { filter:brightness(1.15); }
+  .ed-btn-ghost { background:var(--fill-2);color:var(--muted2);margin-left:8px; }
+  .ed-btn-ghost:hover { background:var(--fill-3);color:var(--text); }
+
+  /* Prompt editing */
+  .ed-label { font-size:.8125rem;font-weight:600;color:var(--text);display:block;margin-bottom:6px; }
+  .ed-hint { font-size:.75rem;color:var(--muted);line-height:1.6;margin:0 0 10px; }
+  textarea.ed-area {
+    width:100%;box-sizing:border-box;min-height:130px;resize:vertical;
+    background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius-sm);
+    color:var(--text);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+    font-size:.8125rem;line-height:1.6;padding:10px 12px;
+  }
+  textarea.ed-area:focus { outline:2px solid var(--accent);outline-offset:1px; }
+
+  /* The always-included part */
+  .ed-locked {
+    margin-top:14px;padding:12px 14px;border-radius:var(--radius-sm);
+    background:var(--fill-1);border:1px dashed var(--border2);
+  }
+  .ed-locked-head {
+    font-size:.6875rem;font-weight:700;color:var(--warn);margin:0 0 8px;
+    display:flex;align-items:center;gap:6px;
+  }
+  .ed-locked pre {
+    margin:0;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.6875rem;
+    line-height:1.55;color:var(--muted2);white-space:pre-wrap;word-break:break-word;
+    max-height:230px;overflow:auto;
+  }
+  .ed-locked-note { font-size:.6875rem;color:var(--muted);margin:8px 0 0;line-height:1.55; }
+
+  .ed-facts { display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:.75rem; }
+  .ed-facts dt { color:var(--muted);white-space:nowrap; }
+  .ed-facts dd { color:var(--text);margin:0;word-break:break-all;font-variant-numeric:tabular-nums; }
+  .ed-warn { color:var(--warn); }
+
+  .ed-tag { font-size:.625rem;font-weight:700;padding:2px 7px;border-radius:99px;
+            background:var(--fill-2);color:var(--muted2);text-transform:uppercase;letter-spacing:.06em; }
+
+  /* --info, not --accent: accent is the player's own theme colour and its dark
+     end is unreadable as inline link text. --info is tuned per theme. */
+  .ed-link { color:var(--info);text-decoration:underline; }
+  .ed-link:hover { filter:brightness(1.15); }
+
+  @media (max-width:640px) { main { padding:16px !important; } }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="ed-wrap anim-up">
+
+  <h1 class="ed-title">Emails</h1>
+  <p class="ed-sub">What the site sends, when it sends it, and what PutnamBot is told
+    to write. Members email <strong>{{ mailbox|default:"the league mailbox" }}</strong>;
+    picks go to <strong>{{ picks_address|default:"—" }}</strong>.</p>
+
+  <!-- ── How mail gets out ── -->
+  <div class="ed-card">
+    <p class="ed-head">Delivery</p>
+    <dl class="ed-facts">
+      <dt>Sending as</dt>
+      <dd>{% if smtp_ready %}{{ mailbox }}{% else %}<span class="ed-warn">not configured — nothing can send</span>{% endif %}</dd>
+      <dt>Members reachable</dt>
+      <dd{% if recipients|length < 3 %} class="ed-warn"{% endif %}>{{ recipients|length }} with an email address</dd>
+    </dl>
+    {% if recipients|length < 3 %}
+    <p class="ed-locked-note">Mail only reaches members whose account has an email
+      address. Add them in <a href="{% url 'main:accountdash' %}" class="ed-link">Accounts</a>.</p>
+    {% endif %}
+  </div>
+
+  <!-- ── Switches ── -->
+  <form method="post" class="ed-card">
+    {% csrf_token %}
+    <p class="ed-head">What gets sent</p>
+
+    <div class="ed-row">
+      <input type="checkbox" name="email_picks_live" id="s1" {% if settings.email_picks_live %}checked{% endif %}>
+      <div class="ed-row-text">
+        <label class="ed-row-name" for="s1">Picks are live</label>
+        <p class="ed-row-why">Tells the league a week is open.</p>
+        <p class="ed-when">Sent when a week is published — by the Scrape button, or
+          automatically at the scrape time set on the Pick Dashboard.</p>
+      </div>
+    </div>
+
+    <div class="ed-row">
+      <input type="checkbox" name="email_ballot" id="s2" {% if settings.email_ballot %}checked{% endif %}>
+      <div class="ed-row-text">
+        <label class="ed-row-name" for="s2">Include the reply-by-email ballot</label>
+        <p class="ed-row-why">Puts the week's games in that email, one per line, so a
+          member can reply having deleted the team they don't want. No typing, and no
+          need to visit the site.</p>
+        <p class="ed-when">Part of the "picks are live" email, so it needs that switch on too.</p>
+      </div>
+    </div>
+
+    <div class="ed-row">
+      <input type="checkbox" name="email_recap" id="s3" {% if settings.email_recap %}checked{% endif %}>
+      <div class="ed-row-text">
+        <label class="ed-row-name" for="s3">Weekly recap</label>
+        <p class="ed-row-why">PutnamBot's write-up of the week just scored.</p>
+        <p class="ed-when">Sent once when the week advances. Switched off, the recap
+          still appears on the <a href="{% url 'main:emails' %}" class="ed-link">Emails page</a> — it just isn't mailed.</p>
+      </div>
+    </div>
+
+    <div class="ed-row">
+      <input type="checkbox" name="email_confirmations" id="s4" {% if settings.email_confirmations %}checked{% endif %}>
+      <div class="ed-row-text">
+        <label class="ed-row-name" for="s4">Confirm emailed picks</label>
+        <p class="ed-row-why">Replies to a member who emailed their picks, listing
+          exactly what was recorded and what couldn't be read.</p>
+        <p class="ed-when">Sent on each submission. <strong>Worth leaving on</strong> —
+          it is the only way someone can catch a misread before the week locks.</p>
+      </div>
+    </div>
+
+    <div class="ed-row">
+      <input type="checkbox" name="email_relay" id="s5" {% if settings.email_relay %}checked{% endif %}>
+      <div class="ed-row-text">
+        <label class="ed-row-name" for="s5">Forward your league emails</label>
+        <p class="ed-row-why">When you email the league mailbox, the site posts it to
+          the Emails page and forwards it to every member. Off, it is only published
+          on the site.</p>
+        <p class="ed-when">Sent as each of your emails arrives.</p>
+      </div>
+    </div>
+
+    <button type="submit" name="save_switches" class="ed-btn">Save</button>
+  </form>
+
+  <!-- ── Prompts ── -->
+  <form method="post" class="ed-card">
+    {% csrf_token %}
+    <p class="ed-head">What PutnamBot is told to write</p>
+
+    <label class="ed-label" for="recap_prompt">Weekly recap
+      {% if recap_is_default %}<span class="ed-tag">default</span>{% endif %}</label>
+    <p class="ed-hint">Your instructions to PutnamBot. Write <code>{week}</code> to
+      have the week number substituted.</p>
+    <textarea class="ed-area" name="recap_prompt" id="recap_prompt">{{ recap_prompt }}</textarea>
+
+    <div class="ed-locked">
+      <p class="ed-locked-head">🔒 Always included — not editable</p>
+      <pre>{% if data_block %}{{ data_block }}{% else %}(week {{ preview_week }} has no scored games yet, so there is nothing to show — the real standings and results appear here){% endif %}
+
+{{ format_rules }}</pre>
+      <p class="ed-locked-note">The results and standings are added after your
+        instructions every time, so PutnamBot always has the facts even if your
+        wording doesn't mention them. The formatting rule is kept too — without it
+        the reply can come back as markdown, which the emails show raw. Shown above
+        for week {{ preview_week }}.</p>
+    </div>
+
+    <label class="ed-label" for="intro_prompt" style="margin-top:22px;">Season preview
+      {% if intro_is_default %}<span class="ed-tag">default</span>{% endif %}</label>
+    <p class="ed-hint">Used once, when you start a new season. It has no results to
+      report, so there is no data block — only the formatting rule is added.</p>
+    <textarea class="ed-area" name="intro_prompt" id="intro_prompt">{{ intro_prompt }}</textarea>
+
+    <button type="submit" name="save_prompts" class="ed-btn">Save prompts</button>
+    <button type="submit" name="reset_prompts" class="ed-btn ed-btn-ghost"
+            onclick="return confirm('Reset both prompts to the built-in defaults?')">Reset to defaults</button>
+  </form>
+
+</div>
+{% endblock %}

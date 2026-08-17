@@ -30,6 +30,31 @@ class SiteSettings(models.Model):
     scrape_filter_from_day = models.IntegerField(null=True, blank=True)  # 0=Mon…6=Sun, None=no filter
     scrape_filter_to_day = models.IntegerField(null=True, blank=True)
 
+    # ── Email — the /dashboard/emails/ page ──
+    # Each switch turns off one kind of mail. *When* they fire is decided by the
+    # auto-pilot fields above; these only decide whether they go out at all.
+    email_picks_live = models.BooleanField(
+        default=True, help_text='Mail the league when a week is published.')
+    email_ballot = models.BooleanField(
+        default=True,
+        help_text='Include the reply-by-email ballot in that mail, so members can '
+                  'send picks by deleting the team they do not want.')
+    email_recap = models.BooleanField(
+        default=True, help_text="Mail PutnamBot's recap when a week is scored.")
+    email_confirmations = models.BooleanField(
+        default=True,
+        help_text='Reply to emailed picks confirming what was recorded. Off leaves '
+                  'members no way to catch a misread.')
+    email_relay = models.BooleanField(
+        default=True,
+        help_text="Forward the commissioner's league emails on to every member.")
+
+    # Editable *instructions* for the Gemini prompts. The data each one needs —
+    # standings, results, and the output format rules — is always appended by the
+    # code and cannot be edited away. Blank means "use the built-in default".
+    recap_prompt = models.TextField(blank=True, default='')
+    intro_prompt = models.TextField(blank=True, default='')
+
     class Meta:
         verbose_name = 'Site Settings'
         verbose_name_plural = 'Site Settings'

@@ -57,6 +57,11 @@ def relay_to_league(league_email, sender_email, already_copied=(), author_name='
     that is what direct mail means; pointing replies at the commissioner both
     avoids that and is what someone hitting reply expects.
     """
+    from .models import SiteSettings
+    if not SiteSettings.get().email_relay:
+        print('[relay] forwarding switched off on the Emails page', flush=True)
+        return 0
+
     copied = {a.lower() for a in already_copied if a}
     copied.add((sender_email or '').lower())
     mailbox = (getattr(django_settings, 'SMTP_USER', '') or '').lower()
@@ -316,6 +321,14 @@ def send_recap_email(week, recap_text, subject=None, year=None):
     if not (recap_text or '').strip():
         return False
 
+    from .models import SiteSettings
+    if not SiteSettings.get().email_recap:
+        # Still recorded, so it shows on the site; just not mailed.
+        record_recap_email(week, recap_text, subject=subject, year=year)
+        print('[email] recap email switched off on the Emails page — recorded only',
+              flush=True)
+        return False
+
     recipients = league_recipients()
     obj, created = record_recap_email(week, recap_text, recipient_count=len(recipients),
                                       subject=subject, year=year)
@@ -382,6 +395,9 @@ def send_picks_published_email(site_settings):
     """Send weekly picks-live notification to all non-bot users with an email address."""
     api_key = getattr(django_settings, 'RESEND_API_KEY', '')
     print(f'[email] send_picks_published_email called, week={site_settings.week}', flush=True)
+    if not site_settings.email_picks_live:
+        print('[email] picks-live email switched off on the Emails page.', flush=True)
+        return
     # Either transport will do; the mailbox is preferred further down.
     if outbound_suppressed() or (not api_key and not smtp_ready()):
         print('[email] no transport available — skipping.', flush=True)
@@ -411,7 +427,7 @@ def send_picks_published_email(site_settings):
     from .models import Game
     games = list(Game.objects.filter(week=week))
     games.sort(key=lambda g: (g.game_dt is None, g.game_dt, g.id))
-    ballot = build_ballot(games) if inbox else ''
+    ballot = build_ballot(games) if (inbox and site_settings.email_ballot) else ''
     if games and not inbox:
         print('[email] IMAP_USER not set — sending without a reply-by-email '
               'ballot, since replies would go nowhere', flush=True)

@@ -261,6 +261,32 @@ someone hitting reply expects.
 Pick submissions are never relayed: that would publish someone's picks to the
 league before lock. `main/tests.py` asserts it.
 
+### The Emails dashboard, and prompts you cannot break
+
+`/dashboard/emails/` (`views.emaildash`) holds the five switches on `SiteSettings`
+— `email_picks_live`, `email_ballot`, `email_recap`, `email_confirmations`,
+`email_relay` — checked at each send site. *When* mail fires is still the
+auto-pilot's business; these only decide whether it goes at all. Switching the
+recap off still records it to the feed, so the site keeps the write-up.
+
+The Gemini prompts are editable there too, but **only the instructions**. Each
+prompt is assembled as:
+
+```
+[editable instructions]  ->  SiteSettings.recap_prompt / intro_prompt
+[data block]             ->  auto.recap_data_block(week)      always
+[format rules]           ->  auto.RECAP_FORMAT_RULES          always
+```
+
+`build_recap_prompt()` does the assembly, so no edit can remove the standings and
+results the recap is written from, or the plain-text rule — drop that and the model
+answers in markdown, which the emails render raw. The page shows both appended
+parts read-only, against real data, so it is obvious they are always there.
+
+Blank means "use the built-in default" (`DEFAULT_RECAP_PROMPT`,
+`DEFAULT_INTRO_PROMPT`). `{week}` is substituted with `replace()`, not `format()`:
+the text is user-edited and a stray brace must not raise. Tests cover all of this.
+
 ### Nothing is sent while tests run
 
 This module drives Resend and `smtplib` directly rather than Django's mail

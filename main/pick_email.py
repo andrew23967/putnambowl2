@@ -195,6 +195,11 @@ def send_reply(to_email, subject, body, in_reply_to=None):
     from .email_utils import (outbound_suppressed, picks_address,
                               send_via_mailbox, smtp_ready)
 
+    if not SiteSettings.get().email_confirmations:
+        print(f'[pick_email] confirmations switched off on the Emails page — '
+              f'{to_email} not told what was recorded', flush=True)
+        return False
+
     if smtp_ready():
         # Corrections come back to the tagged address, so a follow-up is read as
         # picks and never as something to publish.

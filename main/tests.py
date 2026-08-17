@@ -525,6 +525,92 @@ class PickEmailHandleTests(TestCase):
         self.assertIn('model unavailable', outcome)
 
 
+class EmailSwitchTests(TestCase):
+    """The Emails page switches must actually stop mail, and a prompt edit must
+    never be able to remove the data the prompt depends on."""
+
+    def setUp(self):
+        from main import auto, email_utils
+        self.auto = auto
+        self.email_utils = email_utils
+        self.settings_obj = SiteSettings.get()
+        self.settings_obj.week = 4
+        self.settings_obj.save()
+        User.objects.create_user('putnambot')
+
+    def test_recap_switch_off_records_but_does_not_send(self):
+        self.settings_obj.email_recap = False
+        self.settings_obj.save()
+        sent = []
+        self.addCleanup(setattr, self.email_utils, 'league_recipients',
+                        self.email_utils.league_recipients)
+        self.email_utils.league_recipients = lambda: sent or ['a@example.com']
+
+        self.assertFalse(self.email_utils.send_recap_email(3, 'Week 3 recap text.'))
+        from main.models import LeagueEmail
+        # Still on the site, just not mailed.
+        self.assertTrue(LeagueEmail.objects.filter(subject='Week 3 recap').exists())
+
+    def test_relay_switch_off_forwards_to_nobody(self):
+        from main.models import LeagueEmail
+        self.settings_obj.email_relay = False
+        self.settings_obj.save()
+        row = LeagueEmail.objects.create(
+            subject='Notice', body='hello', sent_at=datetime(2026, 1, 1,
+                                                             tzinfo=timezone.utc),
+            message_id='<x@example.com>')
+        self.assertEqual(
+            self.email_utils.relay_to_league(row, sender_email='boss@example.com'), 0)
+
+    def test_confirmation_switch_off_sends_no_reply(self):
+        from main import pick_email
+        self.settings_obj.email_confirmations = False
+        self.settings_obj.save()
+        self.assertFalse(pick_email.send_reply('a@example.com', 's', 'b'))
+
+    def test_editing_the_prompt_cannot_remove_the_data(self):
+        """The instructions are the commissioner's; the standings and results are
+        not optional. Whatever they write, the facts are appended."""
+        make_game(week=3, winner='team1', graded=True)
+        user = User.objects.create_user('player')
+        Pick.objects.create(user=user, game=Game.objects.get(week=3),
+                            choice='team1')
+
+        prompt = self.auto.build_recap_prompt(3, instructions='Be brief.')
+        self.assertTrue(prompt.startswith('Be brief.'))
+        self.assertIn('Standings (points earned this week)', prompt)
+        self.assertIn('player', prompt)
+        self.assertIn(self.auto.RECAP_FORMAT_RULES, prompt)
+
+    def test_week_placeholder_is_substituted(self):
+        make_game(week=3, winner='team1', graded=True)
+        user = User.objects.create_user('player')
+        Pick.objects.create(user=user, game=Game.objects.get(week=3), choice='team1')
+
+        prompt = self.auto.build_recap_prompt(3, instructions='Recap week {week}.')
+        self.assertIn('Recap week 3.', prompt)
+
+    def test_a_stray_brace_in_the_prompt_does_not_raise(self):
+        """User-edited text, so replace() not format() — a stray brace must not
+        blow up recap generation."""
+        make_game(week=3, winner='team1', graded=True)
+        user = User.objects.create_user('player')
+        Pick.objects.create(user=user, game=Game.objects.get(week=3), choice='team1')
+
+        prompt = self.auto.build_recap_prompt(3, instructions='Use {curly} braces {')
+        self.assertIn('{curly}', prompt)
+
+    def test_blank_prompt_falls_back_to_the_default(self):
+        make_game(week=3, winner='team1', graded=True)
+        user = User.objects.create_user('player')
+        Pick.objects.create(user=user, game=Game.objects.get(week=3), choice='team1')
+
+        self.settings_obj.recap_prompt = ''
+        self.settings_obj.save()
+        prompt = self.auto.build_recap_prompt(3)
+        self.assertIn('factual weekly recap', prompt)
+
+
 class RelayTests(TestCase):
     """The site holds the real membership; the Google Group does not, since most of
     the league is not in it. So one message to the group must reach everyone."""

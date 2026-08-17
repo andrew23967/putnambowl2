@@ -18,6 +18,7 @@ urlpatterns = [
     path('seasons/', views.seasons, name='seasons'),
     path('dashboard/picks/', views.pickdash, name='pickdash'),
     path('dashboard/accounts/', views.accountdash, name='accountdash'),
+    path('dashboard/emails/', views.emaildash, name='emaildash'),
     path('dashboard/accounts/edit/<int:user_id>/', views.edit_player, name='edit_player'),
     path('dashboard/accounts/delete/<int:user_id>/', views.delete_player, name='delete_player'),
     path('analytics/', views.analytics, name='analytics'),
