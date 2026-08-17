@@ -701,6 +701,54 @@ class RelayTests(TestCase):
         self.assertIn('Picks are open, get them in.', body)
         self.assertIn('The Commissioner', body)
 
+    def test_deleting_a_feed_row_does_not_re_relay_it(self):
+        """The poller scans a rolling window, so a deleted message is still in the
+        mailbox. If dedupe read the feed, deleting a row would forward that email
+        to the entire league a second time."""
+        from main.models import LeagueEmail
+        with self.settings(SMTP_USER='mailbox@gmail.com'):
+            obj, _ = self.ingest(self._raw('mailbox@gmail.com'))
+            self.assertIsNotNone(obj)
+            self.assertEqual(len(self.forwarded), 4)
+
+            LeagueEmail.objects.all().delete()
+            self.forwarded.clear()
+
+            again, reason = self.ingest(self._raw('mailbox@gmail.com'))
+        self.assertIsNone(again)
+        self.assertEqual(reason, 'already ingested')
+        self.assertEqual(self.forwarded, [], 'must not forward a second time')
+
+    def test_a_rejected_message_is_retried_after_the_flag_is_turned_on(self):
+        """Config rejections are deliberately not marked processed, so enabling
+        someone's publishing picks their message up on the next poll."""
+        self.boss.profile.email_posts_enabled = False
+        self.boss.profile.save()
+        from main import pick_email
+        self.addCleanup(setattr, pick_email, '_ask_model', pick_email._ask_model)
+        pick_email._ask_model = lambda text, games: '{}'
+        self.addCleanup(setattr, pick_email, 'send_reply', pick_email.send_reply)
+        pick_email.send_reply = lambda *a, **kw: True
+
+        with self.settings(SMTP_USER='mailbox@gmail.com'):
+            # Read as picks while the flag is off, which *is* an action, so it is
+            # recorded — the retry case that matters is an unknown sender.
+            self.ingest(self._raw('mailbox@gmail.com', msgid='<x1@example.com>'))
+
+            stranger = self._raw('mailbox@gmail.com', msgid='<x2@example.com>').replace(
+                b'boss@example.com', b'newcomer@example.com')
+            obj, reason = self.ingest(stranger)
+            self.assertIsNone(obj)
+            self.assertIn('not a league member', reason)
+
+            # They get an account, and the next poll picks the message up.
+            newcomer = User.objects.create_user('newcomer',
+                                                email='newcomer@example.com')
+            newcomer.profile.email_posts_enabled = True
+            newcomer.profile.save()
+            obj, reason = self.ingest(stranger)
+        self.assertIsNotNone(obj, reason)
+
     def test_a_pick_submission_is_not_relayed(self):
         """Mail to the tagged address is private picks — forwarding it would leak
         someone's picks to the league before lock."""

@@ -52,7 +52,7 @@ from email.utils import getaddresses, parsedate_to_datetime
 from django.conf import settings as django_settings
 from django.contrib.auth.models import User
 
-from .models import LeagueEmail
+from .models import LeagueEmail, ProcessedEmail
 
 log = logging.getLogger(__name__)
 
@@ -189,7 +189,10 @@ def ingest_message(raw_bytes):
     message_id = (msg.get('Message-ID') or '').strip()
     if not message_id:
         return None, 'no Message-ID'
-    if LeagueEmail.objects.filter(message_id=message_id).exists():
+    # Dedupe against ProcessedEmail, not the feed: the feed can be deleted, and if
+    # dedupe read from it, deleting a message still inside the poll window would
+    # re-ingest and re-relay it to the whole league.
+    if ProcessedEmail.objects.filter(message_id=message_id).exists():
         return None, 'already ingested'
 
     from_name, from_email = ('', '')
@@ -235,9 +238,12 @@ def ingest_message(raw_bytes):
             )
         except Exception as e:
             log.exception('[inbound] pick parsing failed')
+            # Not marked processed, so a transient failure gets another go.
             return None, f'pick parsing failed for {author.username}: {e}'
-        # Recorded so the same email is not re-parsed on the next poll, but kept
-        # out of the feed — picks are private until the week locks.
+        ProcessedEmail.objects.get_or_create(
+            message_id=message_id[:400], defaults={'outcome': outcome[:200]})
+        # Kept as a record of what arrived, but out of the feed — picks are private
+        # until the week locks.
         LeagueEmail.objects.create(
             author=author, from_email=from_email, from_name=_decode(from_name),
             subject=_decode(msg.get('Subject')) or '(no subject)',
@@ -257,11 +263,13 @@ def ingest_message(raw_bytes):
         message_id=message_id[:400],
         recipient_count=len(_addressed_to(msg) & set(members)),
     )
+    # Marked processed before relaying, so a message can never be forwarded to the
+    # league twice — not on a later poll, and not if its feed row is deleted.
+    ProcessedEmail.objects.get_or_create(
+        message_id=message_id[:400], defaults={'outcome': 'published'})
 
     # Forward it on. The site holds the membership, so the commissioner sends one
-    # email and everyone receives it — no mailing list to maintain. Safe here
-    # because message_id is unique: ingest runs once per email, so the relay
-    # cannot fire twice for the same message.
+    # email and everyone receives it — no mailing list to maintain.
     relayed = 0
     try:
         from .email_utils import relay_to_league

@@ -163,6 +163,29 @@ class WeeklyLeaderboard(models.Model):
         return f'Week {self.week} Leaderboard'
 
 
+class ProcessedEmail(models.Model):
+    """Message-IDs the poller has already acted on.
+
+    Deliberately separate from `LeagueEmail`: dedupe has to survive a feed row
+    being deleted. The poller scans a rolling window rather than unread flags, so
+    if dedupe read the feed, deleting a message still inside that window would get
+    it re-ingested — and **re-relayed to the whole league**.
+
+    Only messages that were acted on are recorded. A message *rejected* for
+    configuration reasons — the sender not yet allowed to publish, say — is left
+    out on purpose, so it is picked up on the next poll once that is fixed.
+    """
+    message_id = models.CharField(max_length=400, unique=True)
+    seen_at = models.DateTimeField(auto_now_add=True)
+    outcome = models.CharField(max_length=200, blank=True, default='')
+
+    class Meta:
+        ordering = ['-seen_at']
+
+    def __str__(self):
+        return self.message_id
+
+
 class LeagueEmail(models.Model):
     """A message in the site's Emails feed.
 

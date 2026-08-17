@@ -242,6 +242,30 @@ conversation they started rather than as a stray message.
   group message could broadcast their picks to the whole league.
 - **Pick confirmations** always go straight to the member. Never the list.
 
+### Dedupe lives in ProcessedEmail, not the feed
+
+The poller scans a rolling 7-day window, so a message stays visible after it has
+been handled. Dedupe therefore reads `ProcessedEmail`, a separate table of
+message-ids — **not** `LeagueEmail`. If it read the feed, deleting a row in the
+Django admin would get that message re-ingested and **relayed to the whole league
+again**. With this split, deleting feed rows is safe.
+
+Only messages that were *acted on* are recorded. A message rejected for
+configuration reasons — an unknown sender, say — is deliberately left out, so it
+is picked up on the next poll once the account exists. A crash during pick parsing
+is likewise not recorded, so it gets another go.
+
+`ProcessedEmail` is written **before** relaying, so a message cannot be forwarded
+to the league twice under any ordering.
+
+### Nobody gets old mail on joining
+
+Every send is triggered by an event happening now — a week published, a week
+advanced, a season started, an email arriving — and `league_recipients()` is
+evaluated at that moment. Nothing iterates the archive to send it. A member who
+joins today gets tomorrow's mail and none of the back catalogue; they read the
+history on `/emails/` instead. Keep it that way.
+
 ### The site is the league's mailer
 
 Because the group is not the membership, `email_utils.relay_to_league()` forwards
