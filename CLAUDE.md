@@ -231,14 +231,20 @@ A reply from the mailbox is also a *real* reply — same address the member wrot
 to, threaded via `In-Reply-To`/`References` — so a pick confirmation lands in the
 conversation they started rather than as a stray message.
 
-Channel choice matters:
+**Everything the site sends goes per member**, from the accounts —
+`league_recipients()` — and never to `LEAGUE_LIST_ADDRESS`:
 
-- **Recaps** go as one post to `LEAGUE_LIST_ADDRESS`; the group fans them out and
-  the member list stays hidden. Public content, so the group is right.
-- **The picks-are-live ballot goes per member**, deliberately, even though the list
-  would be one send: a member hitting reply on a group message could broadcast
-  their picks to the whole league.
+- **Most of the league is not in the Google Group.** The group is only how the
+  commissioner's own mail reaches the site for the feed; it is not the league's
+  distribution list. Posting a recap there would be one send instead of nineteen
+  and would miss most of its audience.
+- **The ballot must be per member anyway**, because a member hitting reply on a
+  group message could broadcast their picks to the whole league.
 - **Pick confirmations** always go straight to the member. Never the list.
+
+A corollary worth remembering: because the group is not the membership, mail the
+commissioner sends *to the group* reaches the site's feed but not most members'
+inboxes. The site is the thing that reaches everyone.
 
 ### Nothing is sent while tests run
 

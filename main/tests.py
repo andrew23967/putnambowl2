@@ -321,6 +321,23 @@ class RecapEmailTests(TestCase):
         self.assertIn("I'm PutnamBot", row.body)
         self.assertEqual(len(self.calls), 1, 'one send should have been queued')
 
+    def test_recap_goes_to_members_not_the_group(self):
+        """Most of the league is not in the Google Group — it is only how the
+        commissioner's own mail reaches the site. A recap posted there would miss
+        most of the people it is for."""
+        sent_to = []
+        self.addCleanup(setattr, self.email_utils, 'send_via_mailbox',
+                        self.email_utils.send_via_mailbox)
+        self.email_utils.send_via_mailbox = lambda to, subject, body, **kw: (
+            sent_to.append(to) or (True, 'sent'))
+
+        self._send(4, 'Week 4 went to the favourites.')
+        # _send stubs the thread, so run the queued target directly.
+        self.calls[0]()
+
+        self.assertEqual(sorted(sent_to), ['a@example.com', 'b@example.com'])
+        self.assertNotIn('league@example.com', sent_to)
+
     def test_the_same_recap_is_never_sent_twice(self):
         """Advancing a week twice, or a retried worker tick, must not mail the
         league the same recap again."""

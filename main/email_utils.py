@@ -241,6 +241,10 @@ def send_recap_email(week, recap_text, subject=None, year=None):
     Sends only when the feed row is newly created. The slug makes that check
     idempotent, so advancing a week twice — or a retried worker tick — cannot
     mail the league the same recap again.
+
+    Delivered per member from the accounts, **not** to `LEAGUE_LIST_ADDRESS`. The
+    group is only how the commissioner's own mail reaches the site; most of the
+    league is not in it, so a recap posted there would miss most of its audience.
     """
     if not (recap_text or '').strip():
         return False
@@ -258,15 +262,11 @@ def send_recap_email(week, recap_text, subject=None, year=None):
     body = (f'{obj.body}\n\n'
             f'The full archive: {site_url.rstrip("/")}/emails/')
 
-    # One post to the list, which fans it out — a recap is public league content,
-    # so the group is the right channel and the members list stays hidden.
-    list_address = (getattr(django_settings, 'LEAGUE_LIST_ADDRESS', '') or '').strip()
-    if smtp_ready() and list_address:
-        def _send_to_list():
-            send_via_mailbox(list_address, obj.subject, body)
-        threading.Thread(target=_send_to_list, daemon=True).start()
-        return True
-
+    # Per member, never to LEAGUE_LIST_ADDRESS. Posting to the group would be one
+    # send instead of nineteen, but most of the league is not in the group — it is
+    # only how the commissioner's own mail reaches the site — so a recap sent there
+    # would quietly miss most of the people it is for. The recipient list here
+    # comes from the accounts, which is the real membership.
     if not recipients:
         print('[email] no recipients with an address — recap recorded but not emailed',
               flush=True)
