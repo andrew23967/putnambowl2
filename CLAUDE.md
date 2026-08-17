@@ -219,6 +219,36 @@ Rows arrive two ways:
 Anything writing `settings.weekly_recap` should also update the matching
 `WeeklyLeaderboard` row **and** put the recap in the feed.
 
+### Outbound goes through the league mailbox, not Resend
+
+`email_utils.send_via_mailbox()` sends over SMTP using the **same Google app
+password as IMAP**, and is preferred whenever `SMTP_*` is configured. This is not
+a style preference: Resend's sandbox sender (`onboarding@resend.dev`) only
+delivers to the Resend account owner until a domain is verified, so it could not
+reach a single league member. Resend remains as a fallback.
+
+A reply from the mailbox is also a *real* reply — same address the member wrote
+to, threaded via `In-Reply-To`/`References` — so a pick confirmation lands in the
+conversation they started rather than as a stray message.
+
+Channel choice matters:
+
+- **Recaps** go as one post to `LEAGUE_LIST_ADDRESS`; the group fans them out and
+  the member list stays hidden. Public content, so the group is right.
+- **The picks-are-live ballot goes per member**, deliberately, even though the list
+  would be one send: a member hitting reply on a group message could broadcast
+  their picks to the whole league.
+- **Pick confirmations** always go straight to the member. Never the list.
+
+### Nothing is sent while tests run
+
+This module drives Resend and `smtplib` directly rather than Django's mail
+framework, so the test runner's locmem backend is no protection — the suite
+genuinely delivered mail to `boss@example.com` the moment SMTP was configured.
+`settings.TESTING` (`'test' in sys.argv`) feeds `outbound_suppressed()`, which
+every transport checks. Tests that need to exercise the send path override
+`TESTING=False` **and** stub the transport thread; see `RecapEmailTests`.
+
 ### Recaps are emailed, and exactly once
 
 `send_recap_email()` mails the league *and* records; `record_recap_email()` only

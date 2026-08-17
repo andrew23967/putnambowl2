@@ -115,6 +115,76 @@ PUTNAMBOT_SIGNOFF = (
 )
 
 
+def outbound_suppressed():
+    """True when nothing should actually leave the building.
+
+    This module talks to Resend and smtplib directly instead of going through
+    Django's mail framework, so the test runner's locmem backend gives no
+    protection. The suite really did deliver mail to fixture addresses like
+    boss@example.com once SMTP was configured — checked here so a single guard
+    covers every transport.
+    """
+    return bool(getattr(django_settings, 'TESTING', False))
+
+
+def smtp_ready():
+    """Whether the league mailbox can send."""
+    if outbound_suppressed():
+        return False
+    return all((
+        getattr(django_settings, 'SMTP_HOST', ''),
+        getattr(django_settings, 'SMTP_USER', ''),
+        getattr(django_settings, 'SMTP_PASSWORD', ''),
+    ))
+
+
+def send_via_mailbox(to, subject, body, in_reply_to=None):
+    """Send from the league mailbox over SMTP.
+
+    Preferred over Resend, and the reason is not cosmetic: Resend's sandbox sender
+    only delivers to the account owner until a domain is verified, so it could not
+    reach a single league member. The Gmail app password already used for IMAP
+    sends without any of that.
+
+    It also makes a confirmation a real reply — same From address the member wrote
+    to, and threaded via In-Reply-To/References so it appears in the conversation
+    they started rather than as a stray new message.
+    """
+    import smtplib
+    from email.message import EmailMessage
+
+    if outbound_suppressed():
+        return False, 'suppressed (tests)'
+
+    host = getattr(django_settings, 'SMTP_HOST', '')
+    port = int(getattr(django_settings, 'SMTP_PORT', 587))
+    user = getattr(django_settings, 'SMTP_USER', '')
+    password = getattr(django_settings, 'SMTP_PASSWORD', '')
+    if not (host and user and password):
+        return False, 'SMTP not configured'
+
+    msg = EmailMessage()
+    msg['From'] = user
+    msg['To'] = to
+    msg['Subject'] = subject
+    if in_reply_to:
+        msg['In-Reply-To'] = in_reply_to
+        msg['References'] = in_reply_to
+    msg.set_content(body)
+
+    try:
+        with smtplib.SMTP(host, port, timeout=30) as smtp:
+            smtp.starttls()
+            smtp.login(user, password)
+            smtp.send_message(msg)
+        print(f'[email] sent via mailbox to {to}: {subject}', flush=True)
+        return True, 'sent'
+    except Exception as e:
+        log.error('[email] SMTP send to %s failed: %s', to, e)
+        print(f'[email] SMTP send to {to} FAILED: {e}', flush=True)
+        return False, str(e)
+
+
 def league_recipients():
     """Everyone who should get league mail: real members with an address."""
     return list(
@@ -169,21 +239,41 @@ def send_recap_email(week, recap_text, subject=None):
         print(f'[email] recap "{obj.subject}" already sent — not resending', flush=True)
         return False
 
-    api_key = getattr(django_settings, 'RESEND_API_KEY', '')
-    if not api_key:
-        print('[email] RESEND_API_KEY not set — recap recorded but not emailed',
-              flush=True)
-        return False
+    site_url = getattr(django_settings, 'SITE_URL', 'http://localhost:8000')
+    body = (f'{obj.body}\n\n'
+            f'The full archive: {site_url.rstrip("/")}/emails/')
+
+    # One post to the list, which fans it out — a recap is public league content,
+    # so the group is the right channel and the members list stays hidden.
+    list_address = (getattr(django_settings, 'LEAGUE_LIST_ADDRESS', '') or '').strip()
+    if smtp_ready() and list_address:
+        def _send_to_list():
+            send_via_mailbox(list_address, obj.subject, body)
+        threading.Thread(target=_send_to_list, daemon=True).start()
+        return True
+
     if not recipients:
         print('[email] no recipients with an address — recap recorded but not emailed',
               flush=True)
         return False
 
+    if smtp_ready():
+        def _send_each():
+            sent = sum(1 for a in recipients
+                       if send_via_mailbox(a, obj.subject, body)[0])
+            print(f'[email] recap "{obj.subject}" sent to {sent}/{len(recipients)}',
+                  flush=True)
+        threading.Thread(target=_send_each, daemon=True).start()
+        return True
+
+    api_key = getattr(django_settings, 'RESEND_API_KEY', '')
+    if outbound_suppressed() or not api_key:
+        print('[email] no transport available — recap recorded but not emailed',
+              flush=True)
+        return False
+
     from_email = getattr(django_settings, 'RESEND_FROM', 'onboarding@resend.dev')
     inbox = getattr(django_settings, 'IMAP_USER', '') or ''
-    site_url = getattr(django_settings, 'SITE_URL', 'http://localhost:8000')
-    body = (f'{obj.body}\n\n'
-            f'Standings and the full archive: {site_url.rstrip("/")}/emails/')
 
     def _send():
         try:
@@ -214,8 +304,9 @@ def send_picks_published_email(site_settings):
     """Send weekly picks-live notification to all non-bot users with an email address."""
     api_key = getattr(django_settings, 'RESEND_API_KEY', '')
     print(f'[email] send_picks_published_email called, week={site_settings.week}', flush=True)
-    if not api_key:
-        print('[email] RESEND_API_KEY not set — skipping.', flush=True)
+    # Either transport will do; the mailbox is preferred further down.
+    if outbound_suppressed() or (not api_key and not smtp_ready()):
+        print('[email] no transport available — skipping.', flush=True)
         return
 
     recipients = list(
@@ -276,6 +367,19 @@ def send_picks_published_email(site_settings):
         subject=subject, body=body, recipient_count=len(recipients),
         slug=f'picks-live-w{week}',
     )
+
+    # Deliberately per recipient rather than one post to the list, even though the
+    # list would be one send: this mail carries the ballot, and a member hitting
+    # reply on a group message could broadcast their picks to the whole league.
+    # Sent individually, a reply can only go back to the mailbox.
+    if smtp_ready():
+        def _send_each():
+            sent = sum(1 for a in recipients
+                       if send_via_mailbox(a, subject, body)[0])
+            print(f'[email] picks-live sent to {sent}/{len(recipients)} '
+                  f'for week {week}', flush=True)
+        threading.Thread(target=_send_each, daemon=True).start()
+        return
 
     def _send():
         # One message per recipient. Putting the whole league in a single `to`

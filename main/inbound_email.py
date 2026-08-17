@@ -223,7 +223,10 @@ def ingest_message(raw_bytes):
             # The untrimmed body on purpose: people reply by editing inside the
             # quoted original, so the edited ballot is often below the "On ...
             # wrote:" line that _trim() cuts off.
-            outcome = pick_email.handle(author, full_body, reply_to=from_email)
+            outcome = pick_email.handle(
+                author, full_body, reply_to=from_email,
+                message_id=message_id, subject=_decode(msg.get('Subject')),
+            )
         except Exception as e:
             log.exception('[inbound] pick parsing failed')
             return None, f'pick parsing failed for {author.username}: {e}'

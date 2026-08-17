@@ -277,7 +277,12 @@ class RecapEmailTests(TestCase):
         User.objects.create_user('putnambot')
 
     def _send(self, week, text, **kw):
-        """Run send_recap_email with the actual Resend call stubbed out."""
+        """Run send_recap_email with the transport thread stubbed out.
+
+        TESTING=False lifts the suppression guard so the send path is exercised;
+        the fake thread is what keeps it off the network. All transport settings
+        are pinned here so the result does not depend on the developer's .env.
+        """
         import threading
         real_thread = threading.Thread
 
@@ -291,10 +296,23 @@ class RecapEmailTests(TestCase):
 
         threading.Thread = fake_thread
         try:
-            with self.settings(RESEND_API_KEY='re_test'):
+            with self.settings(TESTING=False, RESEND_API_KEY='re_test',
+                               SMTP_HOST='smtp.example.com', SMTP_USER='u',
+                               SMTP_PASSWORD='p',
+                               LEAGUE_LIST_ADDRESS='league@example.com'):
                 return self.email_utils.send_recap_email(week, text, **kw)
         finally:
             threading.Thread = real_thread
+
+    def test_outbound_is_suppressed_while_testing(self):
+        """The suite talks to Resend and smtplib directly, so Django's locmem
+        backend does not protect it — it really did mail fixture addresses once
+        SMTP was configured."""
+        self.assertTrue(self.email_utils.outbound_suppressed())
+        self.assertFalse(self.email_utils.smtp_ready())
+        ok, why = self.email_utils.send_via_mailbox('nobody@example.com', 's', 'b')
+        self.assertFalse(ok)
+        self.assertIn('suppressed', why)
 
     def test_recap_is_recorded_and_a_send_is_started(self):
         self.assertTrue(self._send(3, 'Week 3 belonged to the underdogs.'))
@@ -343,8 +361,8 @@ class PickEmailHandleTests(TestCase):
         self.pick_email = pick_email
         self.sent = []
         self.addCleanup(setattr, pick_email, 'send_reply', pick_email.send_reply)
-        pick_email.send_reply = lambda to, subject, body: (
-            self.sent.append((to, subject, body)) or True)
+        pick_email.send_reply = lambda to, subject, body, in_reply_to=None: (
+            self.sent.append((to, subject, body, in_reply_to)) or True)
 
         self.addCleanup(setattr, pick_email, '_ask_model', pick_email._ask_model)
         self.model_reply = None
@@ -373,7 +391,7 @@ class PickEmailHandleTests(TestCase):
         self.assertEqual(Pick.objects.get(user=self.user, game=self.kc).choice, 'team1')
         self.assertEqual(Pick.objects.get(user=self.user, game=self.phi).choice, 'team2')
 
-        to, subject, body = self.sent[0]
+        to, subject, body, _ = self.sent[0]
         self.assertEqual(to, 'gramps@example.com')
         self.assertIn('Week 5', subject)
         self.assertIn('Bill', body)
@@ -464,8 +482,8 @@ class PickEmailRoutingTests(TestCase):
         self.LeagueEmail = LeagueEmail
         self.addCleanup(setattr, pick_email, 'send_reply', pick_email.send_reply)
         self.sent = []
-        pick_email.send_reply = lambda to, subject, body: (
-            self.sent.append((to, subject, body)) or True)
+        pick_email.send_reply = lambda to, subject, body, in_reply_to=None: (
+            self.sent.append((to, subject, body, in_reply_to)) or True)
 
         self.user = User.objects.create_user('gramps', email='gramps@example.com')
         # Deliberately WITHOUT email_posts_enabled: submitting picks needs no
@@ -506,7 +524,13 @@ class PickEmailRoutingTests(TestCase):
         self.assertEqual(self.LeagueEmail.objects.filter(published=True).count(), 0)
         # Stored unpublished so the next poll does not parse it again.
         self.assertEqual(self.LeagueEmail.objects.filter(published=False).count(), 1)
-        self.assertTrue(self.sent)
+
+        to, subject, body, in_reply_to = self.sent[0]
+        self.assertEqual(to, 'gramps@example.com')
+        # Threaded onto their own message, and titled as a reply to it, so the
+        # confirmation lands in the conversation they started.
+        self.assertEqual(in_reply_to, '<p1@example.com>')
+        self.assertEqual(subject, 'Re: my picks')
 
     def test_the_same_submission_is_not_processed_twice(self):
         self.ingest(self._raw('putnambowl.league@gmail.com', 'KC please'))

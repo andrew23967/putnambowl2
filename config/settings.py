@@ -1,3 +1,5 @@
+import sys
+
 import environ
 import dj_database_url
 from pathlib import Path
@@ -138,3 +140,20 @@ LEAGUE_LIST_ADDRESS = env('LEAGUE_LIST_ADDRESS', default='')
 # Only turn this off against a local test mailbox. With it off, a forged From
 # header is enough to publish to the home page.
 INBOUND_REQUIRE_AUTH = env('INBOUND_REQUIRE_AUTH', default='true')
+
+# ── Outbound via the league mailbox (SMTP) ──────────────────────────────────
+# Preferred over Resend whenever it is configured. The same Google app password
+# used for IMAP works for SMTP, so this needs no extra credential — and unlike
+# Resend's sandbox sender, which only delivers to the account owner until a domain
+# is verified, Gmail reaches the whole league immediately. A reply to a member
+# also comes *from* the address they wrote to, so it threads in their client.
+SMTP_HOST = env('SMTP_HOST', default='smtp.gmail.com')
+SMTP_PORT = env.int('SMTP_PORT', default=587)
+SMTP_USER = env('SMTP_USER', default='') or IMAP_USER
+SMTP_PASSWORD = env('SMTP_PASSWORD', default='') or IMAP_PASSWORD
+
+# This project sends through Resend and smtplib directly rather than Django's mail
+# framework, so the test runner's locmem backend does not protect it. Without this
+# flag the suite really did deliver mail to its own fixture addresses the moment
+# SMTP was configured. See email_utils.outbound_suppressed().
+TESTING = 'test' in sys.argv

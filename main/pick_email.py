@@ -183,12 +183,31 @@ def build_reply(user, settings, saved, unresolved, games):
     return '\n'.join(lines)
 
 
-def send_reply(to_email, subject, body):
-    """Reply to the sender only. Never to the list — these are private picks."""
+def send_reply(to_email, subject, body, in_reply_to=None):
+    """Reply to the sender only. Never to the list — these are private picks.
+
+    Sent from the league mailbox when SMTP is configured, which is both simpler
+    and necessary: Resend's sandbox sender only reaches the account owner until a
+    domain is verified, so a confirmation could not have reached any member. From
+    the mailbox it is a genuine reply — same address they wrote to, threaded — so
+    it lands in the conversation they started.
+    """
+    from .email_utils import outbound_suppressed, send_via_mailbox, smtp_ready
+
+    if smtp_ready():
+        ok, _ = send_via_mailbox(to_email, subject, body, in_reply_to=in_reply_to)
+        if ok:
+            return True
+        # Fall through to Resend rather than losing the confirmation entirely.
+
     api_key = getattr(django_settings, 'RESEND_API_KEY', '')
-    if not api_key:
-        print(f'[pick_email] RESEND_API_KEY not set — reply to {to_email} not sent',
+    if outbound_suppressed():
+        print(f'[pick_email] outbound suppressed — reply to {to_email} not sent',
               flush=True)
+        return False
+    if not api_key:
+        print(f'[pick_email] no SMTP and no RESEND_API_KEY — reply to {to_email} '
+              f'not sent', flush=True)
         return False
     from_email = getattr(django_settings, 'RESEND_FROM', 'onboarding@resend.dev')
     inbox = getattr(django_settings, 'IMAP_USER', '') or ''
@@ -205,7 +224,7 @@ def send_reply(to_email, subject, body):
         if inbox:
             payload['reply_to'] = [inbox]
         resend.Emails.send(payload)
-        print(f'[pick_email] replied to {to_email}', flush=True)
+        print(f'[pick_email] replied to {to_email} via Resend', flush=True)
         return True
     except Exception as e:
         log.error('[pick_email] reply to %s failed: %s', to_email, e)
@@ -213,15 +232,26 @@ def send_reply(to_email, subject, body):
         return False
 
 
-def handle(user, text, reply_to=None):
-    """Parse and save picks from one email. Returns a human-readable outcome."""
+def handle(user, text, reply_to=None, message_id=None, subject=None):
+    """Parse and save picks from one email. Returns a human-readable outcome.
+
+    `message_id` and `subject` come from the incoming mail so the confirmation
+    threads as a reply to it, rather than arriving as an unrelated message — which
+    matters most for the members this exists for.
+    """
     settings = SiteSettings.get()
     reply_to = reply_to or user.email
     week = settings.week
 
-    def _reply(body, subject=None):
+    if subject:
+        base = subject if subject.lower().startswith('re:') else f'Re: {subject}'
+    else:
+        base = f'Your Week {week} picks'
+
+    def _reply(body, subject_override=None):
         if reply_to:
-            send_reply(reply_to, subject or f'Your Week {week} picks', body)
+            send_reply(reply_to, subject_override or base, body,
+                       in_reply_to=message_id)
 
     if not settings.publish:
         _reply(f"Week {week} isn't open for picks yet — the commissioner is still "
