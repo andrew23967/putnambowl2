@@ -3,20 +3,6 @@
 
 {% block extra_head %}
 <style>
-  /* ── Podium ── */
-  .podium-wrap { display:flex;align-items:flex-end;justify-content:center;gap:8px;padding:8px 0 0; }
-  .pod { display:flex;flex-direction:column;align-items:center; }
-  .pod-block { border-radius:10px 10px 0 0;display:flex;align-items:center;justify-content:center;font-weight:900;color:rgba(255,255,255,.5); }
-  .pod-1 .pod-block { background:linear-gradient(160deg,rgba(245,158,11,.2),rgba(217,119,6,.1));border-top:1px solid rgba(245,158,11,.25);border-left:1px solid rgba(245,158,11,.15);border-right:1px solid rgba(245,158,11,.15);width:100px;height:44px;font-size:1.2rem; }
-  .pod-2 .pod-block { background:rgba(255,255,255,.04);border-top:1px solid rgba(255,255,255,.08);border-left:1px solid rgba(255,255,255,.06);border-right:1px solid rgba(255,255,255,.06);width:86px;height:28px;font-size:.95rem; }
-  .pod-3 .pod-block { background:rgba(255,255,255,.025);border-top:1px solid rgba(255,255,255,.05);border-left:1px solid rgba(255,255,255,.04);border-right:1px solid rgba(255,255,255,.04);width:80px;height:16px;font-size:.8rem; }
-  .pod-avatar { width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.8rem;color:#fff;margin-bottom:4px; }
-  .pod-1 .pod-avatar { width:36px;height:36px;font-size:.95rem; }
-
-  @keyframes podRise { from{transform:translateY(20px);opacity:0} to{transform:translateY(0);opacity:1} }
-  .pod { animation:podRise .45s ease both; }
-  .pod:nth-child(1){animation-delay:.15s} .pod:nth-child(2){animation-delay:.05s} .pod:nth-child(3){animation-delay:0s}
-
   /* ── Leaderboard rows ── */
   .lb-row { display:flex;align-items:center;gap:10px;padding:6px 8px 6px 0;border-bottom:1px solid var(--border);transition:background .12s; }
   .lb-row:last-child { border-bottom:none; }
@@ -64,33 +50,40 @@
   .pk-card-timer { margin-top:13px; }
   .pk-card-timer .timer-wrap { margin-bottom:0; }
 
-  /* ── PutnamBot recap ──
-     Always on the page now. Before, it only appeared in the gap before picks
-     were published, so the week's write-up vanished the moment it mattered. */
-  /* flex:1 so it takes the column's leftover height. Without it the block sized
-     to its content and 48-81px pooled uselessly underneath while the text above
-     was being clipped. */
-  .recap { flex:1;margin-top:22px;padding-top:18px;border-top:1px solid var(--border);display:flex;flex-direction:column;min-height:0; }
-  .recap-head { display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-shrink:0; }
-  .recap-avatar {
-    width:22px;height:22px;border-radius:50%;background:var(--fill-2);
-    display:flex;align-items:center;justify-content:center;font-size:.7rem;flex-shrink:0;
+  /* ── Emails column ──
+     The whole feed, not just the newest, scrolling inside its own box so the
+     page stays exactly one screen tall. */
+  .em-head { display:flex;align-items:baseline;gap:8px;margin-bottom:12px;flex-shrink:0; }
+  .em-head-title { font-size:.6875rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin:0; }
+  .em-head-link {
+    margin-left:auto;white-space:nowrap;text-decoration:none;
+    font-size:.6875rem;font-weight:700;color:var(--muted2);transition:color .14s ease;
   }
-  .recap-avatar-person { background:var(--accent);color:var(--on-accent);font-weight:800;font-size:.625rem; }
-  .recap-label { overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0; }
-  .recap-name { font-size:.75rem;font-weight:700;color:var(--text); }
-  .recap-dot { font-size:.6875rem;color:var(--muted);opacity:.6; }
-  .recap-label { font-size:.6875rem;color:var(--muted); }
-  /* Pushed to the right of the byline row, so the header doubles as the way in
-     to the archive without spending a whole row on a link. */
-  .recap-all {
-    margin-left:auto;flex-shrink:0;white-space:nowrap;text-decoration:none;
-    font-size:.6875rem;font-weight:700;color:var(--muted2);
-    transition:color .14s ease;
+  .em-head-link:hover { color:var(--text);text-decoration:underline; }
+
+  .em-item { padding:14px 0;border-top:1px solid var(--border); }
+  .em-item:first-child { padding-top:0;border-top:none; }
+  .em-from { display:flex;align-items:center;gap:7px;margin-bottom:5px;flex-wrap:wrap; }
+  .em-avatar {
+    width:20px;height:20px;border-radius:50%;background:var(--fill-2);flex-shrink:0;
+    display:flex;align-items:center;justify-content:center;font-size:.65rem;
   }
-  .recap-all:hover { color:var(--text);text-decoration:underline; }
-  .recap-body { font-size:.9375rem;color:var(--muted2);line-height:1.9;flex:1;min-height:0;overflow-y:auto; }
-  .recap-empty { font-size:.8125rem;color:var(--muted);font-style:italic; }
+  .em-avatar-person { background:var(--accent);color:var(--on-accent);font-weight:800;font-size:.5625rem; }
+  .em-name { font-size:.75rem;font-weight:700;color:var(--text); }
+  .em-dot { font-size:.6875rem;color:var(--muted);opacity:.6; }
+  .em-meta { font-size:.6875rem;color:var(--muted); }
+  .em-subject { font-size:.8125rem;font-weight:700;color:var(--text);margin:0 0 6px;letter-spacing:-.01em; }
+  .em-body { font-size:.875rem;color:var(--muted2);line-height:1.75; }
+  .em-body p { margin:0 0 10px; }
+  .em-body p:last-child { margin-bottom:0; }
+  .em-empty { font-size:.8125rem;color:var(--muted);font-style:italic; }
+
+  /* Emails custom scrollbar, matching the leaderboard's. */
+  .em-scroll { scrollbar-width:none; }
+  .em-scroll::-webkit-scrollbar { display:none; }
+  #em-track { position:absolute;right:0;top:0;bottom:0;width:4px;background:rgba(255,255,255,.06);border-radius:2px;z-index:2; }
+  #em-thumb { position:absolute;left:0;width:100%;height:36px;border-radius:2px;background:var(--accent);opacity:.55;transition:opacity .15s;cursor:pointer; }
+  #em-thumb:hover { opacity:.85; }
 
   /* Preseason reminder, shown only after someone chooses "later". */
   .preseason-nudge {
@@ -106,10 +99,8 @@
   .preseason-nudge-cta { font-size:.75rem;font-weight:700;color:var(--warn);white-space:nowrap; }
 
   /* ── Light mode overrides ── */
-  [data-theme="light"] #lb-track { background: rgba(0,0,0,.07); }
-  [data-theme="light"] .pod-block { color: rgba(0,0,0,.45); }
-  [data-theme="light"] .pod-2 .pod-block { background: rgba(0,0,0,.04); border-color: rgba(0,0,0,.08); }
-  [data-theme="light"] .pod-3 .pod-block { background: rgba(0,0,0,.025); border-color: rgba(0,0,0,.05); }
+  [data-theme="light"] #lb-track,
+  [data-theme="light"] #em-track { background: rgba(0,0,0,.07); }
   [data-theme="light"] .rank-n { background: rgba(0,0,0,.04); }
 
   /* Leaderboard custom scrollbar */
@@ -139,37 +130,19 @@
     main { padding:clamp(12px,2.4vw,24px) !important; }
     .main-grid { gap:clamp(12px,2vw,24px) !important; }
     .lb-row { padding:clamp(2px,.4vw,3px) 8px clamp(2px,.4vw,3px) 0; }
-    /* Podium — scale with viewport */
-    .podium-wrap { padding:8px 0 0;gap:clamp(4px,.6vw,6px); }
-    .pod-1 .pod-block { width:clamp(54px,7.5vw,70px);height:clamp(44px,6vw,60px);font-size:clamp(.85rem,1.2vw,1.1rem); }
-    .pod-2 .pod-block { width:clamp(44px,6vw,58px);height:clamp(28px,4.5vw,42px);font-size:clamp(.72rem,1vw,.9rem); }
-    .pod-3 .pod-block { width:clamp(38px,5.5vw,52px);height:clamp(18px,3vw,28px);font-size:clamp(.62rem,.9vw,.8rem); }
-    .pod-avatar { width:clamp(26px,3.5vw,32px);height:clamp(26px,3.5vw,32px);font-size:clamp(.68rem,.85vw,.8rem); }
-    .pod-1 .pod-avatar { width:clamp(32px,4.5vw,40px);height:clamp(32px,4.5vw,40px);font-size:clamp(.82rem,1.1vw,1rem); }
   }
   @media (max-width:640px) {
-    /* Full-page scroll, single column */
+    /* Full-page scroll, single column: the card, then the standings, then the
+       emails — longest last, so it never pushes the table off the screen. */
     main { height:auto !important;display:block !important;overflow:visible !important;padding:16px !important; }
     .main-grid { display:flex !important;flex-direction:column !important;gap:28px !important; }
     .col-left, .col-right { height:auto !important;overflow:visible !important; }
-    /* Flatten the right column so its two pieces can be ordered individually
-       against the leaderboard: the week card is small and actionable so it
-       leads, the standings follow, and the recap — the longest block by far —
-       goes last rather than pushing the table off the bottom of the screen. */
-    .col-right { display:contents !important; }
-    .pk-card  { order:1 !important; }
-    .col-left { order:2 !important; }
-    .recap    { order:3 !important; }
-    /* No column height to fill once the page scrolls; let it size to its text. */
-    .recap    { flex:0 0 auto !important; }
-    /* Leaderboard — simple table, no podium or score bars */
-    .podium-wrap { display:none !important; }
-    #lb-track, #lb-thumb { display:none !important; }
-    #lb-scroll { position:static !important;overflow:visible !important; }
+    /* Both scroll boxes become plain flow; the page itself does the scrolling. */
+    #lb-track, #lb-thumb, #em-track, #em-thumb { display:none !important; }
+    #lb-scroll, #em-scroll { position:static !important;overflow:visible !important; }
+    .lb-wrap, .em-wrap { height:auto !important; }
     .score-bar { display:none !important; }
     .lb-row { padding:9px 0 !important; }
-    /* Let the recap run at full length rather than scroll in a short box. */
-    .recap-body { overflow-y:visible !important; }
   }
 </style>
 {% endblock %}
@@ -184,73 +157,11 @@
 </a>
 {% endif %}
 
-<!-- ── MAIN DASHBOARD: leaderboard | week card + Emails ── -->
+<!-- ── MAIN DASHBOARD: week card + standings | the whole Emails feed ── -->
 <div class="main-grid anim-up" style="display:grid;grid-template-columns:1fr 1.15fr;gap:40px;align-items:stretch;">
 
-  <!-- LEFT: Podium + Leaderboard -->
-  <div class="col-left" style="display:flex;flex-direction:column;">
-    <!-- Podium -->
-    <div id="home-podium-view">
-      {% if leaderboard|length >= 3 %}
-      <div class="podium-wrap" style="margin-bottom:12px;">
-        {% with p2=leaderboard.1 %}
-        <div class="pod pod-2">
-          <div class="pod-avatar" style="background:#334155;">{{ p2.username|first|upper }}</div>
-          <p style="font-size:.625rem;font-weight:600;color:var(--muted2);margin:0 0 3px;max-width:64px;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ p2.username }}</p>
-          <p style="font-size:.8rem;font-weight:800;color:#94a3b8;margin:0 0 4px;">{{ p2.score }}</p>
-          <div class="pod-block">2</div>
-        </div>
-        {% endwith %}
-        {% with p1=leaderboard.0 %}
-        <div class="pod pod-1">
-          <div class="pod-avatar" style="background:#b45309;">{{ p1.username|first|upper }}</div>
-          <p style="font-size:.625rem;font-weight:600;color:var(--muted2);margin:0 0 2px;max-width:72px;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ p1.username }}</p>
-          <p style="font-size:1rem;font-weight:900;color:#fbbf24;margin:0 0 5px;">{{ p1.score }}</p>
-          <div class="pod-block">1</div>
-        </div>
-        {% endwith %}
-        {% with p3=leaderboard.2 %}
-        <div class="pod pod-3">
-          <div class="pod-avatar" style="background:#431407;">{{ p3.username|first|upper }}</div>
-          <p style="font-size:.625rem;font-weight:600;color:var(--muted2);margin:0 0 3px;max-width:64px;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ p3.username }}</p>
-          <p style="font-size:.8rem;font-weight:800;color:#fb923c;margin:0 0 4px;">{{ p3.score }}</p>
-          <div class="pod-block">3</div>
-        </div>
-        {% endwith %}
-      </div>
-      {% endif %}
-    </div><!-- end home-podium-view -->
-
-    <!-- Leaderboard always visible -->
-    <div style="flex:1;min-height:0;position:relative;">
-      <div id="lb-track"><div id="lb-thumb"></div></div>
-      <div id="lb-scroll" class="lb-scroll" style="position:absolute;left:8px;right:0;top:0;bottom:0;overflow-y:scroll;">
-      <div style="min-height:100%;display:flex;flex-direction:column;justify-content:space-between;">
-      {% for entry in leaderboard %}
-      <div class="lb-row{% if entry.username == request.user.username %} lb-row-me{% endif %}">
-        <div class="rank-badge {% if forloop.counter == 1 %}rank-1{% elif forloop.counter == 2 %}rank-2{% elif forloop.counter == 3 %}rank-3{% else %}rank-n{% endif %}">{{ forloop.counter }}</div>
-        <div style="flex:1;min-width:0;">
-          <div style="display:flex;align-items:center;gap:5px;margin-bottom:4px;">
-            <span style="font-size:.8125rem;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ entry.username }}</span>
-            {% if entry.on_fire %}<span class="fire-indicator">🔥</span>{% endif %}
-          </div>
-          <div class="score-bar"><div class="score-bar-fill" data-pct="{{ entry.score }}"></div></div>
-        </div>
-        <div style="text-align:right;flex-shrink:0;">
-          <div style="font-size:.875rem;font-weight:800;color:var(--text);">{{ entry.score }}</div>
-          {% if entry.rank_change > 0 %}<div class="rank-up">↑{{ entry.rank_change }}</div>
-          {% elif entry.rank_change < 0 %}<div class="rank-down">↓{{ entry.rank_change_abs }}</div>
-          {% else %}<div class="rank-flat">—</div>{% endif %}
-        </div>
-      </div>
-      {% endfor %}
-      </div>{# end space-between wrapper #}
-      </div>{# end scroll wrapper #}
-    </div>{# end relative wrapper #}
-  </div><!-- end LEFT -->
-
-  <!-- RIGHT: one card for the week (clock + picks doorway), then PutnamBot -->
-  <div class="col-right" style="display:flex;flex-direction:column;min-height:0;">
+  <!-- LEFT: the week's card, then the standings underneath it -->
+  <div class="col-left" style="display:flex;flex-direction:column;min-height:0;">
 
     {% if not settings.publish %}
     <!-- Nothing to link to yet, so this one isn't a link. -->
@@ -294,34 +205,65 @@
     </a>
     {% endif %}
 
-    <!-- Newest message in the Emails feed, always shown whatever state the week
-         is in. The archive is on /emails/; this stays inline so the latest word
-         to the league is on the page you land on. -->
-    <div class="recap">
-      <div class="recap-head">
-        {% if latest_email %}
-        {% if latest_email.author and latest_email.author.profile.is_bot %}
-        <div class="recap-avatar">🤖</div>
-        {% else %}
-        <div class="recap-avatar recap-avatar-person">{{ latest_email.display_name|first|upper }}</div>
-        {% endif %}
-        <span class="recap-name">{{ latest_email.display_name }}</span>
-        <span class="recap-dot">·</span>
-        <span class="recap-label">{{ latest_email.subject }}</span>
-        {% else %}
-        <div class="recap-avatar">✉</div>
-        <span class="recap-name">Emails</span>
-        {% endif %}
-        <a href="{% url 'main:emails' %}" class="recap-all">{% if email_count > 1 %}All {{ email_count }}{% else %}Open{% endif %} →</a>
+    <!-- Standings fill whatever is left and scroll inside their own box. -->
+    <div class="lb-wrap" style="flex:1;min-height:0;position:relative;margin-top:18px;">
+      <div id="lb-track"><div id="lb-thumb"></div></div>
+      <div id="lb-scroll" class="lb-scroll" style="position:absolute;left:8px;right:0;top:0;bottom:0;overflow-y:scroll;">
+      <div>
+      {% for entry in leaderboard %}
+      <div class="lb-row{% if entry.username == request.user.username %} lb-row-me{% endif %}">
+        <div class="rank-badge {% if forloop.counter == 1 %}rank-1{% elif forloop.counter == 2 %}rank-2{% elif forloop.counter == 3 %}rank-3{% else %}rank-n{% endif %}">{{ forloop.counter }}</div>
+        <div style="flex:1;min-width:0;">
+          <div style="display:flex;align-items:center;gap:5px;margin-bottom:4px;">
+            <span style="font-size:.8125rem;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ entry.username }}</span>
+            {% if entry.on_fire %}<span class="fire-indicator">🔥</span>{% endif %}
+          </div>
+          <div class="score-bar"><div class="score-bar-fill" data-pct="{{ entry.score }}"></div></div>
+        </div>
+        <div style="text-align:right;flex-shrink:0;">
+          <div style="font-size:.875rem;font-weight:800;color:var(--text);">{{ entry.score }}</div>
+          {% if entry.rank_change > 0 %}<div class="rank-up">↑{{ entry.rank_change }}</div>
+          {% elif entry.rank_change < 0 %}<div class="rank-down">↓{{ entry.rank_change_abs }}</div>
+          {% else %}<div class="rank-flat">—</div>{% endif %}
+        </div>
       </div>
-      {% if latest_email %}
-      <div class="recap-body">{{ latest_email.body|linebreaks }}</div>
-      {% else %}
-      <p class="recap-empty">Nothing here yet — PutnamBot files a recap once week
-        {{ settings.week }} is scored.</p>
-      {% endif %}
+      {% endfor %}
+      </div>
+      </div>{# end scroll wrapper #}
+    </div>{# end relative wrapper #}
+  </div><!-- end LEFT -->
+
+  <!-- RIGHT: every message, newest first, scrolling in its own box -->
+  <div class="col-right" style="display:flex;flex-direction:column;min-height:0;">
+    <div class="em-head">
+      <p class="em-head-title">Emails</p>
+      <a href="{% url 'main:emails' %}" class="em-head-link">Open →</a>
     </div>
 
+    <div class="em-wrap" style="flex:1;min-height:0;position:relative;">
+      <div id="em-track"><div id="em-thumb"></div></div>
+      <div id="em-scroll" class="em-scroll" style="position:absolute;left:0;right:8px;top:0;bottom:0;overflow-y:scroll;">
+      {% for msg in emails %}
+      <article class="em-item">
+        <div class="em-from">
+          {% if msg.author and msg.author.profile.is_bot %}
+          <div class="em-avatar">🤖</div>
+          {% else %}
+          <div class="em-avatar em-avatar-person">{{ msg.display_name|first|upper }}</div>
+          {% endif %}
+          <span class="em-name">{{ msg.display_name }}</span>
+          <span class="em-dot">·</span>
+          <span class="em-meta" data-utc-date="{{ msg.sent_at|date:'c' }}">{{ msg.sent_at|date:"M j" }}</span>
+        </div>
+        <p class="em-subject">{{ msg.subject }}</p>
+        <div class="em-body">{{ msg.body|linebreaks }}</div>
+      </article>
+      {% empty %}
+      <p class="em-empty">Nothing here yet — PutnamBot files a recap once week
+        {{ settings.week }} is scored.</p>
+      {% endfor %}
+      </div>{# end scroll wrapper #}
+    </div>{# end relative wrapper #}
   </div><!-- end RIGHT -->
 
 </div><!-- end main-grid -->
@@ -374,6 +316,48 @@
   });
 })();
 
+// Custom emails scrollbar — same behaviour as the leaderboard's, so the two
+// columns scroll alike and the page stays exactly one screen tall.
+(function(){
+  const scroll = document.getElementById('em-scroll');
+  const thumb  = document.getElementById('em-thumb');
+  const track  = document.getElementById('em-track');
+  if (!scroll || !thumb || !track) return;
+  const THUMB_H = 36;
+  function updateThumb() {
+    const trackH = track.clientHeight;
+    const scrollable = scroll.scrollHeight - scroll.clientHeight;
+    track.style.display = scrollable > 0 ? '' : 'none';
+    const pct = scrollable > 0 ? scroll.scrollTop / scrollable : 0;
+    thumb.style.top = Math.min(pct * (trackH - THUMB_H), trackH - THUMB_H) + 'px';
+  }
+  scroll.addEventListener('scroll', updateThumb);
+  window.addEventListener('resize', updateThumb);
+  updateThumb();
+  thumb.addEventListener('mousedown', e => {
+    e.preventDefault();
+    const startY = e.clientY;
+    const startTop = scroll.scrollTop;
+    const trackH = track.clientHeight;
+    function onMove(e) {
+      const dy = e.clientY - startY;
+      const scrollable = scroll.scrollHeight - scroll.clientHeight;
+      scroll.scrollTop = startTop + (dy / (trackH - THUMB_H)) * scrollable;
+    }
+    function onUp() {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    }
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+  track.addEventListener('click', e => {
+    if (e.target === thumb) return;
+    const rect = track.getBoundingClientRect();
+    scroll.scrollTop = ((e.clientY - rect.top) / rect.height) * scroll.scrollHeight;
+  });
+})();
+
 // Score bars
 (function(){
   const data = {{ leaderboard_json|safe }};
@@ -396,7 +380,7 @@ if (LOCK_PICKS) {
   setInterval(() => {
     fetch(`{% url 'main:ajax_leaderboard' %}?week=${SITE_WEEK}`)
       .then(r => r.json())
-      .then(data => { renderLeaderboard(data.entries); renderPodium(data.entries); });
+      .then(data => renderLeaderboard(data.entries));
   }, 30000);
 }
 
@@ -417,7 +401,7 @@ function renderLeaderboard(entries){
   const scroll=document.getElementById('lb-scroll');
   if(!scroll)return;
   const me='{{ request.user.username|escapejs }}';
-  let html='<div style="min-height:100%;display:flex;flex-direction:column;justify-content:space-between;">';
+  let html='<div>';
   entries.forEach((e,i)=>{
     const rank=i+1;
     const isMe=e.me||e.username===me;
@@ -452,28 +436,5 @@ function renderLeaderboard(entries){
   }
 }
 
-function renderPodium(entries){
-  const wrap=document.querySelector('.podium-wrap');
-  if(!wrap||entries.length<3)return;
-  const cfg=[
-    {cls:'pod-1',bg:'#b45309',nameSize:'.625rem',nameColor:'var(--muted2)',scoreStyle:'font-size:1rem;font-weight:900;color:#fbbf24;margin:0 0 5px;',nameMb:'2',maxW:'72px'},
-    {cls:'pod-2',bg:'#334155',nameSize:'.625rem',nameColor:'var(--muted2)',scoreStyle:'font-size:.8rem;font-weight:800;color:#94a3b8;margin:0 0 4px;',nameMb:'3',maxW:'64px'},
-    {cls:'pod-3',bg:'#431407',nameSize:'.625rem',nameColor:'var(--muted2)',scoreStyle:'font-size:.8rem;font-weight:800;color:#fb923c;margin:0 0 4px;',nameMb:'3',maxW:'64px'},
-  ];
-  const displayOrder=[1,0,2];
-  let html='';
-  displayOrder.forEach(idx=>{
-    if(idx>=entries.length)return;
-    const e=entries[idx];
-    const c=cfg[idx];
-    html+=`<div class="pod ${c.cls}">
-      <div class="pod-avatar" style="background:${c.bg};">${e.username[0].toUpperCase()}</div>
-      <p style="font-size:${c.nameSize};font-weight:600;color:${c.nameColor};margin:0 0 ${c.nameMb}px;max-width:${c.maxW};text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${e.username}</p>
-      <p style="${c.scoreStyle}">${e.score}</p>
-      <div class="pod-block">${idx+1}</div>
-    </div>`;
-  });
-  wrap.innerHTML=html;
-}
 </script>
 {% endblock %}

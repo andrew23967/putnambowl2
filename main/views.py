@@ -167,7 +167,9 @@ def home(request):
         Pick.objects.filter(user=request.user, game__in=games).select_related('game')
     )
 
-    feed = _email_feed(limit=2)
+    # The whole feed: the home page shows every message in a scrolling column, so
+    # there is nothing to trim to.
+    feed = _email_feed()
     countdown = _countdown(settings, games)
 
     return render(request, 'main/home.html', {
@@ -176,8 +178,8 @@ def home(request):
         'leaderboard': leaderboard,
         'leaderboard_json': json.dumps(leaderboard),
         'settings': settings,
-        'latest_email': feed[0] if feed else None,
-        'email_count': LeagueEmail.objects.filter(published=True).count(),
+        'emails': feed,
+        'email_count': len(feed),
         'total_games': len(games),
         'picks_made': len(my_picks),
         'my_correct': sum(1 for p in my_picks if p.is_correct),
