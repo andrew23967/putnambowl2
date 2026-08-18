@@ -440,7 +440,7 @@ class PickEmailHandleTests(TestCase):
 
     def test_saves_picks_and_reports_them_back(self):
         self.model_reply = f'{{"{self.kc.id}": "team1", "{self.phi.id}": "team2"}}'
-        outcome = self.pick_email.handle(self.user, 'KC and the Cowboys please')
+        outcome, _ = self.pick_email.handle(self.user, 'KC and the Cowboys please')
 
         self.assertEqual(Pick.objects.filter(user=self.user).count(), 2)
         self.assertEqual(Pick.objects.get(user=self.user, game=self.kc).choice, 'team1')
@@ -497,7 +497,7 @@ class PickEmailHandleTests(TestCase):
     def test_locked_week_saves_nothing_and_says_so(self):
         self.settings.lock_picks = True
         self.settings.save()
-        outcome = self.pick_email.handle(self.user, 'KC and the Cowboys')
+        outcome, _ = self.pick_email.handle(self.user, 'KC and the Cowboys')
         self.assertEqual(Pick.objects.filter(user=self.user).count(), 0)
         self.assertIn('locked', self.sent[0][2])
         self.assertIn('locked', outcome)
@@ -519,7 +519,7 @@ class PickEmailHandleTests(TestCase):
         """A missing key must not look like "you made no picks" — the sender is
         waiting on a confirmation that would otherwise never arrive."""
         self.model_reply = None
-        outcome = self.pick_email.handle(self.user, 'KC and the Cowboys')
+        outcome, _ = self.pick_email.handle(self.user, 'KC and the Cowboys')
 
         self.assertEqual(Pick.objects.filter(user=self.user).count(), 0)
         self.assertIn('unavailable', self.sent[0][2])
@@ -795,6 +795,112 @@ class RelayTests(TestCase):
             newcomer.profile.save()
             obj, reason = self.ingest(stranger)
         self.assertIsNotNone(obj, reason)
+
+    def test_a_model_outage_defers_instead_of_dropping_the_picks(self):
+        """Gemini answering 503 is temporary and must not cost someone their
+        picks. The submission is left unprocessed so the next poll retries, and
+        the sender is not told about an outage that may clear on its own."""
+        from main import inbound_email, pick_email
+        from main.models import ProcessedEmail
+
+        told = []
+        self.addCleanup(setattr, pick_email, 'send_reply', pick_email.send_reply)
+        pick_email.send_reply = lambda *a, **kw: told.append(a[2]) or True
+        self.addCleanup(setattr, pick_email, '_ask_model', pick_email._ask_model)
+        pick_email._ask_model = lambda text, games: None      # unreachable
+
+        s = SiteSettings.get()
+        s.week = 5
+        s.publish = True
+        s.lock_picks = False
+        s.save()
+        make_game(week=5)
+
+        raw = self._raw('mailbox+picks@gmail.com')
+        with self.settings(SMTP_USER='mailbox@gmail.com', PICKS_ADDRESS_TAG='picks'):
+            obj, reason = self.ingest(raw)
+            self.assertIsNone(obj)
+            self.assertIn('will retry', reason)
+            self.assertTrue(ProcessedEmail.objects.get(
+                message_id='<r1@example.com>').deferred)
+            self.assertEqual(told, [], 'must not report an outage that may clear')
+
+            # The model comes back, and the next poll picks it up.
+            pick_email._ask_model = lambda text, games: (
+                f'{{"{Game.objects.get(week=5).id}": "team1"}}')
+            obj, reason = self.ingest(raw)
+
+        self.assertIn('saved 1/1', reason)
+        self.assertFalse(ProcessedEmail.objects.get(
+            message_id='<r1@example.com>').deferred)
+        self.assertEqual(Pick.objects.filter(user=self.boss).count(), 1)
+
+    def test_a_retry_does_not_collide_with_the_row_from_the_first_attempt(self):
+        """A retried submission may already have a LeagueEmail row. create() threw
+        a UNIQUE violation there — after the picks had been saved and the member
+        told, so it looked like a total failure when it was actually a success."""
+        from main import pick_email
+        from main.models import LeagueEmail
+
+        self.addCleanup(setattr, pick_email, 'send_reply', pick_email.send_reply)
+        pick_email.send_reply = lambda *a, **kw: True
+
+        s = SiteSettings.get()
+        s.week = 5
+        s.publish = True
+        s.lock_picks = False
+        s.save()
+        game = make_game(week=5)
+
+        # A row already exists for this message, as it would after a first attempt.
+        LeagueEmail.objects.create(
+            message_id='<r1@example.com>', subject='old', body='old',
+            sent_at=datetime(2026, 1, 1, tzinfo=timezone.utc), published=False)
+
+        self.addCleanup(setattr, pick_email, '_ask_model', pick_email._ask_model)
+        pick_email._ask_model = lambda text, games: f'{{"{game.id}": "team1"}}'
+
+        with self.settings(SMTP_USER='mailbox@gmail.com', PICKS_ADDRESS_TAG='picks'):
+            obj, reason = self.ingest(self._raw('mailbox+picks@gmail.com'))
+
+        self.assertIn('saved 1/1', reason)
+        self.assertEqual(LeagueEmail.objects.filter(
+            message_id='<r1@example.com>').count(), 1)
+        self.assertEqual(Pick.objects.filter(user=self.boss).count(), 1)
+
+    def test_a_long_outage_eventually_tells_the_sender(self):
+        from datetime import timedelta as _td
+
+        from main import pick_email
+        from main.models import ProcessedEmail
+
+        told = []
+        self.addCleanup(setattr, pick_email, 'send_reply', pick_email.send_reply)
+        pick_email.send_reply = lambda *a, **kw: told.append(a[2]) or True
+        self.addCleanup(setattr, pick_email, '_ask_model', pick_email._ask_model)
+        pick_email._ask_model = lambda text, games: None
+
+        s = SiteSettings.get()
+        s.week = 5
+        s.publish = True
+        s.lock_picks = False
+        s.save()
+        make_game(week=5)
+
+        raw = self._raw('mailbox+picks@gmail.com')
+        with self.settings(SMTP_USER='mailbox@gmail.com', PICKS_ADDRESS_TAG='picks'):
+            self.ingest(raw)
+            # Pretend the first attempt was long enough ago to give up on.
+            row = ProcessedEmail.objects.get(message_id='<r1@example.com>')
+            row.seen_at = row.seen_at - _td(hours=2)
+            row.save()
+            obj, reason = self.ingest(raw)
+
+        self.assertIn('gave up', reason)
+        self.assertFalse(ProcessedEmail.objects.get(
+            message_id='<r1@example.com>').deferred, 'must stop retrying')
+        self.assertEqual(len(told), 1)
+        self.assertIn('unavailable', told[0])
 
     def test_a_pick_submission_is_not_relayed(self):
         """Mail to the tagged address is private picks — forwarding it would leak

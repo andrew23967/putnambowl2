@@ -62,6 +62,11 @@ MAX_BODY_CHARS = 20000
 # wide enough to survive the worker being down for a few days.
 INBOUND_WINDOW_DAYS = 7
 
+# How long to keep retrying a submission the model could not read before giving up
+# and telling the sender. Gemini answering 503 ("spikes in demand are usually
+# temporary") should not cost someone their picks.
+DEFER_FOR = timedelta(minutes=30)
+
 # Trailing quoted replies and signatures, so a thread does not grow a copy of
 # itself every time someone hits reply.
 _QUOTE_MARKERS = [
@@ -191,8 +196,9 @@ def ingest_message(raw_bytes):
         return None, 'no Message-ID'
     # Dedupe against ProcessedEmail, not the feed: the feed can be deleted, and if
     # dedupe read from it, deleting a message still inside the poll window would
-    # re-ingest and re-relay it to the whole league.
-    if ProcessedEmail.objects.filter(message_id=message_id).exists():
+    # re-ingest and re-relay it to the whole league. Deferred rows are skipped
+    # here on purpose — those are waiting for another attempt.
+    if ProcessedEmail.objects.filter(message_id=message_id, deferred=False).exists():
         return None, 'already ingested'
 
     from_name, from_email = ('', '')
@@ -228,45 +234,74 @@ def ingest_message(raw_bytes):
 
     if is_picks:
         from . import pick_email
+
+        record, _ = ProcessedEmail.objects.get_or_create(message_id=message_id[:400])
+        # Give a passing outage a real chance to clear before giving up. Measured
+        # in elapsed time, not attempts, so it behaves the same whether the worker
+        # ticks every 10 seconds or every 5 minutes.
+        waited = datetime.now(timezone.utc) - record.seen_at
+        give_up = record.attempts > 0 and waited >= DEFER_FOR
+
         try:
             # The untrimmed body on purpose: people reply by editing inside the
             # quoted original, so the edited ballot is often below the "On ...
             # wrote:" line that _trim() cuts off.
-            outcome = pick_email.handle(
+            outcome, retryable = pick_email.handle(
                 author, full_body, reply_to=from_email,
                 message_id=message_id, subject=_decode(msg.get('Subject')),
+                notify_unavailable=give_up,
             )
         except Exception as e:
             log.exception('[inbound] pick parsing failed')
-            # Not marked processed, so a transient failure gets another go.
+            # Left deferred, so a transient failure gets another go.
+            record.attempts += 1
+            record.deferred = True
+            record.outcome = f'error: {e}'[:200]
+            record.save()
             return None, f'pick parsing failed for {author.username}: {e}'
-        ProcessedEmail.objects.get_or_create(
-            message_id=message_id[:400], defaults={'outcome': outcome[:200]})
+
+        record.attempts += 1
+        record.deferred = retryable and not give_up
+        record.outcome = outcome[:200]
+        record.save()
+        if record.deferred:
+            # Nothing stored yet — try again next poll rather than dropping it.
+            return None, f'{outcome} ({why})'
         # Kept as a record of what arrived, but out of the feed — picks are private
-        # until the week locks.
-        LeagueEmail.objects.create(
-            author=author, from_email=from_email, from_name=_decode(from_name),
-            subject=_decode(msg.get('Subject')) or '(no subject)',
-            body=body, source=LeagueEmail.SOURCE_INBOUND, sent_at=sent_at,
-            message_id=message_id[:400], recipient_count=0, published=False,
+        # until the week locks. update_or_create, not create: a retried submission
+        # already has a row, and a UNIQUE violation here would blow up *after* the
+        # picks were saved and the member was told.
+        LeagueEmail.objects.update_or_create(
+            message_id=message_id[:400],
+            defaults={
+                'author': author, 'from_email': from_email,
+                'from_name': _decode(from_name),
+                'subject': _decode(msg.get('Subject')) or '(no subject)',
+                'body': body, 'source': LeagueEmail.SOURCE_INBOUND,
+                'sent_at': sent_at, 'recipient_count': 0, 'published': False,
+            },
         )
         return None, f'{outcome} ({why})'
 
-    obj = LeagueEmail.objects.create(
-        author=author,
-        from_email=from_email,
-        from_name=_decode(from_name),
-        subject=_decode(msg.get('Subject')) or '(no subject)',
-        body=body,
-        source=LeagueEmail.SOURCE_INBOUND,
-        sent_at=sent_at,
+    obj, _ = LeagueEmail.objects.update_or_create(
         message_id=message_id[:400],
-        recipient_count=len(_addressed_to(msg) & set(members)),
+        defaults={
+            'author': author,
+            'from_email': from_email,
+            'from_name': _decode(from_name),
+            'subject': _decode(msg.get('Subject')) or '(no subject)',
+            'body': body,
+            'source': LeagueEmail.SOURCE_INBOUND,
+            'sent_at': sent_at,
+            'recipient_count': len(_addressed_to(msg) & set(members)),
+        },
     )
     # Marked processed before relaying, so a message can never be forwarded to the
     # league twice — not on a later poll, and not if its feed row is deleted.
-    ProcessedEmail.objects.get_or_create(
-        message_id=message_id[:400], defaults={'outcome': 'published'})
+    ProcessedEmail.objects.update_or_create(
+        message_id=message_id[:400],
+        defaults={'outcome': 'published', 'deferred': False},
+    )
 
     # Forward it on. The site holds the membership, so the commissioner sends one
     # email and everyone receives it — no mailing list to maintain.

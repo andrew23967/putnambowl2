@@ -178,6 +178,11 @@ class ProcessedEmail(models.Model):
     message_id = models.CharField(max_length=400, unique=True)
     seen_at = models.DateTimeField(auto_now_add=True)
     outcome = models.CharField(max_length=200, blank=True, default='')
+    # Set when the message could not be handled for a reason that may pass — the
+    # model returning 503, say. Dedupe ignores deferred rows, so the next poll
+    # tries again instead of dropping someone's picks over a temporary outage.
+    deferred = models.BooleanField(default=False)
+    attempts = models.IntegerField(default=0)
 
     class Meta:
         ordering = ['-seen_at']

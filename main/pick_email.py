@@ -241,8 +241,15 @@ def send_reply(to_email, subject, body, in_reply_to=None):
         return False
 
 
-def handle(user, text, reply_to=None, message_id=None, subject=None):
-    """Parse and save picks from one email. Returns a human-readable outcome.
+def handle(user, text, reply_to=None, message_id=None, subject=None,
+           notify_unavailable=True):
+    """Parse and save picks from one email.
+
+    Returns ``(outcome, retryable)``. ``retryable`` is True only when the model
+    could not be reached — the caller then leaves the message unprocessed so a
+    later poll tries again, rather than dropping the submission over a passing
+    503. Set `notify_unavailable` False while retrying so the sender is not told
+    about an outage that may clear on its own.
 
     `message_id` and `subject` come from the incoming mail so the confirmation
     threads as a reply to it, rather than arriving as an unrelated message — which
@@ -266,30 +273,33 @@ def handle(user, text, reply_to=None, message_id=None, subject=None):
         _reply(f"Week {week} isn't open for picks yet — the commissioner is still "
                f'setting up the games. Nothing has been saved. Send these again '
                f"once picks are live and I'll record them.")
-        return 'week not published — nothing saved, sender told'
+        return 'week not published — nothing saved, sender told', False
 
     if settings.lock_picks:
         _reply(f'Week {week} picks are locked, so I could not record these. '
                f'Sorry — they came in too late. Nothing has been changed.')
-        return 'picks locked — nothing saved, sender told'
+        return 'picks locked — nothing saved, sender told', False
 
     games = list(Game.objects.filter(week=week))
     games.sort(key=lambda g: (g.game_dt is None, g.game_dt, g.id))
     if not games:
         _reply(f'There are no games scheduled for Week {week} yet, so I could not '
                f'record any picks.')
-        return 'no games this week — nothing saved, sender told'
+        return 'no games this week — nothing saved, sender told', False
 
     picks, unresolved, available = extract_picks(text, games)
 
     if not available:
-        # Be honest rather than silent: they are waiting on a confirmation that
-        # would otherwise never come.
-        _reply(f"I could not read your picks just now — the service I use to "
-               f"understand emails is unavailable, so nothing has been saved for "
-               f"Week {week}. Please make them on the site, or reply again later "
-               f"and I'll try again.")
-        return 'model unavailable — nothing saved, sender told'
+        # Retryable: the model was unreachable, which usually passes. The caller
+        # leaves the message unprocessed so a later poll has another go, and only
+        # tells the sender once we have given up.
+        if notify_unavailable:
+            _reply(f'I could not read your picks — the service I use to understand '
+                   f'emails has been unavailable for a while, so nothing has been '
+                   f'saved for Week {week}. Please make them on the site, or reply '
+                   f'again later.')
+            return 'model unavailable — gave up, sender told', False
+        return 'model unavailable — will retry', True
 
     saved = {}
     for game in games:
@@ -303,4 +313,4 @@ def handle(user, text, reply_to=None, message_id=None, subject=None):
     log.info('[pick_email] %s: saved %s/%s for week %s',
              user.username, len(saved), len(games), week)
     return (f'picks from {user.username}: saved {len(saved)}/{len(games)}, '
-            f'{len(unresolved)} unresolved, sender told')
+            f'{len(unresolved)} unresolved, sender told'), False
