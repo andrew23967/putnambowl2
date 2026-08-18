@@ -17,38 +17,40 @@
   .rank-down { color:#f87171;font-size:.6875rem;font-weight:700; }
   .rank-flat { color:var(--muted);font-size:.6875rem; }
 
-  /* ── Picks card ──
-     The slate itself lives on /picks/. This is the doorway to it, and says
-     which of the three states the week is in without reproducing the games.
-     The countdown sits inside it rather than in a box of its own: two stacked
-     cards cost ~110px of the column, and every pixel here comes out of the
-     PutnamBot section below. */
+  /* ── The week ──
+     A full-width band across the top, so neither column owns it and both the
+     standings and the feed start level beneath it. Laid out as a row rather than
+     a stack: the title, the clock and the call to action side by side cost one
+     band of height instead of three, and every pixel saved here is one the two
+     scrolling columns get. */
   .pk-card {
-    display:block;text-decoration:none;flex-shrink:0;
+    display:flex;align-items:center;gap:26px;flex-wrap:wrap;flex-shrink:0;
+    text-decoration:none;margin-bottom:18px;
     background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
-    padding:16px 18px;transition:border-color .14s ease,background .14s ease;
+    padding:13px 18px;transition:border-color .14s ease,background .14s ease;
   }
   a.pk-card:hover { border-color:var(--border2);background:var(--surface2); }
-  .pk-card-top { display:flex;align-items:center;gap:8px;margin-bottom:7px; }
+  .pk-card-top { display:flex;align-items:center;gap:8px;flex-shrink:0; }
   .pk-dot { width:7px;height:7px;border-radius:50%;flex-shrink:0; }
   .pk-card-title { font-size:.9375rem;font-weight:700;color:var(--text);margin:0;letter-spacing:-.01em; }
-  .pk-card-body { font-size:.8125rem;color:var(--muted);line-height:1.65;margin:0; }
+  .pk-card-body { font-size:.8125rem;color:var(--muted);line-height:1.55;margin:0;flex:1;min-width:0; }
+  /* The clock keeps a sane measure in the middle of the row. */
+  .pk-card-timer { flex:0 1 300px;min-width:220px; }
+  .pk-card-timer .timer-wrap { margin-bottom:0; }
+  /* Pushed to the far right; no rule above it, since it is no longer a footer. */
   .pk-card-cta {
-    display:flex;align-items:center;justify-content:space-between;gap:10px;
-    margin-top:14px;padding-top:12px;border-top:1px solid var(--border);
+    display:flex;align-items:center;gap:16px;margin-left:auto;flex-shrink:0;
   }
   /* Filled rather than accent-coloured text: --accent is the player's own theme
      colour, and the dark end of that range is unreadable as type on a card. */
   .pk-card-go {
     display:inline-flex;align-items:center;gap:6px;white-space:nowrap;
     background:var(--accent);color:var(--on-accent);
-    font-size:.75rem;font-weight:700;padding:7px 12px;border-radius:var(--radius-sm);
+    font-size:.75rem;font-weight:700;padding:8px 13px;border-radius:var(--radius-sm);
     transition:filter .15s ease;
   }
   a.pk-card:hover .pk-card-go { filter:brightness(1.15); }
   .pk-card-stat { font-size:.75rem;font-weight:600;color:var(--muted);white-space:nowrap; }
-  .pk-card-timer { margin-top:13px; }
-  .pk-card-timer .timer-wrap { margin-bottom:0; }
 
   /* ── Emails column ──
      The whole feed, not just the newest, scrolling inside its own box so the
@@ -143,6 +145,12 @@
     .lb-wrap, .em-wrap { height:auto !important; }
     .score-bar { display:none !important; }
     .lb-row { padding:9px 0 !important; }
+    /* The band stacks at this width, so the CTA sits under the clock rather
+       than being pushed to the far edge of a row that no longer exists. */
+    .pk-card { gap:14px !important; }
+    .pk-card-cta { margin-left:0 !important;width:100% !important;
+                   justify-content:space-between !important; }
+    .pk-card-timer { flex:1 1 100% !important; }
   }
 </style>
 {% endblock %}
@@ -157,56 +165,59 @@
 </a>
 {% endif %}
 
-<!-- ── MAIN DASHBOARD: week card + standings | the whole Emails feed ── -->
+<!-- ── THE WEEK: full width, so the standings and the feed both start
+     below it rather than one column carrying it ── -->
+  {% if not settings.publish %}
+  <!-- Nothing to link to yet, so this one isn't a link. -->
+  <div class="pk-card">
+    <div class="pk-card-top">
+      <span class="pk-dot" style="background:var(--muted);opacity:.5;"></span>
+      <p class="pk-card-title">Picks aren't open yet</p>
+    </div>
+    <p class="pk-card-body">The commissioner is still setting up this week's games.</p>
+    <div class="pk-card-timer">{% include 'main/_countdown.html' with compact=True %}</div>
+  </div>
+
+  {% elif not settings.lock_picks %}
+  <a href="{% url 'main:picks' %}" class="pk-card">
+    <div class="pk-card-top">
+      <span class="pk-dot pulse" style="background:var(--warn);"></span>
+      <p class="pk-card-title">Week {{ settings.week }} picks are open</p>
+    </div>
+    <div class="pk-card-timer">{% include 'main/_countdown.html' with compact=True %}</div>
+    <div class="pk-card-cta">
+      <span class="pk-card-go">Make your picks →</span>
+      <span class="pk-card-stat">{{ picks_made }} / {{ total_games }} in</span>
+    </div>
+  </a>
+
+  {% else %}
+  <a href="{% url 'main:picks' %}" class="pk-card">
+    <div class="pk-card-top">
+      <span class="pk-dot" style="background:var(--good);"></span>
+      <p class="pk-card-title">Week {{ settings.week }} is underway</p>
+    </div>
+    <div class="pk-card-timer">{% include 'main/_countdown.html' with compact=True %}</div>
+    <div class="pk-card-cta">
+      <span class="pk-card-go">See how you're doing →</span>
+      {% if graded_count %}
+      <span class="pk-card-stat">{{ my_correct }} right of {{ graded_count }} final</span>
+      {% else %}
+      <span class="pk-card-stat">{{ total_games }} games to come</span>
+      {% endif %}
+    </div>
+  </a>
+  {% endif %}
+
+<!-- ── MAIN DASHBOARD: standings | the whole Emails feed ── -->
 <div class="main-grid anim-up" style="display:grid;grid-template-columns:1fr 1.15fr;gap:40px;align-items:stretch;">
 
-  <!-- LEFT: the week's card, then the standings underneath it -->
+  <!-- LEFT: the standings -->
   <div class="col-left" style="display:flex;flex-direction:column;min-height:0;">
 
-    {% if not settings.publish %}
-    <!-- Nothing to link to yet, so this one isn't a link. -->
-    <div class="pk-card">
-      <div class="pk-card-top">
-        <span class="pk-dot" style="background:var(--muted);opacity:.5;"></span>
-        <p class="pk-card-title">Picks aren't open yet</p>
-      </div>
-      <p class="pk-card-body">The commissioner is still setting up this week's games.</p>
-      <div class="pk-card-timer">{% include 'main/_countdown.html' with compact=True %}</div>
-    </div>
-
-    {% elif not settings.lock_picks %}
-    <a href="{% url 'main:picks' %}" class="pk-card">
-      <div class="pk-card-top">
-        <span class="pk-dot pulse" style="background:var(--warn);"></span>
-        <p class="pk-card-title">Week {{ settings.week }} picks are open</p>
-      </div>
-      <div class="pk-card-timer">{% include 'main/_countdown.html' with compact=True %}</div>
-      <div class="pk-card-cta">
-        <span class="pk-card-go">Make your picks →</span>
-        <span class="pk-card-stat">{{ picks_made }} / {{ total_games }} in</span>
-      </div>
-    </a>
-
-    {% else %}
-    <a href="{% url 'main:picks' %}" class="pk-card">
-      <div class="pk-card-top">
-        <span class="pk-dot" style="background:var(--good);"></span>
-        <p class="pk-card-title">Week {{ settings.week }} is underway</p>
-      </div>
-      <div class="pk-card-timer">{% include 'main/_countdown.html' with compact=True %}</div>
-      <div class="pk-card-cta">
-        <span class="pk-card-go">See how you're doing →</span>
-        {% if graded_count %}
-        <span class="pk-card-stat">{{ my_correct }} right of {{ graded_count }} final</span>
-        {% else %}
-        <span class="pk-card-stat">{{ total_games }} games to come</span>
-        {% endif %}
-      </div>
-    </a>
-    {% endif %}
 
     <!-- Standings fill whatever is left and scroll inside their own box. -->
-    <div class="lb-wrap" style="flex:1;min-height:0;position:relative;margin-top:18px;">
+    <div class="lb-wrap" style="flex:1;min-height:0;position:relative;">
       <div id="lb-track"><div id="lb-thumb"></div></div>
       <div id="lb-scroll" class="lb-scroll" style="position:absolute;left:8px;right:0;top:0;bottom:0;overflow-y:scroll;">
       <div>
