@@ -928,6 +928,13 @@ def emaildash(request):
         'outstanding': [(u.username, made, total) for u, made, total in outstanding],
         'reminder_due_dt': reminder_due_dt,
         'recipients': league_recipients(),
+        # Members only. The mailbox is deliberately not in this list: BCC is
+        # stripped in transit, so copying both would have the relay forward to
+        # everyone a second time.
+        'recipient_list': ', '.join(league_recipients()),
+        # Mail to the league address only counts as an announcement when the
+        # sender is set to publish; otherwise inbound reads it as picks.
+        'viewer_can_publish_by_email': request.user.profile.email_posts_enabled,
         'mailbox': getattr(django_settings, 'SMTP_USER', '') or '',
         'picks_address': picks_address(),
         'intro_address': intro_address(),

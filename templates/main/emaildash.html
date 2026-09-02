@@ -218,7 +218,54 @@
       of them right now</strong>. Add more in
       <a href="{% url 'main:accountdash' %}" class="ed-link">Accounts</a>.</p>
   </div>
+  <!-- ── Writing to the league from your own mail app ──
+       The mailbox *is* the league address. Sending to it and letting the site
+       fan out beats copying everyone in: the relay skips the sender, the mailbox
+       and anyone on the original To/Cc, but BCC is stripped in transit, so a
+       message BCC'd to the members *and* the mailbox arrives twice for everyone.
+       One address also keeps the members' addresses off each other's screens. -->
+  <div class="ed-card">
+    <p class="ed-head">Email the league yourself</p>
 
+    <p class="ed-note ed-note-block">Write to this one address from your own mail
+      app. The site forwards it to every member and posts it to the
+      <a href="{% url 'main:home' %}" class="ed-link">Emails feed</a>.</p>
+
+    <div class="ed-addr">
+      <code class="ed-addr-name">{{ mailbox|default:"the league mailbox" }}</code>
+    </div>
+
+    <div class="ed-line ed-line-tight">
+      <button type="button" class="ed-btn ed-btn-sm" id="copy-addrs"
+              data-addresses="{{ mailbox }}">Copy address</button>
+      <a class="ed-btn ed-btn-sm ed-btn-ghost" href="mailto:{{ mailbox|urlencode }}"
+         style="text-decoration:none;">Open in your mail app</a>
+      <span class="ed-note" id="copy-note"></span>
+    </div>
+
+    {% if not viewer_can_publish_by_email %}
+    <p class="ed-warn ed-note-block" style="margin-top:12px;"><strong>Your account
+      is not set to publish by email.</strong> Until it is, anything you send here
+      is read as a <em>pick submission</em> rather than an announcement. Turn on
+      &ldquo;Publish their emails&rdquo; for your account in
+      <a href="{% url 'main:accountdash' %}" class="ed-link">Accounts</a>.</p>
+    {% endif %}
+
+    <details class="ed-fold" style="margin-top:14px;">
+      <summary>Or copy every member&rsquo;s address <span class="ed-count">{{ recipients|length }}</span></summary>
+      <p class="ed-note ed-note-block">For a message you do <em>not</em> want on
+        the site. Paste into <strong>BCC</strong> &mdash; in To, every member sees
+        everyone else&rsquo;s address.</p>
+      <p class="ed-warn ed-note-block">Do not copy the league mailbox on the same
+        message. BCC is stripped in transit, so the site cannot tell who you
+        already reached and would forward it to everyone a second time.</p>
+      <div class="ed-line ed-line-tight">
+        <button type="button" class="ed-btn ed-btn-sm ed-btn-ghost" id="copy-members"
+                data-addresses="{{ recipient_list }}">Copy {{ recipients|length }} addresses</button>
+        <span class="ed-note" id="copy-members-note"></span>
+      </div>
+    </details>
+  </div>
   <!-- ── What gets sent ──
        A div, not a form: the intro block below has forms of its own, and nested
        forms are invalid HTML - the browser closes the outer one at the first
@@ -377,4 +424,52 @@
   </form>
 
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// navigator.clipboard needs a secure context. The site is HTTPS, but a plain
+// http:// dev server only counts as secure on localhost, so fall back to a
+// hidden textarea rather than having the button silently do nothing.
+(function () {
+  function feedback(note, msg) {
+    note.textContent = msg;
+    setTimeout(function () { note.textContent = ''; }, 2600);
+  }
+
+  function fallback(text) {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    var ok = false;
+    try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+    document.body.removeChild(ta);
+    return ok;
+  }
+
+  [['copy-addrs', 'copy-note'], ['copy-members', 'copy-members-note']]
+    .forEach(function (pair) {
+      var btn = document.getElementById(pair[0]);
+      var note = document.getElementById(pair[1]);
+      if (!btn || !note) return;
+      btn.addEventListener('click', function () {
+        var text = btn.dataset.addresses || '';
+        if (!text) { feedback(note, 'Nothing to copy.'); return; }
+        var ok = 'Copied.';
+        var no = 'Could not copy - select it by hand.';
+        if (navigator.clipboard && window.isSecureContext) {
+          navigator.clipboard.writeText(text).then(
+            function () { feedback(note, ok); },
+            function () { feedback(note, fallback(text) ? ok : no); });
+        } else {
+          feedback(note, fallback(text) ? ok : no);
+        }
+      });
+    });
+})();
+</script>
 {% endblock %}

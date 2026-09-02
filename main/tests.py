@@ -3454,3 +3454,101 @@ class ManualScrapeHonoursGameDaysTests(TestCase):
         self.settings.save()
         self._scrape()
         self.assertEqual(Game.objects.filter(week=1).count(), 4)
+
+
+class LeagueRecipientsAreDedupedTests(TestCase):
+    """One address per person, not one per account.
+
+    Three accounts share agvdog@gmail.com, so that inbox received three copies
+    of every email the league sent.
+    """
+
+    def setUp(self):
+        from . import email_utils
+        self.eu = email_utils
+        for name in ('one', 'two', 'three'):
+            User.objects.create_user(name, email='shared@example.com')
+        User.objects.create_user('other', email='other@example.com')
+        bot = User.objects.create_user('abot', email='bot@example.com')
+        bot.profile.is_bot = True
+        bot.profile.save()
+
+    def test_a_shared_address_appears_once(self):
+        r = self.eu.league_recipients()
+        self.assertEqual(r.count('shared@example.com'), 1)
+        self.assertEqual(len(r), 2)
+
+    def test_case_does_not_defeat_it(self):
+        u = User.objects.get(username='other')
+        u.email = 'SHARED@example.com'
+        u.save()
+        self.assertEqual(len(self.eu.league_recipients()), 1)
+
+    def test_bots_are_still_excluded(self):
+        self.assertNotIn('bot@example.com', self.eu.league_recipients())
+
+
+class CopyLeagueAddressesTests(TestCase):
+    """The Emails dashboard offers the league's addresses for pasting into BCC.
+
+    There is no mailing list by design - one mailbox does everything - so mail
+    the site is not sending needs the addresses to reach the commissioner's own
+    client somehow.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user('boss4', password='pw', email='b@x.com')
+        self.user.is_staff = self.user.is_superuser = True
+        self.user.save()
+        self.client.force_login(self.user)
+        User.objects.create_user('mate1', email='mate1@example.com')
+        User.objects.create_user('mate2', email='mate2@example.com')
+
+    def _html(self):
+        return self.client.get('/dashboard/emails/').content.decode()
+
+    def test_the_league_address_is_what_it_offers_first(self):
+        """The mailbox *is* the league address - the site fans it out."""
+        html = self._html()
+        self.assertIn('copy-addrs', html)
+        self.assertIn('Email the league yourself', html)
+
+    def test_the_member_list_is_the_secondary_option(self):
+        html = self._html()
+        self.assertIn('copy-members', html)
+        self.assertIn('mate1@example.com', html)
+        self.assertIn('BCC', html)
+
+    def test_it_warns_against_copying_both(self):
+        """BCC is stripped in transit, so the relay cannot tell who was already
+        reached and would forward to everyone a second time."""
+        self.assertIn('second time', self._html())
+
+    def test_it_warns_when_the_viewer_cannot_publish_by_email(self):
+        """Without the flag, mail to the league address is read as picks."""
+        self.assertFalse(self.user.profile.email_posts_enabled)
+        self.assertIn('not set to publish by email', self._html())
+
+    def test_no_warning_once_the_viewer_can_publish(self):
+        self.user.profile.email_posts_enabled = True
+        self.user.profile.save()
+        self.assertNotIn('not set to publish by email', self._html())
+
+    def test_the_list_is_comma_separated(self):
+        resp = self.client.get('/dashboard/emails/')
+        self.assertIn(', ', resp.context['recipient_list'])
+        self.assertEqual(len(resp.context['recipient_list'].split(', ')),
+                         len(resp.context['recipients']))
+
+    def test_a_shared_address_is_offered_once(self):
+        User.objects.create_user('dupe', email='mate1@example.com')
+        resp = self.client.get('/dashboard/emails/')
+        self.assertEqual(resp.context['recipient_list'].count('mate1@example.com'), 1)
+
+    def test_members_cannot_see_it(self):
+        self.client.logout()
+        plain = User.objects.create_user('plain', password='pw', email='p@x.com')
+        self.client.force_login(plain)
+        resp = self.client.get('/dashboard/emails/')
+        self.assertIn(resp.status_code, (302, 403),
+                      "the roster's addresses are staff-only")

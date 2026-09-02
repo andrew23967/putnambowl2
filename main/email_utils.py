@@ -285,12 +285,23 @@ def send_via_mailbox(to, subject, body, in_reply_to=None, reply_to=None):
 
 
 def league_recipients():
-    """Everyone who should get league mail: real members with an address."""
-    return list(
-        User.objects.exclude(email='').exclude(email__isnull=True)
-        .exclude(profile__is_bot=True)
-        .values_list('email', flat=True)
-    )
+    """Everyone who should get league mail: real members with an address.
+
+    One address per person, not one per account. Three accounts share
+    agvdog@gmail.com, so without this that inbox received three copies of every
+    email the league sent. Compared case-insensitively, since addresses are, and
+    kept in account order so the list is stable.
+    """
+    seen = set()
+    out = []
+    for address in (User.objects.exclude(email='').exclude(email__isnull=True)
+                    .exclude(profile__is_bot=True)
+                    .values_list('email', flat=True)):
+        key = address.strip().lower()
+        if key and key not in seen:
+            seen.add(key)
+            out.append(address.strip())
+    return out
 
 
 def recap_slug(week, year=None):
