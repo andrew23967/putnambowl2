@@ -1178,8 +1178,17 @@ def pickdash(request):
         settings.grade_api = grade_api
         settings.save()
         games = scrape.scrape(week=week, api_type=scrape_api, year=year)
-        added = dupes = 0
+        # The same day filter the autopilot uses. This button had none, so it
+        # pulled every game in the week whatever `scrape_days` said - and since
+        # the lock is derived from the earliest kickoff actually stored, one
+        # Thursday nighter nobody picks dragged the deadline two days early.
+        from .auto import _game_day_allowed
+        day_set = settings.scrape_day_set()
+        added = dupes = skipped_day = 0
         for g in games:
+            if not _game_day_allowed(g[6], day_set, settings.auto_tz):
+                skipped_day += 1
+                continue
             # team_from_abbrev, not a bare dict lookup: 'LA' is not a key in
             # ABBREV_TO_TEAM, so a Rams game was stored under the literal name
             # "LA" and could never match the same fixture stored properly.
@@ -1247,7 +1256,10 @@ def pickdash(request):
                 make_bot_picks()
             except Exception as _bot_err:
                 print(f'[manual scrape] bot picks error: {_bot_err}', flush=True)
-        messages.success(request, f'Scraped week {week}: {added} added, {dupes} updated.')
+        msg = f'Scraped week {week}: {added} added, {dupes} updated.'
+        if skipped_day:
+            msg += (f' {skipped_day} skipped - not on a day this league plays.')
+        messages.success(request, msg)
 
     elif 'grade' in request.POST:
         week = settings.scrape_week

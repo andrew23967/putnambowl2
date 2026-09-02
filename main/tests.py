@@ -3390,3 +3390,67 @@ class NoTransportSendsNothingTests(TestCase):
     def test_smtp_ready_is_false_without_credentials(self):
         with self._no_transport():
             self.assertFalse(self.eu.smtp_ready())
+
+
+class ManualScrapeHonoursGameDaysTests(TestCase):
+    """The dashboard's Scrape button obeys `scrape_days`, like the autopilot.
+
+    It had no day filter at all, so it pulled every game in the week whatever
+    the league had configured. That matters beyond a stray fixture: the lock time
+    is derived from the earliest kickoff *actually stored*, so one Thursday
+    nighter nobody picks dragged the deadline two days earlier than the first
+    game anyone could pick.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user('sc2', password='pw', email='s@x.com')
+        self.user.is_staff = self.user.is_superuser = True
+        self.user.save()
+        self.client.force_login(self.user)
+        self.settings = SiteSettings.get()
+        self.settings.week = 1
+        self.settings.auto_tz = 'America/New_York'
+        self.settings.scrape_days = '4,5,6'          # Friday, Saturday, Sunday
+        self.settings.lock_mode = 'offset'
+        self.settings.auto_lock_offset_minutes = 20
+        self.settings.save()
+
+        # A real week's shape: Thursday opener, Sunday slate, Monday nighter.
+        self.thu = datetime(2026, 9, 10, 0, 20, tzinfo=timezone.utc)   # Wed 20:20 ET
+        self.fri = datetime(2026, 9, 12, 0, 0, tzinfo=timezone.utc)
+        self.sun = datetime(2026, 9, 13, 17, 0, tzinfo=timezone.utc)
+        self.mon = datetime(2026, 9, 15, 0, 15, tzinfo=timezone.utc)
+        self.addCleanup(setattr, scrape, 'scrape', scrape.scrape)
+        scrape.scrape = lambda **kw: [
+            ('Dallas Cowboys', 'Philadelphia Eagles', -150, 130, True, 'g_thu', self.thu),
+            ('Kansas City Chiefs', 'Los Angeles Chargers', -160, 140, True, 'g_fri', self.fri),
+            ('Chicago Bears', 'Green Bay Packers', -120, 105, True, 'g_sun', self.sun),
+            ('Minnesota Vikings', 'Detroit Lions', -130, 115, True, 'g_mon', self.mon),
+        ]
+
+    def _scrape(self):
+        return self.client.post('/dashboard/picks/', {
+            'scrape': '1', 'scrape_week': '1',
+            'scrape_api': 'nfl_data_py', 'grade_api': 'espn', 'scrape_year': '2026'})
+
+    def test_only_the_configured_days_are_stored(self):
+        self._scrape()
+        stored = {g.game_id for g in Game.objects.filter(week=1)}
+        self.assertEqual(stored, {'g_fri', 'g_sun'},
+                         'Thursday and Monday are not days this league plays')
+
+    def test_the_lock_follows_the_first_game_that_counts(self):
+        """Not the Thursday nighter, which never enters the slate."""
+        self._scrape()
+        self.settings.refresh_from_db()
+        self.assertEqual(self.settings.first_game_dt, self.fri)
+        self.assertEqual(self.settings.auto_lock_dt,
+                         self.fri - timedelta(minutes=20))
+        self.assertGreater(self.settings.auto_lock_dt, self.thu,
+                           'the lock must not precede a game nobody can pick')
+
+    def test_no_filter_still_takes_everything(self):
+        self.settings.scrape_days = ''
+        self.settings.save()
+        self._scrape()
+        self.assertEqual(Game.objects.filter(week=1).count(), 4)
