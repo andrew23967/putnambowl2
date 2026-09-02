@@ -9,19 +9,47 @@
 
   .ed-card {
     background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
-    padding:18px 20px;margin-top:18px;
+    padding:14px 16px;margin-top:12px;
   }
   .ed-head { font-size:.6875rem;font-weight:700;color:var(--muted);text-transform:uppercase;
-             letter-spacing:.1em;margin:0 0 14px; }
+             letter-spacing:.1em;margin:0 0 10px; }
 
-  /* Switch rows */
-  .ed-row { display:flex;align-items:flex-start;gap:12px;padding:11px 0;border-top:1px solid var(--border); }
-  .ed-row:first-of-type { border-top:none;padding-top:0; }
-  .ed-row input[type=checkbox] { margin-top:3px;flex-shrink:0;width:15px;height:15px;cursor:pointer; }
-  .ed-row-text { flex:1;min-width:0; }
-  .ed-row-name { font-size:.875rem;font-weight:600;color:var(--text);display:block;cursor:pointer; }
-  .ed-row-why { font-size:.75rem;color:var(--muted);line-height:1.55;margin:3px 0 0; }
-  .ed-when { font-size:.6875rem;color:var(--muted2);margin:4px 0 0;font-variant-numeric:tabular-nums; }
+  /* Switch rows. One line each: box, name, and a single short hint. They used
+     to carry a two-line "why" and a two-line "when", which read well once and
+     then made the page four screens long forever. */
+  .ed-sw {
+    display:flex;align-items:baseline;gap:9px;padding:7px 0;
+    border-top:1px solid var(--border);cursor:pointer;
+  }
+  .ed-sw:first-of-type { border-top:none;padding-top:0; }
+  .ed-sw input[type=checkbox] { flex-shrink:0;width:14px;height:14px;cursor:pointer;position:relative;top:2px; }
+  .ed-sw-name { font-size:.8125rem;font-weight:600;color:var(--text);white-space:nowrap;flex-shrink:0; }
+  .ed-note { font-size:.72rem;color:var(--muted);line-height:1.5; }
+  .ed-note-block { display:block;margin:6px 0 8px; }
+
+  .ed-line { display:flex;align-items:baseline;gap:10px;flex-wrap:wrap; }
+  .ed-line-tight { margin-top:8px; }
+
+  .ed-row-name { font-size:.8125rem;font-weight:600;color:var(--text);cursor:pointer; }
+
+  /* Collapsed by default: the library is ten rows you touch once a week, not
+     something that needs to be on screen while you write the intro. */
+  .ed-fold { margin-top:14px;border-top:1px solid var(--border);padding-top:10px; }
+  .ed-fold > summary {
+    cursor:pointer;font-size:.8125rem;font-weight:600;color:var(--text);
+    list-style:none;display:flex;align-items:center;gap:7px;
+  }
+  .ed-fold > summary::-webkit-details-marker { display:none; }
+  .ed-fold > summary::before {
+    content:'';width:0;height:0;border-left:4px solid var(--muted);
+    border-top:3.5px solid transparent;border-bottom:3.5px solid transparent;
+    transition:transform .15s;
+  }
+  .ed-fold[open] > summary::before { transform:rotate(90deg); }
+  .ed-count {
+    font-size:.625rem;font-weight:700;padding:1px 6px;border-radius:99px;
+    background:var(--fill-2);color:var(--muted2);
+  }
 
   .ed-btn {
     background:var(--accent);color:var(--on-accent);border:none;cursor:pointer;
@@ -29,6 +57,54 @@
     margin-top:16px;transition:filter .15s;
   }
   .ed-btn:hover { filter:brightness(1.15); }
+  .ed-btn-sm { padding:6px 12px;margin-top:10px;font-size:.72rem; }
+
+  .ed-code {
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.72rem;
+    background:var(--fill-2);padding:1px 4px;border-radius:4px;color:var(--text);
+  }
+  .ed-input {
+    width:100%;background:var(--surface2);border:1px solid var(--border2);
+    color:var(--text);border-radius:var(--radius-sm);padding:7px 10px;
+    font-size:.8125rem;margin-bottom:8px;
+  }
+  .ed-tpl-list { display:flex;flex-direction:column;gap:2px; }
+  /* One line per intro. The body is on the Edit button's data-body and in the
+     row's title attribute, so nothing has to render it. */
+  .ed-tpl {
+    display:flex;align-items:center;justify-content:space-between;gap:10px;
+    padding:4px 8px;border-radius:var(--radius-sm);
+  }
+  .ed-tpl:hover { background:var(--surface2); }
+  .ed-tpl-name {
+    font-size:.75rem;font-weight:600;color:var(--muted2);
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  }
+  .ed-tpl:hover .ed-tpl-name { color:var(--text); }
+  .ed-tpl-actions { display:flex;align-items:center;gap:3px;flex-shrink:0; }
+  .ed-mini {
+    background:var(--fill-2);border:1px solid var(--border2);color:var(--muted2);
+    font-size:.66rem;font-weight:600;padding:3px 8px;border-radius:5px;cursor:pointer;
+  }
+  .ed-mini:hover { background:var(--fill-3);color:var(--text); }
+  .ed-mini-danger:hover { color:var(--bad);border-color:var(--bad); }
+  .ed-tpl-form {
+    margin-top:12px;padding-top:11px;border-top:1px dashed var(--border2);
+  }
+
+  /* The hand-written intro sits above the switches, so it needs its own
+     separation from them. */
+  .ed-intro {
+    padding-bottom:14px;margin-bottom:14px;
+    border-bottom:1px solid var(--border);
+  }
+  /* Inline number, sized to its content so it reads as part of the sentence
+     rather than a form field dropped into one. */
+  .ed-num {
+    width:56px;background:var(--surface2);border:1px solid var(--border2);
+    color:var(--text);border-radius:var(--radius-sm);padding:2px 6px;
+    font-size:.6875rem;font-variant-numeric:tabular-nums;
+  }
   .ed-btn-ghost { background:var(--fill-2);color:var(--muted2);margin-left:8px; }
   .ed-btn-ghost:hover { background:var(--fill-3);color:var(--text); }
 
@@ -36,22 +112,26 @@
   .ed-label { font-size:.8125rem;font-weight:600;color:var(--text);display:block;margin-bottom:6px; }
   .ed-hint { font-size:.75rem;color:var(--muted);line-height:1.6;margin:0 0 10px; }
   textarea.ed-area {
-    width:100%;box-sizing:border-box;min-height:130px;resize:vertical;
+    width:100%;box-sizing:border-box;min-height:120px;resize:vertical;
     background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius-sm);
     color:var(--text);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
     font-size:.8125rem;line-height:1.6;padding:10px 12px;
   }
   textarea.ed-area:focus { outline:2px solid var(--accent);outline-offset:1px; }
+  textarea.ed-area-sm { min-height:0; }
 
   /* The always-included part */
   .ed-locked {
-    margin-top:14px;padding:12px 14px;border-radius:var(--radius-sm);
+    margin-top:10px;padding:9px 12px;border-radius:var(--radius-sm);
     background:var(--fill-1);border:1px dashed var(--border2);
   }
-  .ed-locked-head {
-    font-size:.6875rem;font-weight:700;color:var(--warn);margin:0 0 8px;
-    display:flex;align-items:center;gap:6px;
+  .ed-locked > summary {
+    font-size:.6875rem;font-weight:700;color:var(--warn);cursor:pointer;
+    list-style:none;
   }
+  .ed-locked > summary::-webkit-details-marker { display:none; }
+  .ed-locked[open] > summary { margin-bottom:8px; }
+  .ed-locked pre { margin-top:0; }
   .ed-locked pre {
     margin:0;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.6875rem;
     line-height:1.55;color:var(--muted2);white-space:pre-wrap;word-break:break-word;
@@ -59,9 +139,17 @@
   }
   .ed-locked-note { font-size:.6875rem;color:var(--muted);margin:8px 0 0;line-height:1.55; }
 
-  .ed-facts { display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:.75rem; }
-  .ed-facts dt { color:var(--muted);white-space:nowrap; }
-  .ed-facts dd { color:var(--text);margin:0;word-break:break-all;font-variant-numeric:tabular-nums; }
+  /* One block per address: the address itself, then what sending there means. */
+  .ed-addr { padding:9px 0;border-top:1px solid var(--border); }
+  .ed-addr:first-of-type { border-top:none;padding-top:0; }
+  .ed-addr-name {
+    display:inline-block;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+    font-size:.75rem;font-weight:600;color:var(--text);
+    background:var(--fill-2);padding:2px 7px;border-radius:5px;margin-bottom:5px;
+    word-break:break-all;
+  }
+  .ed-addr .ed-note { display:block;margin:0; }
+
   .ed-warn { color:var(--warn); }
 
   .ed-tag { font-size:.625rem;font-weight:700;padding:2px 7px;border-radius:99px;
@@ -80,118 +168,212 @@
 <div class="ed-wrap anim-up">
 
   <h1 class="ed-title">Emails</h1>
-  <p class="ed-sub">What the site sends, when it sends it, and what PutnamBot is told
-    to write. Members email <strong>{{ mailbox|default:"the league mailbox" }}</strong>;
-    picks go to <strong>{{ picks_address|default:"—" }}</strong>.</p>
+  <p class="ed-sub">What the site sends, when it sends it, and what the recap is
+    told to say.</p>
 
-  <!-- ── How mail gets out ── -->
+  <!-- ── The three addresses ──
+       One Gmail mailbox does all of this. Gmail delivers anything sent to
+       user+tag@ to user@ and leaves the tag in the headers, which is what lets
+       the tag decide what the message means - and why the league needs no
+       mailing list. -->
   <div class="ed-card">
-    <p class="ed-head">Delivery</p>
-    <dl class="ed-facts">
-      <dt>Sending as</dt>
-      <dd>{% if smtp_ready %}{{ mailbox }}{% else %}<span class="ed-warn">not configured — nothing can send</span>{% endif %}</dd>
-      <dt>Members reachable</dt>
-      <dd{% if recipients|length < 3 %} class="ed-warn"{% endif %}>{{ recipients|length }} with an email address</dd>
-    </dl>
-    {% if recipients|length < 3 %}
-    <p class="ed-locked-note">Mail only reaches members whose account has an email
-      address. Add them in <a href="{% url 'main:accountdash' %}" class="ed-link">Accounts</a>.</p>
+    <p class="ed-head">Where members write</p>
+
+    {% if not smtp_ready %}
+    <p class="ed-warn ed-note-block"><strong>The mailbox is not configured, so
+      nothing can send or be read.</strong> Set <code class="ed-code">IMAP_USER</code>
+      and <code class="ed-code">SMTP_USER</code> to fix it.</p>
     {% endif %}
+
+    <div class="ed-addr">
+      <code class="ed-addr-name">{{ mailbox|default:"the league mailbox" }}</code>
+      <p class="ed-note">A message to the league. It is published to the
+        <a href="{% url 'main:home' %}" class="ed-link">Emails feed</a> and
+        forwarded to every member — but <strong>only for members you have given
+        posting rights</strong> in
+        <a href="{% url 'main:accountdash' %}" class="ed-link">Accounts</a>.
+        From anyone else, the same message is read as their picks instead.</p>
+    </div>
+
+    <div class="ed-addr">
+      <code class="ed-addr-name">{{ picks_address|default:"—" }}</code>
+      <p class="ed-note">These are my picks. Replying to the weekly ballot lands
+        here automatically, so a reply is never mistaken for an announcement —
+        which matters most for you, since your plain mail <em>is</em> published.
+        The reply is read by Gemini and confirmed back to the sender.</p>
+    </div>
+
+    <div class="ed-addr">
+      <code class="ed-addr-name">{{ intro_address|default:"—" }}</code>
+      <p class="ed-note">This is the intro for this week. The body becomes the
+        note at the top of the next picks-are-live email, with the recap and
+        ballot added underneath as usual — so you can write the week's opening
+        line from your phone. Nothing sends at that moment. Needs posting rights,
+        like the first address: it goes out over your name to everyone.</p>
+    </div>
+
+    <p class="ed-note ed-note-block">
+      Mail only reaches members whose account has an email address —
+      <strong{% if recipients|length < 3 %} class="ed-warn"{% endif %}>{{ recipients|length }}
+      of them right now</strong>. Add more in
+      <a href="{% url 'main:accountdash' %}" class="ed-link">Accounts</a>.</p>
   </div>
 
-  <!-- ── Switches ── -->
-  <form method="post" class="ed-card">
-    {% csrf_token %}
+  <!-- ── What gets sent ──
+       A div, not a form: the intro block below has forms of its own, and nested
+       forms are invalid HTML - the browser closes the outer one at the first
+       inner <form>, which dropped the switches out of the card. -->
+  <div class="ed-card">
     <p class="ed-head">What gets sent</p>
 
-    <div class="ed-row">
-      <input type="checkbox" name="email_picks_live" id="s1" {% if settings.email_picks_live %}checked{% endif %}>
-      <div class="ed-row-text">
-        <label class="ed-row-name" for="s1">Picks are live</label>
-        <p class="ed-row-why">Tells the league a week is open.</p>
-        <p class="ed-when">Sent when a week is published — by the Scrape button, or
-          automatically at the scrape time set on the Pick Dashboard.</p>
+    <div class="ed-intro">
+      <div class="ed-line">
+        <label class="ed-row-name" for="wi">This week's intro</label>
+        <span class="ed-note">Top of the email, above the recap and ballot. <code class="ed-code">{week}</code> becomes the week number. Cleared when the week advances.</span>
       </div>
+
+      <form method="post">
+        {% csrf_token %}
+        <textarea name="weekly_intro" id="wi" rows="3" class="ed-area ed-area-sm"
+                  placeholder="Optional. Anything you want to say before the week starts.">{{ settings.weekly_intro }}</textarea>
+        <div class="ed-line ed-line-tight">
+          <button type="submit" name="save_intro" class="ed-btn ed-btn-sm">Save intro</button>
+          {% if '{week}' in settings.weekly_intro %}
+            <span class="ed-note">Reads as: {{ intro_preview }}</span>
+          {% endif %}
+        </div>
+      </form>
+
+      <details class="ed-fold">
+        <summary>Saved intros <span class="ed-count">{{ intro_templates|length }}</span></summary>
+        <p class="ed-note ed-note-block">Pick one to drop it into the box above — editing it there does not change the saved copy.</p>
+        <div class="ed-tpl-list">
+          {% for t in intro_templates %}
+          <div class="ed-tpl">
+            <span class="ed-tpl-name" title="{{ t.body }}">{{ t.name }}</span>
+            <span class="ed-tpl-actions">
+              <form method="post" style="display:inline;">{% csrf_token %}
+                <button type="submit" name="use_intro" value="{{ t.pk }}" class="ed-mini">Use</button>
+              </form>
+              <button type="button" class="ed-mini" data-body="{{ t.body }}"
+                      onclick="editIntro({{ t.pk }}, this)">Edit</button>
+              <form method="post" style="display:inline;"
+                    onsubmit="return confirm('Delete &quot;{{ t.name|escapejs }}&quot;?');">{% csrf_token %}
+                <button type="submit" name="delete_template" value="{{ t.pk }}" class="ed-mini ed-mini-danger">Delete</button>
+              </form>
+            </span>
+          </div>
+          {% empty %}
+          <p class="ed-note">No saved intros yet.</p>
+          {% endfor %}
+        </div>
+
+        <form method="post" id="tpl-form" class="ed-tpl-form">
+          {% csrf_token %}
+          <input type="hidden" name="tpl_id" id="tpl_id" value="">
+          <p class="ed-row-name" id="tpl-form-title">Add an intro</p>
+          <input type="text" name="tpl_name" id="tpl_name" class="ed-input"
+                 placeholder="Name, e.g. Playoff push" maxlength="60">
+          <textarea name="tpl_body" id="tpl_body" rows="3" class="ed-area ed-area-sm"
+                    placeholder="Week {week} is live. …"></textarea>
+          <button type="submit" name="save_template" class="ed-btn ed-btn-sm">Save</button>
+          <button type="button" class="ed-btn ed-btn-sm ed-btn-ghost" onclick="resetIntroForm()">Cancel</button>
+        </form>
+      </details>
     </div>
 
-    <div class="ed-row">
-      <input type="checkbox" name="email_ballot" id="s2" {% if settings.email_ballot %}checked{% endif %}>
-      <div class="ed-row-text">
-        <label class="ed-row-name" for="s2">Include the reply-by-email ballot</label>
-        <p class="ed-row-why">Puts the week's games in that email, one per line, so a
-          member can reply having deleted the team they don't want. No typing, and no
-          need to visit the site.</p>
-        <p class="ed-when">Part of the "picks are live" email, so it needs that switch on too.</p>
-      </div>
-    </div>
+    <script>
+    // The edit form is the add form; the hidden id decides create vs update.
+    // The body comes off the button's data-body so the collapsed one-line rows
+    // do not have to render the text at all.
+    function editIntro(pk, btn) {
+      document.getElementById('tpl_id').value = pk;
+      document.getElementById('tpl_name').value =
+        btn.closest('.ed-tpl').querySelector('.ed-tpl-name').textContent.trim();
+      document.getElementById('tpl_body').value = btn.dataset.body;
+      document.getElementById('tpl-form-title').textContent = 'Edit intro';
+      document.getElementById('tpl-form').scrollIntoView({behavior:'smooth', block:'center'});
+    }
+    function resetIntroForm() {
+      document.getElementById('tpl_id').value = '';
+      document.getElementById('tpl_name').value = '';
+      document.getElementById('tpl_body').value = '';
+      document.getElementById('tpl-form-title').textContent = 'Add an intro';
+    }
+    </script>
 
-    <div class="ed-row">
-      <input type="checkbox" name="email_recap" id="s3" {% if settings.email_recap %}checked{% endif %}>
-      <div class="ed-row-text">
-        <label class="ed-row-name" for="s3">Weekly recap</label>
-        <p class="ed-row-why">PutnamBot's write-up of the week just scored.</p>
-        <p class="ed-when">Sent once when the week advances. Switched off, the recap
-          still appears on the <a href="{% url 'main:emails' %}" class="ed-link">Emails page</a> — it just isn't mailed.</p>
-      </div>
-    </div>
+    <form method="post">
+      {% csrf_token %}
+    <label class="ed-sw">
+      <input type="checkbox" name="email_picks_live" {% if settings.email_picks_live %}checked{% endif %}>
+      <span class="ed-sw-name">Picks are live</span>
+      <span class="ed-note">The one weekly email. Sent when a week is published.</span>
+    </label>
 
-    <div class="ed-row">
-      <input type="checkbox" name="email_confirmations" id="s4" {% if settings.email_confirmations %}checked{% endif %}>
-      <div class="ed-row-text">
-        <label class="ed-row-name" for="s4">Confirm emailed picks</label>
-        <p class="ed-row-why">Replies to a member who emailed their picks, listing
-          exactly what was recorded and what couldn't be read.</p>
-        <p class="ed-when">Sent on each submission. <strong>Worth leaving on</strong> —
-          it is the only way someone can catch a misread before the week locks.</p>
-      </div>
-    </div>
+    <label class="ed-sw">
+      <input type="checkbox" name="email_ballot" {% if settings.email_ballot %}checked{% endif %}>
+      <span class="ed-sw-name">Include the ballot</span>
+      <span class="ed-note">Reply-by-email pick list at the bottom. Needs the switch above.</span>
+    </label>
 
-    <div class="ed-row">
-      <input type="checkbox" name="email_relay" id="s5" {% if settings.email_relay %}checked{% endif %}>
-      <div class="ed-row-text">
-        <label class="ed-row-name" for="s5">Forward your league emails</label>
-        <p class="ed-row-why">When you email the league mailbox, the site posts it to
-          the Emails page and forwards it to every member. Off, it is only published
-          on the site.</p>
-        <p class="ed-when">Sent as each of your emails arrives.</p>
-      </div>
-    </div>
+    <label class="ed-sw">
+      <input type="checkbox" name="email_recap" {% if settings.email_recap %}checked{% endif %}>
+      <span class="ed-sw-name">Include last week's recap</span>
+      <span class="ed-note">Carried in the middle. Off, it still shows in the <a href="{% url 'main:home' %}" class="ed-link">feed</a>.</span>
+    </label>
 
-    <button type="submit" name="save_switches" class="ed-btn">Save</button>
-  </form>
+    <label class="ed-sw">
+      <input type="checkbox" name="email_reminder" {% if settings.email_reminder %}checked{% endif %}>
+      <span class="ed-sw-name">Remind who hasn't picked</span>
+      <span class="ed-note">Incomplete ballots only, once,
+        <input type="number" name="reminder_hours_before_lock" min="1" max="168"
+               value="{{ settings.reminder_hours_before_lock }}" class="ed-num"
+               onclick="event.preventDefault();"> hours before lock.
+        {% if reminder_due_dt %}Next <span data-utc-full="{{ reminder_due_dt|date:'c' }}">{{ reminder_due_dt|date:"M j, g:i A" }}</span>,
+          {% if outstanding %}reaching {{ outstanding|length }}{% else %}reaching nobody{% endif %}.{% endif %}</span>
+    </label>
+
+    <label class="ed-sw">
+      <input type="checkbox" name="email_confirmations" {% if settings.email_confirmations %}checked{% endif %}>
+      <span class="ed-sw-name">Confirm emailed picks</span>
+      <span class="ed-note">Replies with what was recorded. Worth leaving on.</span>
+    </label>
+
+    <label class="ed-sw">
+      <input type="checkbox" name="email_relay" {% if settings.email_relay %}checked{% endif %}>
+      <span class="ed-sw-name">Forward your league emails</span>
+      <span class="ed-note">Off, your mail is only published on the site.</span>
+    </label>
+
+      <button type="submit" name="save_switches" class="ed-btn ed-btn-sm">Save</button>
+    </form>
+  </div>
 
   <!-- ── Prompts ── -->
   <form method="post" class="ed-card">
     {% csrf_token %}
-    <p class="ed-head">What PutnamBot is told to write</p>
+    <p class="ed-head">What the recap says</p>
 
     <label class="ed-label" for="recap_prompt">Weekly recap
       {% if recap_is_default %}<span class="ed-tag">default</span>{% endif %}</label>
-    <p class="ed-hint">Your instructions to PutnamBot. Write <code>{week}</code> to
+    <p class="ed-hint">Instructions for the write-up. Write <code>{week}</code> to
       have the week number substituted.</p>
     <textarea class="ed-area" name="recap_prompt" id="recap_prompt">{{ recap_prompt }}</textarea>
 
-    <div class="ed-locked">
-      <p class="ed-locked-head">🔒 Always included — not editable</p>
+    <details class="ed-locked"><summary class="ed-locked-head">Always included — not editable</summary>
       <pre>{% if data_block %}{{ data_block }}{% else %}(week {{ preview_week }} has no scored games yet, so there is nothing to show — the real standings and results appear here){% endif %}
 
 {{ format_rules }}</pre>
       <p class="ed-locked-note">The results and standings are added after your
-        instructions every time, so PutnamBot always has the facts even if your
+        instructions every time, so the write-up always has the facts even if your
         wording doesn't mention them. The formatting rule is kept too — without it
         the reply can come back as markdown, which the emails show raw. Shown above
         for week {{ preview_week }}.</p>
-    </div>
+    </details>
 
-    <label class="ed-label" for="intro_prompt" style="margin-top:22px;">Season preview
-      {% if intro_is_default %}<span class="ed-tag">default</span>{% endif %}</label>
-    <p class="ed-hint">Used once, when you start a new season. It has no results to
-      report, so there is no data block — only the formatting rule is added.</p>
-    <textarea class="ed-area" name="intro_prompt" id="intro_prompt">{{ intro_prompt }}</textarea>
-
-    <button type="submit" name="save_prompts" class="ed-btn">Save prompts</button>
-    <button type="submit" name="reset_prompts" class="ed-btn ed-btn-ghost"
-            onclick="return confirm('Reset both prompts to the built-in defaults?')">Reset to defaults</button>
+    <button type="submit" name="save_prompts" class="ed-btn ed-btn-sm">Save prompt</button>
+    <button type="submit" name="reset_prompts" class="ed-btn ed-btn-sm ed-btn-ghost"
+            onclick="return confirm('Reset the recap prompt to the built-in default?')">Reset</button>
   </form>
 
 </div>

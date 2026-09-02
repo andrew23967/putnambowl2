@@ -1,68 +1,176 @@
 {% extends 'base.html' %}
 {% block title %}My Profile — PutnamBowl{% endblock %}
+
+{% block extra_head %}
+<style>
+  /* Design tokens, not Tailwind's palette. This page was bg-white / text-slate-900
+     / border-slate-200 — fixed light colours — so in the dark theme the cards
+     stayed white with near-black text while the page around them went dark.
+
+     Fields are also written out one by one now. The old version looped the form
+     and sniffed each widget to decide how to render it, which is how
+     `field.field.widget.__class__.__name__` got in — illegal in a Django
+     template, variables may not begin with an underscore, so the page raised on
+     every load and nobody could open it. Five known fields do not need
+     introspection. */
+  .pf-wrap { max-width:840px;margin:0 auto; }
+  .pf-head { margin-bottom:18px; }
+  .pf-title { font-size:1.05rem;font-weight:800;color:var(--text);margin:0;letter-spacing:-.02em; }
+  .pf-sub { font-size:.78rem;color:var(--muted);margin:5px 0 0; }
+
+  .pf-grid { display:grid;grid-template-columns:1fr 260px;gap:16px;align-items:start; }
+  .pf-card {
+    background:var(--surface);border:1px solid var(--border);
+    border-radius:var(--radius);padding:18px 20px;
+  }
+
+  .pf-field { margin-bottom:15px; }
+  .pf-field:last-of-type { margin-bottom:0; }
+  .pf-label { display:block;font-size:.75rem;font-weight:600;color:var(--muted2);margin-bottom:5px; }
+  .pf-hint { font-size:.7rem;color:var(--muted);margin:4px 0 0;line-height:1.5; }
+  .pf-input, .pf-select, .pf-textarea {
+    width:100%;box-sizing:border-box;background:var(--surface2);
+    border:1px solid var(--border2);border-radius:var(--radius-sm);
+    color:var(--text);font-size:.8125rem;padding:8px 11px;
+    font-family:inherit;transition:border-color .15s;
+  }
+  .pf-input:focus, .pf-select:focus, .pf-textarea:focus {
+    outline:none;border-color:var(--accent);
+  }
+  .pf-textarea { min-height:82px;resize:vertical;line-height:1.55; }
+  .pf-err { border-color:var(--bad) !important; }
+  .pf-err-text { font-size:.7rem;color:var(--bad);margin:4px 0 0; }
+
+  /* The colour input: a swatch you click, with the value beside it. A bare
+     <input type=color> renders as a small grey button in most browsers and
+     reads as broken next to real form fields. */
+  .pf-colour { display:flex;align-items:center;gap:11px; }
+  .pf-colour input[type=color] {
+    width:42px;height:42px;padding:0;border:1px solid var(--border2);
+    border-radius:var(--radius-sm);background:none;cursor:pointer;flex-shrink:0;
+  }
+  .pf-colour input[type=color]::-webkit-color-swatch-wrapper { padding:3px; }
+  .pf-colour input[type=color]::-webkit-color-swatch { border:none;border-radius:5px; }
+
+  .pf-save {
+    background:var(--accent);color:var(--on-accent);border:none;cursor:pointer;
+    font-size:.8125rem;font-weight:700;padding:9px 18px;
+    border-radius:var(--radius-sm);margin-top:18px;transition:filter .15s;
+  }
+  .pf-save:hover { filter:brightness(1.12); }
+
+  /* Sidebar */
+  .pf-avatar {
+    width:52px;height:52px;border-radius:50%;background:var(--accent);
+    color:var(--on-accent);display:flex;align-items:center;justify-content:center;
+    font-size:1.3rem;font-weight:800;margin-bottom:11px;
+  }
+  .pf-name { font-size:.9rem;font-weight:700;color:var(--text);margin:0; }
+  .pf-email { font-size:.75rem;color:var(--muted);margin:2px 0 0;word-break:break-all; }
+  .pf-stat-head {
+    font-size:.625rem;font-weight:700;color:var(--muted);text-transform:uppercase;
+    letter-spacing:.09em;margin:0 0 9px;
+  }
+  .pf-stat { display:flex;justify-content:space-between;gap:10px;font-size:.78rem;padding:4px 0; }
+  .pf-stat dt { color:var(--muted); }
+  .pf-stat dd { color:var(--text);font-weight:700;margin:0;font-variant-numeric:tabular-nums; }
+  .pf-link { color:var(--info);text-decoration:none;font-size:.75rem;font-weight:600; }
+  .pf-link:hover { text-decoration:underline; }
+
+  @media (max-width:760px) {
+    .pf-grid { grid-template-columns:1fr; }
+  }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="mb-6">
-  <h1 class="text-xl font-bold text-slate-900">My Profile</h1>
-  <p class="text-slate-500 text-sm">Update your preferences and personal info.</p>
-</div>
-<div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-  <div class="md:col-span-2">
-    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-      <form method="post" class="space-y-5">
-        {% csrf_token %}
-        {% for field in form %}
-        <div>
-          <label class="block text-sm font-medium text-slate-700 mb-1">{{ field.label }}</label>
-          {% if field.field.widget.input_type == 'color' %}
-            <div class="flex items-center gap-3">
-              <input name="{{ field.html_name }}" type="color"
-                     value="{{ field.value|default:'#00897b' }}"
-                     class="w-10 h-10 rounded cursor-pointer border border-slate-300">
-              <span class="text-sm text-slate-500">Pick your theme color</span>
-            </div>
-          {% elif 'textarea' in field.field.widget.__class__.__name__|lower %}
-            <textarea name="{{ field.html_name }}" rows="3"
-                      class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 ring-theme">{{ field.value|default:'' }}</textarea>
-          {% elif field.field.choices %}
-            <select name="{{ field.html_name }}" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 ring-theme bg-white">
-              {% for val, label in field.field.choices %}
-              <option value="{{ val }}" {% if val == field.value %}selected{% endif %}>{{ label }}</option>
-              {% endfor %}
-            </select>
-          {% else %}
-            <input name="{{ field.html_name }}" type="{{ field.field.widget.input_type }}"
-                   value="{{ field.value|default:'' }}"
-                   class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 ring-theme
-                     {% if field.errors %}border-red-400{% endif %}">
-          {% endif %}
-          {% for e in field.errors %}<p class="text-xs text-red-500 mt-1">{{ e }}</p>{% endfor %}
-        </div>
-        {% endfor %}
-        <button type="submit" class="px-5 py-2.5 text-sm font-semibold btn-theme rounded-lg">Save Changes</button>
-      </form>
-    </div>
+<div class="pf-wrap anim-up">
+
+  <div class="pf-head">
+    <h1 class="pf-title">My Profile</h1>
+    <p class="pf-sub">How you appear to the rest of the league.</p>
   </div>
-  <div class="space-y-4">
-    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-      <div class="w-14 h-14 rounded-full bg-theme flex items-center justify-center text-white text-2xl font-bold mb-3">
-        {{ request.user.username|first|upper }}
+
+  <form method="post" class="pf-grid">
+    {% csrf_token %}
+
+    <div class="pf-card">
+      <div class="pf-field">
+        <label class="pf-label" for="id_real_name">{{ form.real_name.label }}</label>
+        <input class="pf-input {% if form.real_name.errors %}pf-err{% endif %}"
+               type="text" name="{{ form.real_name.html_name }}" id="id_real_name"
+               maxlength="50" value="{{ form.real_name.value|default:'' }}"
+               placeholder="Shown on the leaderboard instead of your username">
+        {% for e in form.real_name.errors %}<p class="pf-err-text">{{ e }}</p>{% endfor %}
       </div>
-      <p class="font-semibold text-slate-900">{{ request.user.username }}</p>
-      <p class="text-sm text-slate-500">{{ request.user.email }}</p>
+
+      <div class="pf-field">
+        <label class="pf-label" for="id_email">{{ form.email.label }}</label>
+        <input class="pf-input {% if form.email.errors %}pf-err{% endif %}"
+               type="email" name="{{ form.email.html_name }}" id="id_email"
+               maxlength="200" value="{{ form.email.value|default:'' }}" required>
+        <p class="pf-hint">Where the weekly email goes, and the address you reply
+          from to submit picks by email.</p>
+        {% for e in form.email.errors %}<p class="pf-err-text">{{ e }}</p>{% endfor %}
+      </div>
+
+      <div class="pf-field">
+        <label class="pf-label" for="id_favorite_team">{{ form.favorite_team.label }}</label>
+        <select class="pf-select" name="{{ form.favorite_team.html_name }}" id="id_favorite_team">
+          {% for val, label in form.favorite_team.field.choices %}
+          <option value="{{ val }}" {% if val == form.favorite_team.value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+        {% for e in form.favorite_team.errors %}<p class="pf-err-text">{{ e }}</p>{% endfor %}
+      </div>
+
+      <div class="pf-field">
+        <label class="pf-label" for="id_bio">{{ form.bio.label }}</label>
+        <textarea class="pf-textarea" name="{{ form.bio.html_name }}" id="id_bio"
+                  maxlength="300" rows="3"
+                  placeholder="A line or two about you — shown on the Members page.">{{ form.bio.value|default:'' }}</textarea>
+        <p class="pf-hint">Up to 300 characters.</p>
+        {% for e in form.bio.errors %}<p class="pf-err-text">{{ e }}</p>{% endfor %}
+      </div>
+
+      <div class="pf-field">
+        <label class="pf-label" for="id_theme">{{ form.theme.label }}</label>
+        <div class="pf-colour">
+          <input type="color" name="{{ form.theme.html_name }}" id="id_theme"
+                 value="{{ form.theme.value|default:'#00897b' }}">
+          <span class="pf-hint" style="margin:0;">Your accent colour across the
+            site — buttons, links and your avatar.</span>
+        </div>
+        {% for e in form.theme.errors %}<p class="pf-err-text">{{ e }}</p>{% endfor %}
+      </div>
+
+      <button type="submit" class="pf-save">Save changes</button>
     </div>
-    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-      <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Stats</p>
-      <div class="space-y-2">
-        <div class="flex justify-between text-sm">
-          <span class="text-slate-500">Score</span>
-          <span class="font-semibold text-slate-900">{{ request.user.profile.score_display }}</span>
-        </div>
-        <div class="flex justify-between text-sm">
-          <span class="text-slate-500">Joined</span>
-          <span class="font-semibold text-slate-900">{{ request.user.date_joined|date:"M Y" }}</span>
-        </div>
+
+    <div>
+      <div class="pf-card" style="margin-bottom:12px;">
+        <div class="pf-avatar">{{ request.user.username|first|upper }}</div>
+        <p class="pf-name">{{ request.user.profile.real_name|default:request.user.username }}</p>
+        <p class="pf-email">{{ request.user.email|default:"No email set" }}</p>
+        <p style="margin:11px 0 0;">
+          <a class="pf-link" href="{% url 'accounts:public_profile' request.user.username %}">
+            View public profile →</a>
+        </p>
+      </div>
+
+      <div class="pf-card">
+        <p class="pf-stat-head">Season</p>
+        <dl style="margin:0;">
+          <div class="pf-stat"><dt>Score</dt><dd>{{ request.user.profile.score_display }}</dd></div>
+          <div class="pf-stat"><dt>Joined</dt><dd>{{ request.user.date_joined|date:"M Y" }}</dd></div>
+          <div class="pf-stat"><dt>Team</dt><dd>{{ request.user.profile.favorite_team_abbrev|default:"—" }}</dd></div>
+        </dl>
+        <p style="margin:11px 0 0;">
+          <a class="pf-link" href="{% url 'main:members' %}">All members →</a>
+        </p>
       </div>
     </div>
-  </div>
+  </form>
+
 </div>
 {% endblock %}

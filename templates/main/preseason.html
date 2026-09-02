@@ -46,8 +46,13 @@
 <div class="pre-card">
   <div class="pre-header">
     <h1>Preseason Picks</h1>
-    <p>Your Super Bowl pick must be one of your conference champions.</p>
-    <p class="warning">These picks cannot be changed once submitted.</p>
+    <p>Your Super Bowl pick is whichever of your two conference champions you
+      think takes it.</p>
+    {% if preseason_open %}
+    <p>Change these as often as you like — they lock when week 1's picks do.</p>
+    {% else %}
+    <p class="warning">Week 1 picks are locked, so these are set for the season.</p>
+    {% endif %}
   </div>
   <div class="pre-form-wrap">
     <form method="post">
@@ -58,7 +63,8 @@
       {% for field in form %}
       <div class="pre-field">
         <label class="pre-label">{{ field.label }}</label>
-        <select name="{{ field.html_name }}" class="pre-select">
+        <select name="{{ field.html_name }}" class="pre-select"
+                {% if not preseason_open %}disabled{% endif %}>
           {% for val, label in field.field.choices %}
           <option value="{{ val }}" {% if val == field.value %}selected{% endif %}>{{ label }}</option>
           {% endfor %}
@@ -66,15 +72,62 @@
         {% for e in field.errors %}<p class="pre-error">{{ e }}</p>{% endfor %}
       </div>
       {% endfor %}
-      <button type="submit" class="pre-submit">Save preseason picks</button>
+      {% if preseason_open %}
+      <button type="submit" class="pre-submit">
+        {% if preseason_done %}Update preseason picks{% else %}Save preseason picks{% endif %}
+      </button>
+      {% endif %}
     </form>
     {% if can_defer %}
     <form method="post" style="margin:0;">
       {% csrf_token %}
       <button type="submit" name="defer" value="1" class="pre-defer">I'll do this later</button>
     </form>
-    <p class="pre-defer-note">You can make these any time during week 1. We'll keep reminding you on the home page until you do.</p>
+    <p class="pre-defer-note">You can make these any time before week 1's picks lock. We'll keep reminding you on the home page until you do.</p>
     {% endif %}
   </div>
 </div>
+
+<script>
+(function(){
+  const nfc = document.querySelector('[name="nfc_champ"]');
+  const afc = document.querySelector('[name="afc_champ"]');
+  const sb  = document.querySelector('[name="superbowl_winner"]');
+  if (!nfc || !afc || !sb) return;
+
+  /* The Super Bowl is played by the two conference champions, so this field
+     offers exactly those two and nothing else, rebuilt whenever either changes.
+
+     Left alone when the form is locked: a pick made before the conference lists
+     were split could be a team that is no longer in either dropdown, and
+     rewriting a locked field would show something the member never chose.
+
+     PreseasonForm.clean() enforces the same rule server-side, so a stale page or
+     a browser with no JS still cannot save an impossible bracket. */
+  if (sb.disabled) return;
+
+  function sync(){
+    const chosen = sb.value;
+    const seen = new Set();
+    sb.innerHTML = '';
+    [[nfc.value, 'NFC'], [afc.value, 'AFC']].forEach(([team, conf]) => {
+      // Both champions can only differ, but guard anyway rather than render the
+      // same team twice if the two lists ever overlap.
+      if (!team || seen.has(team)) return;
+      seen.add(team);
+      const o = document.createElement('option');
+      o.value = team;
+      o.textContent = team + ' (' + conf + ' champion)';
+      sb.appendChild(o);
+    });
+    // Keep their answer if it survived the change; otherwise fall to the NFC one
+    // rather than leaving the field on a team that is no longer on offer.
+    sb.value = seen.has(chosen) ? chosen : (nfc.value || afc.value);
+  }
+
+  nfc.addEventListener('change', sync);
+  afc.addEventListener('change', sync);
+  sync();
+})();
+</script>
 {% endblock %}

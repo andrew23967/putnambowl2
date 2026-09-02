@@ -43,6 +43,21 @@ class Profile(models.Model):
     def score_display(self):
         return round(self.score, 1)
 
+    @property
+    def favorite_team_abbrev(self):
+        """Three-letter form, for anywhere the full name will not fit.
+
+        Falls back to the full name rather than blank: an unmapped team should
+        look wrong, not look empty.
+        """
+        from main.teams import TEAM_ABBREV
+        return TEAM_ABBREV.get(self.favorite_team, self.favorite_team)
+
+    @property
+    def display_name(self):
+        """Real name if they set one, otherwise the username."""
+        return self.real_name.strip() or self.user.username
+
 
 @receiver(post_save, sender=User)
 def create_profile(sender, instance, created, **kwargs):

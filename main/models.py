@@ -1,6 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import User
-from .teams import TEAMS
+from .teams import TEAMS, canonical_game_id
 
 
 class SiteSettings(models.Model):
@@ -30,6 +30,43 @@ class SiteSettings(models.Model):
     scrape_filter_from_day = models.IntegerField(null=True, blank=True)  # 0=Mon…6=Sun, None=no filter
     scrape_filter_to_day = models.IntegerField(null=True, blank=True)
 
+    # ── Which days the league plays ──
+    # Replaces the from/to pair above, which could only express a contiguous run.
+    # A league that plays Sunday and Monday but skips the Saturday slate had no way
+    # to say so. Comma-separated weekday numbers, 0=Mon…6=Sun; blank means every day.
+    scrape_days = models.CharField(
+        max_length=20, blank=True, default='',
+        help_text='Weekdays the league picks games on, 0=Mon…6=Sun. Blank = all days.')
+
+    # ── Grading ──
+    # Grading used to run on every tick from the moment picks locked, which meant
+    # it hammered the source all through Sunday for results that could not exist.
+    # It now starts at the first kickoff and polls each tick until every game is
+    # in, which is what carries it across Monday night.
+    #
+    # Derived from the slate at publish time, never configured: no result can
+    # exist before the first game starts, and a flexed kickoff moves it on its
+    # own where a hand-set weekday and time would just sit there being wrong.
+    auto_grade_dt = models.DateTimeField(null=True, blank=True)
+
+    # ── Advancing ──
+    # Advancing was unconditional and immediate: the moment the last game was
+    # graded the week rolled over, with no way to hold it and no stop at the end
+    # of the season, so it ran past the Super Bowl into empty week 23.
+    auto_advance = models.BooleanField(
+        default=True, help_text='Roll to the next week once every game is graded.')
+    season_last_week = models.IntegerField(
+        default=22, help_text='Final week of the season. Autopilot stops here.')
+
+    # ── Scrape validation and retry ──
+    # A scrape that came back empty or unpriced used to publish anyway and mail the
+    # league. Now it retries for this long, then publishes and flags what is wrong.
+    auto_retry_window_minutes = models.IntegerField(
+        default=360,
+        help_text='Keep retrying a bad scrape for this many minutes, then publish anyway.')
+    auto_first_attempt_dt = models.DateTimeField(null=True, blank=True)
+    auto_last_issue = models.TextField(blank=True, default='')
+
     # ── Email — the /dashboard/emails/ page ──
     # Each switch turns off one kind of mail. *When* they fire is decided by the
     # auto-pilot fields above; these only decide whether they go out at all.
@@ -40,7 +77,12 @@ class SiteSettings(models.Model):
         help_text='Include the reply-by-email ballot in that mail, so members can '
                   'send picks by deleting the team they do not want.')
     email_recap = models.BooleanField(
-        default=True, help_text="Mail PutnamBot's recap when a week is scored.")
+        default=True,
+        help_text="Include last week's recap in the picks-are-live email. The "
+                  "recap no longer goes out on its own - one mail a week, not two.")
+    email_reminder = models.BooleanField(
+        default=True,
+        help_text='Nudge anyone whose picks are still incomplete before they lock.')
     email_confirmations = models.BooleanField(
         default=True,
         help_text='Reply to emailed picks confirming what was recorded. Off leaves '
@@ -49,11 +91,26 @@ class SiteSettings(models.Model):
         default=True,
         help_text="Forward the commissioner's league emails on to every member.")
 
-    # Editable *instructions* for the Gemini prompts. The data each one needs —
+    # ── The weekly email ──
+    # Written by hand, shown at the top of the picks-are-live mail, and cleared
+    # when the week advances so last week's note cannot go out again attached to
+    # this week's games. Blank simply omits the section.
+    weekly_intro = models.TextField(
+        blank=True, default='',
+        help_text='Optional note from the commissioner, top of this week\'s email.')
+
+    # How long before picks lock the reminder goes out. An offset rather than a
+    # clock time, so it follows the slate: the lock is itself derived from the
+    # first kickoff, and a flexed game moves both together.
+    reminder_hours_before_lock = models.IntegerField(default=24)
+    # The week the reminder last went out, so a tick every 5 minutes across the
+    # whole window does not mail everyone dozens of times.
+    reminder_sent_week = models.IntegerField(default=0)
+
+    # Editable *instructions* for the recap prompt. The data it needs —
     # standings, results, and the output format rules — is always appended by the
     # code and cannot be edited away. Blank means "use the built-in default".
     recap_prompt = models.TextField(blank=True, default='')
-    intro_prompt = models.TextField(blank=True, default='')
 
     class Meta:
         verbose_name = 'Site Settings'
@@ -62,6 +119,20 @@ class SiteSettings(models.Model):
     def save(self, *args, **kwargs):
         self.pk = 1
         super().save(*args, **kwargs)
+
+    def scrape_day_set(self):
+        """Weekdays the league plays, as a set of ints. Empty set = every day.
+
+        Tolerates junk in the field rather than raising inside the worker: a
+        malformed value means "no filter", which scrapes everything, rather than
+        an exception that stops the week being published at all.
+        """
+        days = set()
+        for part in (self.scrape_days or '').split(','):
+            part = part.strip()
+            if part.isdigit() and 0 <= int(part) <= 6:
+                days.add(int(part))
+        return days
 
     @classmethod
     def get(cls):
@@ -85,10 +156,48 @@ class Game(models.Model):
     points2 = models.FloatField(default=1.0)
     winner = models.CharField(max_length=10, choices=WINNER_CHOICES, blank=True, default='')
     graded = models.BooleanField(default=False)
-    home_team = models.BooleanField(default=True, help_text='True = team2 is home')
+    # Named for what it means. It used to be `home_team`, documented as
+    # "True = team2 is home" — the exact opposite of what every writer stored.
+    # scrape.py and the manual-entry view both set it from "the favorite is at
+    # home", i.e. team1, while do_grade and the templates read the help text and
+    # believed team2. That single disagreement made auto-grading award every game
+    # to the losing team.
+    team1_is_home = models.BooleanField(
+        default=True, help_text='True = team1 (the favorite) is the home team')
     game_id = models.CharField(max_length=50, blank=True, default='')
     game_dt = models.DateTimeField(null=True, blank=True)
     week = models.IntegerField(default=1)
+
+    @classmethod
+    def match_existing(cls, week, team1, team2, game_id=''):
+        """The stored row for this fixture, or None.
+
+        Keyed on **who is playing**, never on the odds. team1/team2 are
+        favorite/underdog, so when a line crosses pick'em the two swap places;
+        the old check compared them in order, so a re-scrape after the favorite
+        changed stored the same game a second time with the teams reversed.
+        Comparing the pair unordered is what makes a re-scrape idempotent.
+
+        Kickoff time is deliberately *not* part of the key. Flex scheduling moves
+        games between slots all season, and a moved game is still the same game —
+        keying on the time would duplicate it every time the NFL reshuffled the
+        Sunday night slot. The week plus the two teams already identifies a
+        fixture uniquely: two teams meet at most once in a week.
+
+        game_id is tried first where both sides have one, canonicalised so the
+        two sources' spellings compare equal.
+        """
+        in_week = cls.objects.filter(week=week)
+        canon = canonical_game_id(game_id)
+        if canon:
+            for g in in_week:
+                if canonical_game_id(g.game_id) == canon:
+                    return g
+        pair = {team1, team2}
+        for g in in_week:
+            if {g.team1, g.team2} == pair:
+                return g
+        return None
 
     @property
     def game_dt_iso(self):
@@ -291,3 +400,34 @@ class SeasonRecord(models.Model):
 
     def __str__(self):
         return f'{self.year} Season — Winner: {self.winner_username}'
+
+
+class IntroTemplate(models.Model):
+    """A reusable opening line for the weekly email.
+
+    The intro is the one part of that mail nobody can automate - it is the
+    commissioner talking - but most weeks it says one of a handful of things.
+    Keeping them named and editable means picking one is a click, and the odd
+    week that needs something specific can still be typed straight into the box.
+
+    `{week}` in the body is replaced with the week number when the mail is built,
+    not when the template is chosen, so a template written once stays correct
+    every time it is reused.
+    """
+    name = models.CharField(max_length=60, unique=True)
+    body = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
+
+    def render(self, week):
+        """Body with `{week}` filled in.
+
+        `replace`, never `format`: the text is user-edited and a stray brace -
+        an emoticon, a bit of pasted JSON - must not raise inside the send path.
+        """
+        return (self.body or '').replace('{week}', str(week))

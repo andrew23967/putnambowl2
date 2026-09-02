@@ -1,0 +1,139 @@
+{% extends 'base.html' %}
+{% block title %}Members — PutnamBowl{% endblock %}
+
+{% block extra_head %}
+<style>
+  .mb-wrap { max-width:820px;margin:0 auto; }
+  .mb-title { font-size:1.05rem;font-weight:800;color:var(--text);margin:0;letter-spacing:-.02em; }
+  .mb-sub { font-size:.78rem;color:var(--muted);margin:5px 0 16px; }
+
+  .mb-list { display:flex;flex-direction:column;gap:8px; }
+  .mb-card {
+    display:flex;gap:13px;align-items:flex-start;
+    background:var(--surface);border:1px solid var(--border);
+    border-radius:var(--radius);padding:14px 16px;
+    transition:border-color .15s;
+  }
+  .mb-card:hover { border-color:var(--border2); }
+
+  /* Each member's own theme colour, so the roster is scannable by face rather
+     than by reading every name. Set inline from profile.theme. */
+  .mb-avatar {
+    width:40px;height:40px;border-radius:50%;flex-shrink:0;
+    display:flex;align-items:center;justify-content:center;
+    font-size:.95rem;font-weight:800;color:#fff;
+    text-shadow:0 1px 2px rgba(0,0,0,.25);
+  }
+
+  .mb-body { flex:1;min-width:0; }
+  .mb-line { display:flex;align-items:baseline;gap:8px;flex-wrap:wrap; }
+  .mb-name { font-size:.9rem;font-weight:700;color:var(--text); }
+  .mb-handle { font-size:.72rem;color:var(--muted); }
+  .mb-chip {
+    font-size:.6rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+    padding:2px 6px;border-radius:99px;background:var(--fill-2);color:var(--muted2);
+  }
+  .mb-bio {
+    font-size:.78rem;color:var(--muted2);line-height:1.55;margin:6px 0 0;
+    white-space:pre-wrap;word-break:break-word;
+  }
+  .mb-bio-empty { font-size:.75rem;color:var(--muted);font-style:italic;margin:6px 0 0; }
+
+  /* Label/value pairs, two columns, wrapping as needed. A dl because that is
+     what these are, and it keeps the label tied to its value for a screen
+     reader rather than being two loose runs of text. */
+  .mb-facts {
+    display:grid;grid-template-columns:auto 1fr;gap:2px 10px;
+    margin:8px 0 0;font-size:.75rem;align-items:baseline;
+  }
+  .mb-facts dt {
+    color:var(--muted);white-space:nowrap;
+    font-size:.6875rem;font-weight:600;
+  }
+  .mb-facts dd { margin:0;color:var(--muted2);font-weight:600; }
+  /* The one preseason pick worth ten points. */
+  .mb-sb { color:var(--text) !important; }
+  .mb-none { color:var(--muted) !important;font-weight:500 !important;font-style:italic; }
+
+  .mb-meta {
+    display:flex;flex-direction:column;align-items:flex-end;gap:3px;
+    flex-shrink:0;text-align:right;
+  }
+  .mb-joined { font-size:.7rem;color:var(--muted);white-space:nowrap; }
+  .mb-score { font-size:.85rem;font-weight:800;color:var(--text);font-variant-numeric:tabular-nums; }
+  .mb-score-label { font-size:.6rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em; }
+
+  @media (max-width:560px) {
+    .mb-card { flex-wrap:wrap; }
+    .mb-meta { flex-direction:row;align-items:baseline;gap:8px;width:100%;
+               justify-content:flex-start;text-align:left;margin-top:2px; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="mb-wrap anim-up">
+
+  <h1 class="mb-title">Members</h1>
+  <p class="mb-sub">{{ human_count }} player{{ human_count|pluralize }}{% if bot_count %},
+    plus {{ bot_count }} bot{{ bot_count|pluralize }}{% endif %} — oldest first.</p>
+
+  <div class="mb-list">
+    {% for m in members %}
+    <div class="mb-card">
+      <div class="mb-avatar" style="background:{{ m.theme }};">{{ m.initial }}</div>
+
+      <div class="mb-body">
+        <div class="mb-line">
+          {% comment %}
+            Not a link. Everything a member's profile page showed is on this row
+            now, so clicking through only cost a page load to read the same
+            three facts.
+          {% endcomment %}
+          <span class="mb-name">{{ m.display_name }}</span>
+          {% if m.display_name != m.username %}<span class="mb-handle">{{ m.username }}</span>{% endif %}
+          {% if m.is_bot %}<span class="mb-chip">Bot</span>{% endif %}
+        </div>
+
+        {% if m.bio %}<p class="mb-bio">{{ m.bio }}</p>{% endif %}
+
+        {% comment %}
+          Bots have a favourite_team and preseason fields because those columns
+          have defaults, not because they mean anything - seventeen of them all
+          claiming Arizona is noise on a page about who is in the league.
+        {% endcomment %}
+        {% if not m.is_bot %}
+        <dl class="mb-facts">
+          <dt>Team</dt>
+          <dd>{{ m.team }}</dd>
+
+          {% if m.preseason %}
+          <dt>Big loser</dt>
+          <dd>{{ m.preseason.big_loser }}</dd>
+          <dt>NFC</dt>
+          <dd>{{ m.preseason.nfc }}</dd>
+          <dt>AFC</dt>
+          <dd>{{ m.preseason.afc }}</dd>
+          <dt>Super Bowl</dt>
+          <dd class="mb-sb">{{ m.preseason.superbowl }}</dd>
+          {% else %}
+          <dt>Preseason</dt>
+          <dd class="mb-none">Not in yet</dd>
+          {% endif %}
+        </dl>
+        {% endif %}
+      </div>
+
+      <div class="mb-meta">
+        <span class="mb-score">{{ m.score }}</span>
+        <span class="mb-score-label">points</span>
+        <span class="mb-joined">Joined {{ m.joined|date:"M Y" }}</span>
+      </div>
+    </div>
+    {% empty %}
+    <p class="mb-bio-empty">Nobody has joined yet.</p>
+    {% endfor %}
+  </div>
+
+</div>
+{% endblock %}

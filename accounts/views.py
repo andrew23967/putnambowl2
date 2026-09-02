@@ -6,6 +6,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from .forms import RegisterForm, ProfileForm
 from main.models import SiteSettings, SeasonRecord
+from main.rankings import competition_ranks
 
 
 def register(request):
@@ -55,11 +56,16 @@ def public_profile(request, username):
     settings = SiteSettings.get()
     player_seasons = []
     for record in SeasonRecord.objects.all():
-        for i, entry in enumerate(record.final_standings):
+        # Competition ranking, so a shared finish reads the same here as it does
+        # on the season page rather than picking one of them to be "3rd".
+        ranks = competition_ranks(
+            (e.get('username', ''), e.get('score', 0))
+            for e in record.final_standings)
+        for entry in record.final_standings:
             if entry.get('username') == player.username:
                 player_seasons.append({
                     'year': record.year,
-                    'rank': i + 1,
+                    'rank': ranks.get(player.username, 0),
                     'score': entry.get('score', 0),
                     'winner': record.winner_username,
                 })

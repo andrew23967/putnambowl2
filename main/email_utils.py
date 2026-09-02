@@ -80,7 +80,7 @@ def relay_to_league(league_email, sender_email, already_copied=(), author_name='
             f'—\n'
             f'Sent to the league by {who} via PutnamBowl. '
             f'Reply to reach {sender_email}.\n'
-            f'{site_url.rstrip("/")}/emails/')
+            f'{site_url.rstrip("/")}/home/')
 
     def _send():
         sent = sum(1 for a in recipients
@@ -166,13 +166,12 @@ def record_site_email(subject, body, recipient_count, author=None, sent_at=None,
     return obj, created
 
 
-# PutnamBot signs its own work. The feed shows an author either way, but the mail
-# that goes out has no such framing, so it says so in the body.
-PUTNAMBOT_SIGNOFF = (
-    "——\n"
-    "I'm PutnamBot, the AI commissioner of this league. This recap is mine — "
-    "I write one after every week is scored."
-)
+# League mail is from the commissioner, full stop. Recaps used to append a
+# LEAGUE_SIGNOFF introducing an "AI commissioner", and the feed credited them
+# to the `putnambot` account - so the league had two commissioners, one of whom
+# was a bot that also competed in the standings. PutnamBot is still a *player*;
+# it is not a correspondent.
+LEAGUE_SIGNOFF = "──\nPutnamBowl"
 
 
 def picks_address():
@@ -184,14 +183,33 @@ def picks_address():
     makes replying to one unambiguous — including for someone whose plain mail is
     published, where a reply would otherwise broadcast their picks.
     """
+    return _tagged_address(
+        getattr(django_settings, 'PICKS_ADDRESS_TAG', 'picks') or 'picks')
+
+
+def _tagged_address(tag):
+    """`user+tag@domain` for the league mailbox, or the bare mailbox if it cannot
+    be built. Gmail delivers the tag to the same inbox and keeps it in the
+    headers, which is what lets one mailbox route several jobs."""
     mailbox = getattr(django_settings, 'SMTP_USER', '') or \
         getattr(django_settings, 'IMAP_USER', '') or ''
-    tag = getattr(django_settings, 'PICKS_ADDRESS_TAG', 'picks') or 'picks'
     if not mailbox or '@' not in mailbox or not tag:
         return mailbox
     local, domain = mailbox.rsplit('@', 1)
     local = local.split('+', 1)[0]
     return f'{local}+{tag}@{domain}'
+
+
+def intro_address():
+    """The tagged address that means "this is this week's intro".
+
+    Mail here from a member whose posting is enabled becomes
+    `SiteSettings.weekly_intro`, so the commissioner can write the week's opening
+    line from their phone. The recap and the ballot are appended by the send path
+    as usual - the intro is only ever the top section.
+    """
+    return _tagged_address(
+        getattr(django_settings, 'INTRO_ADDRESS_TAG', 'intro') or 'intro')
 
 
 def outbound_suppressed():
@@ -292,7 +310,7 @@ def recap_slug(week, year=None):
 
 def record_recap_email(week, recap_text, recipient_count=0, subject=None, year=None,
                        slug=None):
-    """Record one of PutnamBot's recaps in the Emails feed, without sending it.
+    """Record a weekly recap in the Emails feed, without sending it.
 
     Keyed per season and week, so regenerating a recap replaces its row instead of
     stacking up duplicates. Returns (obj, created).
@@ -302,23 +320,24 @@ def record_recap_email(week, recap_text, recipient_count=0, subject=None, year=N
     """
     if not (recap_text or '').strip():
         return None, False
-    author = User.objects.filter(username='putnambot').first()
+    # No author: the recap is the league's own, the same as the picks-are-live
+    # mail. Crediting the `putnambot` account put a robot avatar on it in the
+    # feed and read as a second commissioner.
     return record_site_email(
         subject=subject or f'Week {week} recap',
-        body=f'{recap_text.strip()}\n\n{PUTNAMBOT_SIGNOFF}',
+        body=f'{recap_text.strip()}\n\n{LEAGUE_SIGNOFF}',
         recipient_count=recipient_count,
-        author=author,
         slug=slug or recap_slug(week, year),
     )
 
 
 def send_recap_email(week, recap_text, subject=None, year=None, slug=None):
-    """Mail one of PutnamBot's recaps to the league, and record it in the feed.
+    """Mail a weekly recap to the league, and record it in the feed.
 
-    PutnamBot's own intro promises "a comprehensive recap" by email, and for a
-    while it didn't send one: recaps were recorded to the feed and only ever
-    reached an inbox second-hand, as a "Last Week" section inside the next
-    "picks are live" mail.
+    **Not the normal path.** A recap now reaches the league inside the next
+    "picks are live" mail, as its "Last Week" section, and `do_advance_week` only
+    records it to the feed. This is for corrections — a regenerated recap the
+    league should actually be told about.
 
     Called, it sends. It used to send only when the feed row was newly created, on
     the theory that advancing a week twice shouldn't mail the league twice — but
@@ -349,7 +368,7 @@ def send_recap_email(week, recap_text, subject=None, year=None, slug=None):
 
     site_url = getattr(django_settings, 'SITE_URL', 'http://localhost:8000')
     body = (f'{obj.body}\n\n'
-            f'The full archive: {site_url.rstrip("/")}/emails/')
+            f'Every message the league has sent: {site_url.rstrip("/")}/home/')
 
     # Per member, from the accounts. There is no list: the site is the mailer.
     if not recipients:
@@ -398,6 +417,130 @@ def send_recap_email(week, recap_text, subject=None, year=None, slug=None):
 
     threading.Thread(target=_send, daemon=True).start()
     return True
+
+
+def members_missing_picks(week):
+    """(user, made, total) for everyone whose ballot is still incomplete.
+
+    Incomplete, not merely empty. The rules are all-or-nothing - "if we do not
+    receive all of your picks on time, then NONE of your picks will count" - so
+    someone who did twelve of sixteen games is in exactly as much trouble as
+    someone who did none, and is the person most worth nudging.
+    """
+    from .models import Game, Pick
+
+    total = Game.objects.filter(week=week).count()
+    if not total:
+        return []
+
+    made = {}
+    for user_id in Pick.objects.filter(game__week=week).values_list('user_id', flat=True):
+        made[user_id] = made.get(user_id, 0) + 1
+
+    out = []
+    for user in (User.objects.exclude(email='').exclude(email__isnull=True)
+                 .exclude(profile__is_bot=True).select_related('profile')):
+        n = made.get(user.id, 0)
+        if n < total:
+            out.append((user, n, total))
+    return out
+
+
+def send_pick_reminder_email(site_settings):
+    """Nudge anyone whose picks are still incomplete, once per week.
+
+    Sent to individuals, never the league: it names how many games each person
+    still owes, and that is nobody else's business.
+    """
+    week = site_settings.week
+    if not site_settings.email_reminder:
+        print('[email] reminder switched off on the Emails page.', flush=True)
+        return 0
+    if site_settings.reminder_sent_week == week:
+        return 0
+    if outbound_suppressed() or not (smtp_ready()
+                                     or getattr(django_settings, 'RESEND_API_KEY', '')):
+        print('[email] no transport available - skipping reminder.', flush=True)
+        return 0
+
+    outstanding = members_missing_picks(week)
+    # Mark the week done either way. Nobody outstanding is a finished job, and
+    # re-checking every tick for the rest of the window buys nothing.
+    site_settings.reminder_sent_week = week
+    site_settings.save(update_fields=['reminder_sent_week'])
+    if not outstanding:
+        print(f'[email] week {week}: everyone is in, no reminder needed.', flush=True)
+        return 0
+
+    site_url = getattr(django_settings, 'SITE_URL', 'http://localhost:8000')
+    picks_url = f'{site_url.rstrip("/")}/picks/'
+    inbox = picks_address()
+
+    lock_line = ''
+    if site_settings.auto_lock_dt:
+        left = _format_lock_delta(site_settings.auto_lock_dt)
+        when = _format_lock_dt(site_settings.auto_lock_dt, site_settings.auto_tz)
+        lock_line = f'Picks lock in {left} ({when}).\n'
+
+    subject = f'Week {week} picks close soon'
+    messages = []
+    for user, made, total in outstanding:
+        if made:
+            standing = (f'You have {made} of {total} games in. The missing '
+                        f'{total - made} still need a pick.\n\n'
+                        f'A partial ballot scores nothing: if all of your picks '
+                        f'are not in on time, none of them count.\n')
+        else:
+            standing = f'You have not picked any of this week\'s {total} games yet.\n'
+        body = (f'{standing}\n{lock_line}'
+                f'\nMake your picks: {picks_url}\n'
+                f'\n\n──\nPutnamBowl')
+        messages.append((user.email, body))
+
+    # One feed entry for the batch, not one per member: the feed is the league's
+    # record of what went out, and nineteen near-identical rows would bury it.
+    record_site_email(
+        subject=subject,
+        body=(f'Reminder sent to {len(messages)} member(s) with incomplete picks '
+              f'for week {week}.\n\n{lock_line}'),
+        recipient_count=len(messages),
+        slug=f'reminder-w{week}',
+    )
+
+    def _send_each():
+        sent = 0
+        for address, body in messages:
+            if smtp_ready():
+                ok = send_via_mailbox(address, subject, body,
+                                      reply_to=inbox or None)[0]
+            else:
+                ok = _send_via_resend(address, subject, body)
+            sent += 1 if ok else 0
+        print(f'[email] reminder sent to {sent}/{len(messages)} for week {week}',
+              flush=True)
+
+    threading.Thread(target=_send_each, daemon=True).start()
+    return len(messages)
+
+
+def _send_via_resend(address, subject, body):
+    """Single-recipient Resend send. Returns True on success."""
+    api_key = getattr(django_settings, 'RESEND_API_KEY', '')
+    if not api_key:
+        return False
+    try:
+        import resend
+        resend.api_key = api_key
+        resend.Emails.send({
+            'from': getattr(django_settings, 'RESEND_FROM', 'onboarding@resend.dev'),
+            'to': [address],
+            'subject': subject,
+            'text': body,
+        })
+        return True
+    except Exception as e:
+        print(f'[email] resend failed for {address}: {e}', flush=True)
+        return False
 
 
 def send_picks_published_email(site_settings):
@@ -449,18 +592,40 @@ def send_picks_published_email(site_settings):
     elif site_settings.first_game_dt:
         lock_line = 'Picks lock before the first kickoff.\n'
 
+    # Three sections, in this order: what the commissioner wrote, what happened
+    # last week, and the ballot. The ballot sits last because it is the longest
+    # part by far - one line per game - and anything after it is never read.
+    intro_section = ''
+    if site_settings.weekly_intro.strip():
+        # Substituted here, not when the intro was chosen, so a template
+        # written once stays correct every week it is reused. replace(),
+        # never format(): the text is hand-edited and a stray brace must not
+        # raise mid-send.
+        intro_section = (site_settings.weekly_intro.strip()
+                         .replace('{week}', str(week)) + '\n\n')
+
+    # Week 1 has no previous week in this season, so it never carries a recap.
+    # `weekly_recap` is a single field that persists across a season boundary,
+    # so without this guard the opening email of a new season could lead with
+    # last season's closing write-up under a "Last Week" heading.
     recap_section = ''
-    if site_settings.weekly_recap:
-        recap_section = f'\n── Last Week ─────────────────────────────────\n\n{site_settings.weekly_recap}\n'
+    has_previous_week = week > 1
+    if site_settings.weekly_recap and site_settings.email_recap and has_previous_week:
+        recap_section = (f'\n── Last Week ─────────────────────────────────\n\n'
+                         f'{site_settings.weekly_recap}\n')
+
+    # build_ballot() opens with its own "Reply with your picks" rule, so a
+    # section header here stacked two dividers with nothing between them.
+    ballot_section = f'\n{ballot}\n' if ballot else ''
 
     subject = f'Week {week} picks are live'
-    ballot_section = f'\n{ballot}\n' if ballot else ''
     body = (
         f'Week {week} picks are up.\n\n'
+        f'{intro_section}'
         f'{lock_line}'
         f'\nMake your picks on the site: {picks_url}\n'
-        f'{ballot_section}'
         f'{recap_section}'
+        f'{ballot_section}'
         f'\n\n──\nPutnamBowl'
     )
 

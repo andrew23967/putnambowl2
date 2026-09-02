@@ -12,10 +12,11 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 from . import models, forms, scrape
 from .models import (
-    Game, Pick, SiteSettings, WeeklyLeaderboard,
+    Game, IntroTemplate, Pick, SiteSettings, WeeklyLeaderboard,
     LeagueEmail, SeasonRecord
 )
-from .teams import TEAM_ABBREV, ABBREV_TO_TEAM
+from .rankings import competition_ranks, rank_rows
+from .teams import TEAM_ABBREV, ABBREV_TO_TEAM, team_from_abbrev
 
 
 def _calculate_points(underdog_ml, favorite_ml):
@@ -58,6 +59,7 @@ def _countdown(settings, games):
                 'kind': 'lock',
                 'ts': int(lock_dt.timestamp() * 1000),
                 'label': 'Picks lock in:',
+                'short': 'Locks in:',
                 'expired': 'Picks are locked',
             })
 
@@ -69,6 +71,9 @@ def _countdown(settings, games):
             'kind': 'game',
             'ts': int(game.game_dt.timestamp() * 1000),
             'label': f'{matchup} · Kickoff in:',
+            # The units under the digits already say this is a countdown, so the
+            # matchup alone carries the whole message when space is short.
+            'short': matchup,
             # A game only plausibly runs for so long; past that it has finished
             # and is waiting on the grader rather than being played.
             'expired': f'{matchup} · Underway',
@@ -89,10 +94,9 @@ def _email_feed(limit=None):
     """The Emails feed, newest first.
 
     One source of truth: `LeagueEmail`. Mail the league sends lands here through
-    `inbound_email`, and mail the site sends is recorded at send time — including
-    PutnamBot's recaps, which sign themselves in the body. That keeps ordering
-    honest, because every row carries a real `sent_at`; a feed stitched together
-    from `WeeklyLeaderboard.recap` had no timestamp to sort by.
+    `inbound_email`, and mail the site sends is recorded at send time. That keeps
+    ordering honest, because every row carries a real `sent_at`; a feed stitched
+    together from `WeeklyLeaderboard.recap` had no timestamp to sort by.
     """
     qs = LeagueEmail.objects.filter(published=True).select_related('author', 'author__profile')
     return list(qs[:limit] if limit else qs)
@@ -103,10 +107,18 @@ def home(request):
         return redirect('accounts:login')
 
     settings = SiteSettings.get()
-    # Week 1 asks for preseason picks, but never traps you here: "Later" sets a
-    # session flag so the rest of the site is reachable, and the home page keeps
-    # a banner up until the picks are actually in.
-    needs_preseason = (settings.week == 1
+    # Open until week 1's picks lock — the same deadline as the slate above it in
+    # the bar, so the countdown there is the countdown for these too. Shown in
+    # both states meanwhile: a prompt before they are in, the way back in after.
+    preseason_open = settings.week == 1 and not settings.lock_picks
+
+    # Nudge to the preseason form, but only while it can still be filled in.
+    # This used to test `settings.week == 1` alone, so anyone who missed the
+    # deadline was bounced to a form that would no longer accept anything — and
+    # bounced again on every visit, with no way to reach the home page until the
+    # week rolled over. "Later" sets a session flag, but a new browser session
+    # forgot it and the trap closed again.
+    needs_preseason = (preseason_open
                        and not request.user.profile.preseason_submitted)
     if needs_preseason and not request.session.get('preseason_deferred'):
         return redirect('main:preseason')
@@ -118,19 +130,21 @@ def home(request):
         key=lambda x: x['score'], reverse=True
     )
 
-    # Rank change vs previous week
+    # Rank change vs previous week. Both sides use competition ranking, so two
+    # players tied all season do not show a change every week as their arbitrary
+    # order flips.
+    rank_rows(leaderboard)
     prev_ranks = {}
     if settings.week > 1:
         try:
             prev_lb = WeeklyLeaderboard.objects.get(week=settings.week - 1)
-            prev_ranks = {e['username']: i + 1 for i, e in enumerate(
-                sorted(prev_lb.entries, key=lambda x: x['score'], reverse=True)
-            )}
+            prev_ranks = competition_ranks(
+                (e['username'], e['score']) for e in prev_lb.entries)
         except WeeklyLeaderboard.DoesNotExist:
             pass
-    for i, entry in enumerate(leaderboard):
+    for entry in leaderboard:
         prev = prev_ranks.get(entry['username'])
-        change = (prev - (i + 1)) if prev else 0
+        change = (prev - entry['rank']) if prev else 0
         entry['rank_change'] = change
         entry['rank_change_abs'] = abs(change)
 
@@ -167,10 +181,17 @@ def home(request):
         Pick.objects.filter(user=request.user, game__in=games).select_related('game')
     )
 
-    # The whole feed: the home page shows every message in a scrolling column, so
-    # there is nothing to trim to.
     feed = _email_feed()
     countdown = _countdown(settings, games)
+
+    # allow_network=False is required in a page view: the week-number fallback is
+    # accurate for 2021+ and the download costs seconds on every home page load.
+    week_type = scrape.get_week_type(settings.week, allow_network=False)
+    week_type_label = {
+        'regular': 'Regular Season',
+        'playoffs': 'Playoffs',
+        'superbowl': 'Super Bowl',
+    }.get(week_type, 'Regular Season')
 
     return render(request, 'main/home.html', {
         'countdown_json': countdown['milestones_json'],
@@ -180,11 +201,14 @@ def home(request):
         'settings': settings,
         'emails': feed,
         'email_count': len(feed),
+        'season_year': scrape.current_season_year(),
+        'week_type_label': week_type_label,
         'total_games': len(games),
         'picks_made': len(my_picks),
         'my_correct': sum(1 for p in my_picks if p.is_correct),
         'graded_count': sum(1 for g in games if g.winner),
-        'needs_preseason': needs_preseason,
+        'preseason_open': preseason_open,
+        'preseason_done': request.user.profile.preseason_submitted,
     })
 
 
@@ -206,9 +230,8 @@ def analytics(request):
     position_chart = [['Week'] + chart_players]
     for lb in leaderboards:
         score_map = {e['username']: e['score'] for e in lb.entries}
-        rank_map = {e['username']: i + 1 for i, e in enumerate(
-            sorted(lb.entries, key=lambda x: x['score'], reverse=True)
-        )}
+        rank_map = competition_ranks(
+            (e['username'], e['score']) for e in lb.entries)
         points_chart.append([str(lb.week)] + [score_map.get(u, 0) for u in chart_players])
         position_chart.append([str(lb.week)] + [rank_map.get(u, len(chart_players)) for u in chart_players])
 
@@ -248,16 +271,6 @@ def analytics(request):
         'position_chart': json.dumps(position_chart),
         'win_rate_chart': json.dumps(win_rate_chart),
         'efficiency_chart': json.dumps(efficiency_chart),
-    })
-
-
-@login_required
-def emails(request):
-    """Every message the league has sent or received, newest first. The home page
-    carries the newest one inline; this is the archive."""
-    return render(request, 'main/emails.html', {
-        'settings': SiteSettings.get(),
-        'emails': _email_feed(),
     })
 
 
@@ -344,28 +357,42 @@ def ajax_leaderboard(request):
 
     prev_ranks = {}
     prev_scores = {}
-    # For the current week, compare against scores at the START of this week (pre-week snapshot).
-    # For past weeks, compare against the snapshot before that week.
-    # WeeklyLeaderboard(week=N) stores scores BEFORE week N, so:
-    #   current week baseline = WeeklyLeaderboard(week=settings.week)
-    #   past week N baseline  = WeeklyLeaderboard(week=N-1) — pre-week-N scores
-    baseline_week = settings.week if week == settings.week else week - 1
-    if baseline_week > 0:
-        try:
-            prev_lb = WeeklyLeaderboard.objects.get(week=baseline_week)
-            prev_ranks = {e['username']: i + 1 for i, e in enumerate(
-                sorted(prev_lb.entries, key=lambda x: x['score'], reverse=True)
-            )}
-            prev_scores = {e['username']: e['score'] for e in prev_lb.entries}
-        except WeeklyLeaderboard.DoesNotExist:
-            pass
+    if live_grading:
+        # Movement caused by this week's results so far. The baseline is each
+        # player's stored score, which is exactly "where they stood when the week
+        # locked" - profile.score is only written by do_advance_week, so it does
+        # not move again until the week rolls over. `_base` already carries it.
+        #
+        # This used to read WeeklyLeaderboard(week=settings.week), which does not
+        # exist yet: that row is written when the week is advanced *away* from,
+        # so it only appears once the week is over. The lookup always missed, and
+        # every arrow came back flat - so the page rendered real movement and the
+        # first live poll wiped it to dashes.
+        prev_ranks = competition_ranks((e['username'], e['_base']) for e in entries)
+        prev_scores = {e['username']: e['_base'] for e in entries}
+    else:
+        # Otherwise compare against the snapshot from before the previous week,
+        # which is what the home page itself does. WeeklyLeaderboard(week=N)
+        # holds the scores as they stood going *into* week N.
+        baseline_week = week - 1
+        if baseline_week > 0:
+            try:
+                prev_lb = WeeklyLeaderboard.objects.get(week=baseline_week)
+                prev_ranks = competition_ranks(
+                    (e['username'], e['score']) for e in prev_lb.entries)
+                prev_scores = {e['username']: e['score'] for e in prev_lb.entries}
+            except WeeklyLeaderboard.DoesNotExist:
+                pass
 
     is_past = week < settings.week
     current_user = request.user.username
+    # Ranks come from the scores, not from row position, so ties share a place.
+    ranks = competition_ranks((e['username'], e['score']) for e in entries)
     result = []
-    for i, entry in enumerate(entries):
+    for entry in entries:
+        rank = ranks[entry['username']]
         prev = prev_ranks.get(entry['username'])
-        change = (prev - (i + 1)) if prev else 0
+        change = (prev - rank) if prev else 0
         if live_grading:
             gained = entry.get('_gained', 0)
         elif is_past:
@@ -375,6 +402,7 @@ def ajax_leaderboard(request):
         result.append({
             'username': entry['username'],
             'score': entry['score'],
+            'rank': rank,
             'rank_change': change,
             'rank_change_abs': abs(change),
             'week_gained': gained,
@@ -409,7 +437,7 @@ def ajax_add_game(request):
         team2=d['favorite'],
         points1=float(settings.multiplier),
         points2=points2,
-        home_team=d['favorite_is_home'],
+        team1_is_home=d['favorite_is_home'],
         game_dt=game_dt_utc,
         week=settings.week,
     )
@@ -419,7 +447,7 @@ def ajax_add_game(request):
         'team2_abbrev': game.team2_abbrev,
         'points1': game.points1,
         'points2': game.points2,
-        'home_team': game.home_team,
+        'team1_is_home': game.team1_is_home,
         'game_dt_iso': game.game_dt_iso,
     }})
 
@@ -634,14 +662,14 @@ def ajax_history(request):
         'points1': g.points1,
         'points2': g.points2,
         'winner': g.winner,
-        'home_team': g.home_team,
+        'team1_is_home': g.team1_is_home,
         'game_dt_iso': g.game_dt_iso,
     } for g in games]
 
     all_usernames = list(User.objects.order_by('username').values_list('username', flat=True))
 
-    rank_after  = {u: i + 1 for i, (u, _) in enumerate(sorted(week_scores.items(),  key=lambda x: x[1], reverse=True))}
-    rank_before = {u: i + 1 for i, (u, _) in enumerate(sorted(pre_scores.items(), key=lambda x: x[1], reverse=True))}
+    rank_after = competition_ranks(week_scores)
+    rank_before = competition_ranks(pre_scores)
 
     players_data = []
     for username in all_usernames:
@@ -684,12 +712,21 @@ def preseason(request):
     # "I'll do this later" — remembered for the session so the prompt does not
     # reappear on every page load, but not persisted, so it comes back next
     # visit while week 1 is still open.
+    # Submitting is not the deadline; week 1's kickoff is. These stay editable
+    # right up until that week's picks lock, and close with them — past that the
+    # season has started and a late edit would be hindsight.
+    preseason_open = settings.week == 1 and not settings.lock_picks
+
     if request.method == 'POST' and 'defer' in request.POST:
         request.session['preseason_deferred'] = True
         return redirect('main:home')
 
+    if request.method == 'POST' and not preseason_open:
+        messages.error(request, 'Preseason picks locked when week 1 picks did.')
+        return redirect('main:home')
+
     form = forms.PreseasonForm(request.user, request.POST or None)
-    if form.is_valid():
+    if preseason_open and form.is_valid():
         request.user.profile.big_loser = form.cleaned_data['big_loser']
         request.user.profile.nfc_champ = form.cleaned_data['nfc_champ']
         request.user.profile.afc_champ = form.cleaned_data['afc_champ']
@@ -697,13 +734,18 @@ def preseason(request):
         request.user.profile.preseason_submitted = True
         request.user.save()
         request.session.pop('preseason_deferred', None)
-        messages.success(request, 'Preseason picks saved.')
+        # No flash on the way out: the bar on the home page turns green and says
+        # the picks are in, which is the same news in the place it belongs, and
+        # it keeps saying it rather than fading after one page load.
         return redirect('main:home')
     return render(request, 'main/preseason.html', {
         'form': form,
         'week': settings.week,
-        # Only week 1 is skippable; later weeks reach this page by choice.
-        'can_defer': settings.week == 1,
+        'preseason_open': preseason_open,
+        'preseason_done': request.user.profile.preseason_submitted,
+        # Only worth offering while they are still missing; once they are in this
+        # page is an edit screen, and there is nothing left to put off.
+        'can_defer': preseason_open and not request.user.profile.preseason_submitted,
     })
 
 
@@ -713,27 +755,69 @@ def standings_view(request):
 
 
 def rules(request):
-    rules = [
-        ("Picking Games", "Each week, pick a winner for every NFL game. Picks lock when the admin closes submissions."),
-        ("Scoring", "Picking the favorite earns 1 point (times the current multiplier). Picking the underdog earns bonus points based on the moneyline spread — the bigger the upset, the more points."),
-        ("Perfect Week Bonus", "Pick every game correctly in a week (weeks 1–18) and earn an extra 10 bonus points."),
-        ("Preseason Picks", "Before the season starts, predict the biggest loser, NFC champ, AFC champ, and Super Bowl winner. Your Super Bowl pick must be one of your conference champions."),
-        ("Multiplier", "The admin can double the point value for big games, up to 4×. This applies to all games that week."),
-        ("Leaderboard", "Scores accumulate all season. Click the week buttons on the home page to view historical snapshots."),
-        ("Season History", "At the end of the season, the admin saves the final standings. All-time results are visible on the Seasons page."),
-    ]
-    return render(request, 'main/rules.html', {'rules': rules})
+    """The commissioner's rules, kept verbatim in the template.
 
+    They were a list of (title, body) pairs paraphrased here in the view. That
+    is prose, not data — nothing queries it and nothing varies it — and the
+    paraphrase had drifted from what the league was actually told. The template
+    now carries the original text from the old site instead.
+    """
+    return render(request, 'main/rules.html')
+
+
+
+@login_required
+def members(request):
+    """The league roster: who is in it, when they joined, what they wrote.
+
+    Ordered by join date, oldest first, so the page reads as the league's history
+    rather than an alphabetical list. Bots are included — they play and they
+    score, so leaving them out would make the standings not add up — but they are
+    marked, and sorted last regardless of when they were created.
+    """
+    people = (User.objects.select_related('profile')
+              .order_by('date_joined', 'username'))
+    rows = []
+    for user in people:
+        profile = user.profile
+        rows.append({
+            'username': user.username,
+            'display_name': profile.display_name,
+            'bio': profile.bio.strip(),
+            'joined': user.date_joined,
+            'team': profile.favorite_team,
+            'team_abbrev': profile.favorite_team_abbrev,
+            'score': profile.score_display,
+            'theme': profile.theme or '#00897b',
+            'initial': (profile.display_name or user.username)[:1].upper(),
+            'is_bot': profile.is_bot,
+            # Only when they actually submitted. Every preseason field has a team
+            # as its default, so an untouched profile would otherwise claim four
+            # confident picks nobody made.
+            'preseason': {
+                'big_loser': profile.big_loser,
+                'nfc': profile.nfc_champ,
+                'afc': profile.afc_champ,
+                'superbowl': profile.superbowl_winner,
+            } if profile.preseason_submitted else None,
+        })
+    rows.sort(key=lambda r: (r['is_bot'], r['joined']))
+
+    return render(request, 'main/members.html', {
+        'members': rows,
+        'human_count': sum(1 for r in rows if not r['is_bot']),
+        'bot_count': sum(1 for r in rows if r['is_bot']),
+    })
 
 
 def seasons(request):
     raw_records = SeasonRecord.objects.all()
     season_records = []
     for record in raw_records:
-        standings = [
-            {'rank': i + 1, 'username': e.get('username', ''), 'score': e.get('score', 0)}
-            for i, e in enumerate(record.final_standings)
-        ]
+        standings = rank_rows([
+            {'username': e.get('username', ''), 'score': e.get('score', 0)}
+            for e in record.final_standings
+        ])
         season_records.append({
             'year': record.year,
             'winner_username': record.winner_username,
@@ -746,7 +830,7 @@ def seasons(request):
 
 @staff_member_required
 def emaildash(request):
-    """Which emails go out, and what PutnamBot is told to write.
+    """Which emails go out, and what the recap is told to say.
 
     Only the *instructions* are editable. Each prompt's data — standings, results,
     and the output format rules — is appended by the code and shown here read-only,
@@ -755,25 +839,67 @@ def emaildash(request):
     from django.conf import settings as django_settings
 
     from . import auto
-    from .email_utils import league_recipients, picks_address, smtp_ready
+    from .email_utils import (intro_address, league_recipients, picks_address,
+                              smtp_ready)
 
     settings = SiteSettings.get()
 
     if request.method == 'POST':
         if 'save_switches' in request.POST:
             for field in ('email_picks_live', 'email_ballot', 'email_recap',
-                          'email_confirmations', 'email_relay'):
+                          'email_reminder', 'email_confirmations', 'email_relay'):
                 setattr(settings, field, request.POST.get(field) == 'on')
+            try:
+                settings.reminder_hours_before_lock = max(1, min(168, int(
+                    request.POST.get('reminder_hours_before_lock', 24))))
+            except (TypeError, ValueError):
+                pass
             settings.save()
             messages.success(request, 'Email settings saved.')
+        elif 'save_intro' in request.POST:
+            settings.weekly_intro = request.POST.get('weekly_intro', '').strip()
+            settings.save(update_fields=['weekly_intro'])
+            messages.success(
+                request,
+                'Intro saved. It goes out at the top of this week\'s email.'
+                if settings.weekly_intro else 'Intro cleared.')
+        elif 'use_intro' in request.POST:
+            # Copy the template's raw body, `{week}` and all — it is substituted
+            # when the mail is built, so the text stays reusable and the copy can
+            # be edited for this week without touching the saved one.
+            tpl = IntroTemplate.objects.filter(
+                pk=request.POST.get('use_intro')).first()
+            if tpl:
+                settings.weekly_intro = tpl.body
+                settings.save(update_fields=['weekly_intro'])
+                messages.success(request, f'Using "{tpl.name}" this week.')
+        elif 'save_template' in request.POST:
+            name = request.POST.get('tpl_name', '').strip()
+            body = request.POST.get('tpl_body', '').strip()
+            pk = request.POST.get('tpl_id') or None
+            if not name or not body:
+                messages.error(request, 'An intro needs both a name and some text.')
+            elif IntroTemplate.objects.filter(name=name).exclude(pk=pk).exists():
+                messages.error(request, f'There is already an intro called "{name}".')
+            elif pk:
+                IntroTemplate.objects.filter(pk=pk).update(name=name, body=body)
+                messages.success(request, f'Saved "{name}".')
+            else:
+                IntroTemplate.objects.create(name=name, body=body)
+                messages.success(request, f'Added "{name}".')
+        elif 'delete_template' in request.POST:
+            tpl = IntroTemplate.objects.filter(
+                pk=request.POST.get('delete_template')).first()
+            if tpl:
+                name = tpl.name
+                tpl.delete()
+                messages.success(request, f'Deleted "{name}".')
         elif 'save_prompts' in request.POST:
             settings.recap_prompt = request.POST.get('recap_prompt', '').strip()
-            settings.intro_prompt = request.POST.get('intro_prompt', '').strip()
             settings.save()
             messages.success(request, 'Prompts saved.')
         elif 'reset_prompts' in request.POST:
             settings.recap_prompt = ''
-            settings.intro_prompt = ''
             settings.save()
             messages.success(request, 'Prompts reset to the built-in defaults.')
         return redirect('main:emaildash')
@@ -783,16 +909,31 @@ def emaildash(request):
     preview_week = max(settings.week - 1, 1)
     data_block, _ = auto.recap_data_block(preview_week)
 
+    # Who the reminder would go to if it fired now - the point of the feature is
+    # knowing that before it sends, not after.
+    from .email_utils import members_missing_picks
+    outstanding = members_missing_picks(settings.week)
+    reminder_due_dt = None
+    if settings.auto_lock_dt:
+        reminder_due_dt = settings.auto_lock_dt - timedelta(
+            hours=settings.reminder_hours_before_lock or 0)
+
+    # Rendered with this week's number so what is shown is what would go out.
+    intro_preview = (settings.weekly_intro or '').replace('{week}', str(settings.week))
+
     return render(request, 'main/emaildash.html', {
         'settings': settings,
+        'intro_templates': IntroTemplate.objects.all(),
+        'intro_preview': intro_preview,
+        'outstanding': [(u.username, made, total) for u, made, total in outstanding],
+        'reminder_due_dt': reminder_due_dt,
         'recipients': league_recipients(),
         'mailbox': getattr(django_settings, 'SMTP_USER', '') or '',
         'picks_address': picks_address(),
+        'intro_address': intro_address(),
         'smtp_ready': smtp_ready(),
         'recap_prompt': settings.recap_prompt or auto.DEFAULT_RECAP_PROMPT,
-        'intro_prompt': settings.intro_prompt or auto.DEFAULT_INTRO_PROMPT,
         'recap_is_default': not settings.recap_prompt,
-        'intro_is_default': not settings.intro_prompt,
         'preview_week': preview_week,
         'data_block': data_block,
         'format_rules': auto.RECAP_FORMAT_RULES,
@@ -873,13 +1014,24 @@ def delete_player(request, user_id):
 def pickdash(request):
     settings = SiteSettings.get()
 
-    if settings.auto_enabled:
+    # Explicit POST only. This used to run on every GET whenever auto_enabled was
+    # set, which made *opening this page* scrape the week, publish it and mail
+    # the league — a page view with irreversible outward side effects. It fired
+    # for real from throwaway database copies too, because the SMTP credentials
+    # are the same whichever database is attached, and it sent to real members.
+    #
+    # `run_auto` is what should drive the autopilot. The button exists so a tick
+    # can still be forced from here when the worker is not running, but only
+    # because someone pressed it.
+    if settings.auto_enabled and request.method == 'POST' and 'run_tick' in request.POST:
         try:
             from .auto import auto_tick
             auto_tick()
             settings = SiteSettings.get()
+            messages.success(request, 'Auto-pilot tick run.')
         except Exception as _e:
             print(f'[auto_tick error] {_e}', flush=True)
+            messages.error(request, f'Auto-pilot tick failed: {_e}')
 
     if 'add_game' in request.POST:
         form = forms.GameForm(request.POST)
@@ -893,7 +1045,7 @@ def pickdash(request):
                 team2=d['favorite'],
                 points1=float(settings.multiplier),
                 points2=points2,
-                home_team=d['favorite_is_home'],
+                team1_is_home=d['favorite_is_home'],
                 game_dt=None,
                 week=settings.week,
             )
@@ -979,10 +1131,17 @@ def pickdash(request):
             settings.auto_scrape_hour = (utc_total_minutes // 60) % 24
             settings.auto_scrape_minute = utc_total_minutes % 60
             settings.auto_scrape_weekday = (local_weekday + utc_total_minutes // (60 * 24)) % 7
-            from_day = request.POST.get('scrape_filter_from_day', '')
-            to_day = request.POST.get('scrape_filter_to_day', '')
-            settings.scrape_filter_from_day = int(from_day) if from_day != '' else None
-            settings.scrape_filter_to_day = int(to_day) if to_day != '' else None
+            # Game days: a set of checkboxes now, not a from/to range, so a
+            # league can play Sunday and Monday without picking up Saturday.
+            picked = request.POST.getlist('scrape_days')
+            days = sorted({int(d) for d in picked if d.isdigit() and 0 <= int(d) <= 6})
+            settings.scrape_days = '' if len(days) in (0, 7) else ','.join(str(d) for d in days)
+
+            settings.auto_advance = 'auto_advance' in request.POST
+            settings.season_last_week = max(1, min(30, int(
+                request.POST.get('season_last_week', 22))))
+            settings.auto_retry_window_minutes = max(0, min(2880, int(
+                request.POST.get('auto_retry_window_minutes', 360))))
 
             from .auto import _next_weekday_hour, _this_or_next_weekday_hour
             settings.auto_scrape_dt = _this_or_next_weekday_hour(settings.auto_scrape_weekday, settings.auto_scrape_hour, settings.auto_scrape_minute)
@@ -1021,35 +1180,60 @@ def pickdash(request):
         games = scrape.scrape(week=week, api_type=scrape_api, year=year)
         added = dupes = 0
         for g in games:
-            team1 = ABBREV_TO_TEAM.get(g[0], g[0])
-            team2 = ABBREV_TO_TEAM.get(g[1], g[1])
+            # team_from_abbrev, not a bare dict lookup: 'LA' is not a key in
+            # ABBREV_TO_TEAM, so a Rams game was stored under the literal name
+            # "LA" and could never match the same fixture stored properly.
+            team1 = team_from_abbrev(g[0])
+            team2 = team_from_abbrev(g[1])
             game_id = g[5]
-            # Scope the duplicate check to this week — games persist across
-            # weeks now, and division rivals play the same matchup twice.
-            if Game.objects.filter(week=settings.week).filter(
-                Q(game_id=game_id) | Q(team1=team1, team2=team2)
-            ).exists():
+            ml1, ml2 = g[2], g[3]
+            pts2 = (_calculate_points(ml1, abs(ml2)) * settings.multiplier
+                    if ml1 and ml2 else float(settings.multiplier))
+
+            # Match on who is playing, unordered — team1/team2 are favorite and
+            # underdog, so they swap when a line crosses pick'em, and comparing
+            # them in order stored the fixture twice with the teams reversed.
+            existing = Game.match_existing(week, team1, team2, game_id)
+            if existing is not None:
+                existing.game_dt = g[6]
+                existing.game_id = game_id
+                fields = ['game_dt', 'game_id']
+                # Points are settled at lock; rewriting them afterwards silently
+                # rescores picks members already made.
+                if not settings.lock_picks:
+                    existing.team1, existing.team2 = team1, team2
+                    existing.team1_is_home = g[4]
+                    existing.points1 = float(settings.multiplier)
+                    existing.points2 = pts2
+                    fields += ['team1', 'team2', 'team1_is_home', 'points1', 'points2']
+                existing.save(update_fields=fields)
                 dupes += 1
                 continue
-            ug_ml, fav_ml = g[2], g[3]
-            pts2 = _calculate_points(ug_ml, abs(fav_ml)) * settings.multiplier if ug_ml and fav_ml else settings.multiplier
+
             Game.objects.create(
                 team1=team1, team2=team2,
                 points1=float(settings.multiplier), points2=pts2,
-                home_team=g[4], game_id=game_id, game_dt=g[6],
-                week=settings.week,
+                team1_is_home=g[4], game_id=game_id, game_dt=g[6],
+                # The week that was scraped, not the week the site happens to be
+                # showing. These are separate on purpose - `scrape_week` exists so
+                # you can pull a week ahead - but the store used settings.week, so
+                # scraping week 1 while the site sat on week 2 filed week 1's
+                # fixtures under week 2 and left both weeks wrong.
+                week=week,
             )
             added += 1
         from django.db.models import Min
         from datetime import timedelta as _td2
-        # Only this week's kickoffs — otherwise the earliest game of the whole
-        # season wins and the auto-lock time lands in the past.
-        first_dt = Game.objects.filter(
-            week=settings.week, game_dt__isnull=False
-        ).aggregate(Min('game_dt'))['game_dt__min']
-        settings.first_game_dt = first_dt
-        if first_dt and settings.lock_mode == 'offset' and settings.auto_lock_offset_minutes:
-            settings.auto_lock_dt = first_dt - _td2(minutes=settings.auto_lock_offset_minutes)
+        # Only recompute the lock when the week just scraped is the live one.
+        # Pulling a future week must not drag the current week's lock onto a
+        # kickoff that is still a fortnight away.
+        if week == settings.week:
+            first_dt = Game.objects.filter(
+                week=settings.week, game_dt__isnull=False
+            ).aggregate(Min('game_dt'))['game_dt__min']
+            settings.first_game_dt = first_dt
+            if first_dt and settings.lock_mode == 'offset' and settings.auto_lock_offset_minutes:
+                settings.auto_lock_dt = first_dt - _td2(minutes=settings.auto_lock_offset_minutes)
         settings.save()
         if settings.publish:
             try:
@@ -1063,7 +1247,7 @@ def pickdash(request):
                 make_bot_picks()
             except Exception as _bot_err:
                 print(f'[manual scrape] bot picks error: {_bot_err}', flush=True)
-        messages.success(request, f'Scraped week {week}: {added} added, {dupes} skipped.')
+        messages.success(request, f'Scraped week {week}: {added} added, {dupes} updated.')
 
     elif 'grade' in request.POST:
         week = settings.scrape_week
@@ -1124,8 +1308,12 @@ def pickdash(request):
             settings.weekly_recap = recap
             settings.save()
             WeeklyLeaderboard.objects.filter(week=completed_week).update(recap=recap)
-            from .email_utils import send_recap_email
-            send_recap_email(completed_week, recap)
+            # Recorded, not mailed - the same as the autopilot path. The recap
+            # reaches the league at the top of next week's picks-are-live email.
+            # This button used to send a standalone recap, so advancing by hand
+            # mailed the league twice for one week.
+            from .email_utils import record_recap_email
+            record_recap_email(completed_week, recap)
 
         messages.success(request, f'Advanced to week {settings.week}.')
 
@@ -1160,11 +1348,10 @@ def pickdash(request):
         settings.lock_picks = False
         settings.first_game_dt = None
         settings.auto_lock_dt = None
-        from .auto import build_intro
-        settings.weekly_recap = build_intro()
+        # No season-preview mail. The league gets one scheduled email a week and
+        # the "Season opener" intro template covers the same ground, inside it.
+        settings.weekly_recap = ''
         settings.save()
-        from .email_utils import send_recap_email
-        send_recap_email(None, settings.weekly_recap, subject='Season preview')
         for p in User.objects.select_related('profile').all():
             p.profile.preseason_submitted = False
             p.profile.save()
@@ -1208,6 +1395,14 @@ def pickdash(request):
         display_lock_weekday = _lock_local.weekday()
         display_lock_time = _lock_local.strftime('%H:%M')
 
+    # Which game-day boxes are ticked. Blank means every day, so show them all
+    # ticked rather than none - "no filter" and "no days" would look identical.
+    _day_set = settings.scrape_day_set()
+    scrape_day_choices = [
+        (val, name, (not _day_set) or val in _day_set)
+        for val, name in WEEKDAY_NAMES.items()
+    ]
+
     return render(request, 'main/pickdash.html', {
         'add_game_form': forms.GameForm(),
         'save_season_form': save_season_form,
@@ -1224,6 +1419,7 @@ def pickdash(request):
         'display_lock_weekday': display_lock_weekday,
         'display_lock_time': display_lock_time,
         'display_auto_lock_computed_dt': display_auto_lock_computed_dt,
+        'scrape_day_choices': scrape_day_choices,
     })
 
 
@@ -1253,6 +1449,9 @@ def generate_recap(request):
     from .auto import build_recap
     settings = SiteSettings.get()
     last_week = settings.week - 1
+    if last_week < 1:
+        return JsonResponse(
+            {'error': 'Week 1 has no previous week to recap.'}, status=400)
     recap = build_recap(last_week)
     if recap is None:
         return JsonResponse({'error': f'No history saved for week {last_week}.'}, status=404)
@@ -1279,87 +1478,33 @@ def send_test_email(request):
 
 
 def montecarlo_view(request):
-    results = None
-    ev_results = []
-    team_ev = []
-    errors = []
-    year_counts = {}
-    available_years = list(range(2016, 2026))
-    config = {
-        'years': list(range(2016, 2026)),
-        'n_trials': 2000,
-        'pct_step': 5,
-        'ev_step': 0.1,
-    }
-    s1_summary = s2_summary = s3_summary = None
+    """The strategy write-up, served from a saved report.
 
-    if request.method == 'POST':
-        try:
-            config['years'] = [int(y) for y in request.POST.getlist('years') if y]
-            config['n_trials'] = int(request.POST.get('n_trials', 2000))
-            config['pct_step'] = int(request.POST.get('pct_step', 5))
-            config['ev_step'] = float(request.POST.get('ev_step', 0.1))
-        except ValueError:
-            pass
+    No simulation runs here. It used to: ten seasons and 2,000 trials per
+    strategy, on request, which is tens of seconds of a web worker for an answer
+    that only changes when another season finishes. `manage.py build_strategy`
+    computes it; this reads the file.
+    """
+    from . import strategy_report
 
-        if not config['years']:
-            errors.append('Select at least one season.')
-        else:
-            from . import montecarlo as mc
-            games, year_counts, load_errors = mc.load_multi_season(config['years'])
-            errors.extend(load_errors)
-            if not games:
-                errors.append('No completed games found for the selected seasons.')
-            else:
-                results = mc.run(games, n_trials=config['n_trials'], pct_step=config['pct_step'])
-                ev_results = mc.ev_by_underdog_points(games, step=config['ev_step'])
-                team_ev = mc.ev_by_team(games)
-
-                if results:
-                    best = next(r for r in results if r['is_best'])
-                    s1_summary = {
-                        'best_pct': best['pct'],
-                        'best_mean': best['mean'],
-                        'fav_mean': results[0]['mean'],
-                        'ug_mean': results[-1]['mean'],
-                        'range': round(max(r['mean'] for r in results) - min(r['mean'] for r in results), 1),
-                        'bonf_sig': best.get('bonf_sig_vs_fav', False),
-                        'bonf_margin': best.get('bonf_margin_vs_fav'),
-                        'diff_vs_fav': best.get('diff_vs_fav', 0),
-                        'n_strategies': len(results),
-                    }
-
-                if ev_results:
-                    bonf_pos = [r for r in ev_results if r.get('bonf_sig') and r['net_ev'] > 0]
-                    bonf_neg = [r for r in ev_results if r.get('bonf_sig') and r['net_ev'] < 0]
-                    s2_summary = {
-                        'n_pos': len([r for r in ev_results if r['net_ev'] > 0]),
-                        'n_total': len(ev_results),
-                        'n_bonf': len([r for r in ev_results if r.get('bonf_sig')]),
-                        'bonf_pos_labels': [r['label'] for r in bonf_pos],
-                        'bonf_neg_labels': [r['label'] for r in bonf_neg],
-                    }
-
-                if team_ev:
-                    bonf_teams = [r for r in team_ev if r.get('bonf_sig')]
-                    s3_summary = {
-                        'n_bonf': len(bonf_teams),
-                        'bonf_teams': [(r['team'], r['net_ev']) for r in bonf_teams],
-                    }
+    report = strategy_report.load()
+    if report is None:
+        # Never built, or the file went missing. Say so rather than showing an
+        # empty page that looks like the simulation found nothing.
+        return render(request, 'main/montecarlo.html', {'report_missing': True})
 
     return render(request, 'main/montecarlo.html', {
-        'results': results,
-        'errors': errors,
-        'year_counts': year_counts,
-        'config': config,
-        'available_years': available_years,
+        'generated_at': report['generated_at'],
+        'config': report['config'],
+        'year_counts': report['year_counts'],
+        'total_games': report['total_games'],
+        'results': report['results'],
+        'ev_results': report['ev_results'],
+        'team_ev': report['team_ev'],
+        's1_summary': report['s1_summary'],
+        's2_summary': report['s2_summary'],
+        's3_summary': report['s3_summary'],
         'headers': ['Underdog %', 'Mean', 'Std Dev', 'P10', 'P90', 'Min', 'Max'],
-        'total_games': sum(year_counts.values()),
-        'ev_results': ev_results,
-        'team_ev': team_ev,
-        's1_summary': s1_summary,
-        's2_summary': s2_summary,
-        's3_summary': s3_summary,
     })
 
 

@@ -2,7 +2,7 @@ import time
 import requests
 from bs4 import BeautifulSoup
 from datetime import date
-from .teams import ABBREV_TO_TEAM
+from .teams import ABBREV_TO_TEAM, canonical_abbrev, make_game_id, team_from_abbrev
 
 # How long a downloaded schedule stays usable. The worker is a long-lived
 # process, so without an expiry it would keep serving the schedule it fetched
@@ -114,7 +114,12 @@ def scrape_nfl_data_py(week, year=None):
     ):
         if w != week:
             continue
-        if home_ml != home_ml:
+        # NaN-check BOTH sides. This tested only home_ml, so a game priced on one
+        # side and blank on the other kept a NaN — and NaN is truthy, so it sailed
+        # past the `if ug_ml and fav_ml` guard in auto.py and reached the points
+        # formula, storing NaN points. No game in five seasons has been half-priced,
+        # but the cost of the guard is nothing and the failure is silent.
+        if home_ml != home_ml or away_ml != away_ml:
             home_ml = away_ml = 0
         game_dt = None
         if gameday and gametime:
@@ -123,10 +128,16 @@ def scrape_nfl_data_py(week, year=None):
                 game_dt = dt_local.astimezone(_tz.utc)
             except Exception:
                 pass
+        # Rebuild rather than trust the source's own string: nfl_data_py spells
+        # the Rams 'LA' where ESPN says 'LAR', so the two sources produced
+        # different ids for the same fixture and grading matched nothing.
+        gid = make_game_id(year or current_season_year(), w, away, home)
+        # Lower moneyline = bigger favorite = team1. Ties in the line (a true
+        # pick'em) fall to the else branch, which keeps home as team1.
         if home_ml >= away_ml:
-            games.append([away, home, away_ml, home_ml, False, game_id, game_dt])
+            games.append([away, home, away_ml, home_ml, False, gid, game_dt])
         else:
-            games.append([home, away, home_ml, away_ml, True, game_id, game_dt])
+            games.append([home, away, home_ml, away_ml, True, gid, game_dt])
     return games
 
 
@@ -194,9 +205,12 @@ def scrape_espn(week, year=None):
                     game_dt = datetime.fromisoformat(date_str.replace('Z', '+00:00')).astimezone(_tz.utc)
                 except Exception:
                     pass
-            game_id = f"{season}_{week}_{away}_{home}"
-            home_full = ABBREV_TO_TEAM.get(home, home)
-            away_full = ABBREV_TO_TEAM.get(away, away)
+            game_id = make_game_id(season, week, away, home)
+            home_full = team_from_abbrev(home)
+            away_full = team_from_abbrev(away)
+            # ESPN carries no moneylines, so team1/team2 here is just away/home;
+            # the caller must not treat it as favorite/underdog. `False` says
+            # team1 is not the home side, which is true either way.
             games.append([away_full, home_full, 0, 0, False, game_id, game_dt])
     except Exception as e:
         print(f"scrape_espn error: {e}")
@@ -259,7 +273,7 @@ def grade_espn(week, year=None):
                     away, away_score = abbrev, score
             if not home or not away:
                 continue
-            game_id = f"{season}_{week}_{away}_{home}"
+            game_id = make_game_id(season, week, away, home)
             diff = home_score - away_score
             outcome = 'home' if diff > 0 else ('away' if diff < 0 else 'tie')
             games.append([game_id, outcome, home, away])

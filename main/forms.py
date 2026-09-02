@@ -15,8 +15,12 @@ class GameForm(forms.Form):
 
 class PreseasonForm(forms.Form):
     big_loser = forms.ChoiceField(choices=TEAMS, label='Biggest Loser (worst team)')
-    nfc_champ = forms.ChoiceField(choices=TEAMS, label='NFC Champion')
-    afc_champ = forms.ChoiceField(choices=TEAMS, label='AFC Champion')
+    nfc_champ = forms.ChoiceField(choices=NFC_TEAMS, label='NFC Champion')
+    afc_champ = forms.ChoiceField(choices=AFC_TEAMS, label='AFC Champion')
+    # Stays the full list: the two teams actually allowed here are whichever
+    # conference champions were picked above, which is a different pair for every
+    # member and changes as they edit. clean() is what enforces it, and the page
+    # narrows the visible options to match.
     superbowl_winner = forms.ChoiceField(choices=TEAMS, label='Super Bowl Winner')
 
     def __init__(self, user, *args, **kwargs):

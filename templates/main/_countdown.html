@@ -42,6 +42,21 @@ Include once per page. Pass `compact` to shrink the digits:
   // passed kickoff was wrong for every game that had already finished.
   const GAME_WINDOW_MS = 4*60*60*1000;
 
+  // The home band lays the label out beside the digits on one row. That row runs
+  // out of width on a tablet and wraps onto a second line, doubling the band's
+  // height, so there it takes each milestone's short label instead. Only the band
+  // is compact — the picks page has a column to itself and keeps the full wording.
+  //
+  // The range matches the band's own media query in home.html. Below 641px the
+  // band has already broken into stacked rows, so the clock has a line to itself
+  // and the pressure that justifies the short label is gone.
+  // Re-read every tick rather than on a listener, so a rotate fixes itself.
+  const narrow = window.matchMedia('(min-width:641px) and (max-width:1024px)');
+  function labelFor(ms){
+    return (wrap.classList.contains('timer-compact') && narrow.matches && ms.short)
+      ? ms.short : ms.label;
+  }
+
   function pad(n){ return String(n).padStart(2,'0'); }
 
   // Under a day, count h:m:s. Over it, swap the units to d:h:m — an early-week
@@ -66,7 +81,7 @@ Include once per page. Pass `compact` to shrink the digits:
     const next = milestones.find(ms => ms.ts > now);
 
     if (next) {
-      label.textContent = next.label;
+      label.textContent = labelFor(next);
       hms.style.display = '';
       render(next.ts - now);
       return;

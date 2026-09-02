@@ -187,6 +187,52 @@ def _is_pick_submission(msg, author):
     return False, f'{author.username} is set to publish by email'
 
 
+def _is_intro_submission(msg, author):
+    """Is this the week's intro?
+
+    Two conditions, both required. Addressed to the tagged +intro address, and
+    from someone whose posting is enabled - the intro goes out to the whole
+    league at the top of the weekly mail, so it is the same trust level as
+    publishing to the site, and `email_posts_enabled` is what grants that.
+    A member without it who mails the intro address is treated as normal mail
+    rather than silently rewriting what everyone reads.
+    """
+    from .email_utils import intro_address
+
+    tagged = (intro_address() or '').strip().lower()
+    if not tagged or tagged not in _addressed_to(msg):
+        return False
+    if not author.profile.email_posts_enabled:
+        log.warning('[inbound] %s mailed the intro address but is not set to '
+                    'publish by email; ignoring', author.username)
+        return False
+    return True
+
+
+def _confirm_intro(author, reply_to, message_id, subject, site_settings):
+    """Tell them it landed, and what it will look like.
+
+    Same reasoning as the pick confirmations: without a reply there is no way to
+    notice that the wrong thing was saved until the whole league has read it.
+    """
+    from .email_utils import send_via_mailbox, smtp_ready
+
+    if not site_settings.email_confirmations or not smtp_ready():
+        return
+    preview = site_settings.weekly_intro.replace(
+        '{week}', str(site_settings.week))
+    body = (f'Saved as the week {site_settings.week} intro. It will go out at the '
+            f'top of the picks-are-live email, with the recap and the ballot '
+            f'below it.\n\n'
+            f'--- what the league will see ---\n{preview}\n')
+    try:
+        send_via_mailbox(reply_to, f'Re: {subject or "Intro"}', body,
+                         in_reply_to=message_id)
+    except Exception as e:
+        # A confirmation that fails must not undo the intro that was saved.
+        log.error('[inbound] intro confirmation failed: %s', e)
+
+
 def ingest_message(raw_bytes):
     """Store one message if it passes every rule. Returns (obj_or_None, reason)."""
     msg = email.message_from_bytes(raw_bytes)
@@ -229,6 +275,24 @@ def ingest_message(raw_bytes):
     body = _trim(full_body)
     if not body:
         return None, 'empty body'
+
+    # The +intro address, before the picks/announcement split: this is neither.
+    if _is_intro_submission(msg, author):
+        from .models import SiteSettings
+
+        site_settings = SiteSettings.get()
+        site_settings.weekly_intro = body
+        site_settings.save(update_fields=['weekly_intro'])
+        ProcessedEmail.objects.update_or_create(
+            message_id=message_id[:400],
+            defaults={'deferred': False,
+                      'outcome': f'intro set for week {site_settings.week}'[:200]},
+        )
+        log.info('[inbound] %s set the week %s intro by email',
+                 author.username, site_settings.week)
+        _confirm_intro(author, from_email, message_id,
+                       _decode(msg.get('Subject')), site_settings)
+        return None, f'intro set for week {site_settings.week}'
 
     is_picks, why = _is_pick_submission(msg, author)
 

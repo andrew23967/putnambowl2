@@ -3,29 +3,34 @@
 
 {% block extra_head %}
 <style>
-  /* Carousel */
+  /* One panel per graph; the tabs decide which is showing. */
   .slide { display:none; }
   .slide.active { display:block; }
   .slide-chart-area { position:relative;flex:1;min-height:0; }
 
-  /* Nav arrows */
-  .carousel-arrow {
-    background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:8px;
-    color:var(--muted2);cursor:pointer;font-size:1rem;line-height:1;padding:5px 10px;
-    transition:background .12s,color .12s;flex-shrink:0;
+  /* ── Tabs ──
+     One per graph, so every chart is reachable in a single click and you can see
+     the whole set at once. Real buttons, so they tab and fire on Enter. */
+  .an-head { margin-bottom:14px;flex-shrink:0; }
+  .an-tabs { display:flex;align-items:center;gap:4px;flex-wrap:wrap;
+             border-bottom:1px solid var(--border);padding-bottom:0; }
+  .an-tab {
+    background:none;border:0;border-bottom:2px solid transparent;
+    margin-bottom:-1px;padding:7px 11px;cursor:pointer;
+    font-family:inherit;font-size:.75rem;font-weight:600;color:var(--muted);
+    transition:color .14s ease,border-color .14s ease;
   }
-  .carousel-arrow:hover { background:rgba(255,255,255,.12);color:var(--text); }
-  .carousel-arrow:disabled { opacity:.25;cursor:default; }
-  [data-theme="light"] .carousel-arrow { background:rgba(0,0,0,.05); }
-  [data-theme="light"] .carousel-arrow:hover { background:rgba(0,0,0,.1); }
-
-  /* Dots */
-  .slide-dot {
-    width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.15);
-    cursor:pointer;transition:background .18s,transform .18s;flex-shrink:0;
-  }
-  .slide-dot.active { background:var(--accent);transform:scale(1.3); }
-  [data-theme="light"] .slide-dot { background:rgba(0,0,0,.15); }
+  .an-tab:hover { color:var(--text); }
+  .an-tab.active { color:var(--text);border-bottom-color:var(--accent); }
+  .an-tab:focus-visible { outline:2px solid var(--accent);outline-offset:-2px;border-radius:4px; }
+  /* What the graph on screen is showing, under the tabs rather than beside a
+     title — the tab is the title now. */
+  .an-sub { display:flex;align-items:center;gap:14px;margin-top:9px;flex-wrap:wrap; }
+  .an-label { font-size:.6875rem;color:var(--muted);margin:0; }
+  .an-week { display:flex;align-items:center;gap:7px;margin-left:auto; }
+  .an-week[hidden] { display:none; }
+  .an-week-text { font-size:.625rem;font-weight:700;color:var(--muted);
+                  text-transform:uppercase;letter-spacing:.07em;white-space:nowrap; }
 
   /* Fade transition */
   @keyframes slideFadeIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
@@ -38,14 +43,7 @@
   /* Viewport fill */
   @media (min-width:641px) {
     main { height:calc(100vh - 53px) !important;display:flex !important;flex-direction:column !important;overflow:hidden !important;box-sizing:border-box !important; }
-    html.nav-has-slider main { height:calc(100vh - 86px) !important; }
   }
-
-  /* Pill toggle light mode */
-  [data-theme="light"] #chart-toggle,
-  [data-theme="light"] #analytics-toggle { border-color:rgba(0,0,0,.12)!important; }
-  [data-theme="light"] #toggle-pill,
-  [data-theme="light"] #analytics-pill { background:#edf0f3!important;border-color:rgba(0,0,0,.1)!important; }
 </style>
 {% endblock %}
 
@@ -55,61 +53,72 @@
 <!-- Carousel card -->
 <div class="card animate-fade-up" style="padding:20px 24px 24px;flex:1;display:flex;flex-direction:column;min-height:0;">
 
-  <!-- Carousel header -->
-  <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
-
-    <!-- Left: slide title + optional toggles -->
-    <div style="flex:1;min-width:0;display:flex;align-items:center;gap:10px;">
-      <span id="slide-title" style="font-size:.75rem;font-weight:700;color:var(--text);white-space:nowrap;"></span>
-
-      <!-- Score / Rank toggle -->
-      <div id="chart-toggle" style="display:none;position:relative;display:none;align-items:center;width:118px;height:22px;background:transparent;border:1px solid rgba(255,255,255,.07);border-radius:100px;padding:2px;cursor:grab;user-select:none;touch-action:none;">
-        <div id="toggle-pill" style="position:absolute;left:2px;width:calc(50% - 2px);height:calc(100% - 4px);background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:100px;transition:left .22s cubic-bezier(.4,0,.2,1);pointer-events:none;"></div>
-        <span id="tog-score" style="position:relative;flex:1;text-align:center;font-size:.625rem;font-weight:500;color:var(--text);z-index:1;pointer-events:none;">Score</span>
-        <span id="tog-rank"  style="position:relative;flex:1;text-align:center;font-size:.625rem;font-weight:500;color:var(--muted);z-index:1;pointer-events:none;">Rank</span>
+  {% comment %}
+    One tab per graph. The pills that used to switch Score/Rank and
+    Win Rate/Efficiency in place are gone: those were four graphs hiding behind
+    two, reachable only by finding a control that appeared on some slides and not
+    others. Every graph is now its own tab and its own canvas.
+  {% endcomment %}
+  <div class="an-head">
+    <div class="an-tabs" id="an-tabs" role="tablist" aria-label="Charts"></div>
+    <div class="an-sub">
+      <p class="an-label" id="an-label"></p>
+      {% comment %}
+        The week lives on the card, not up in the nav: it belongs to the graph it
+        changes, and it only appears for the graphs that read it. Score and Rank
+        always plot the whole season.
+      {% endcomment %}
+      <div class="an-week" id="an-week" hidden>
+        <span class="an-week-text">Week</span>
+        <div class="nav-wk">
+          <button type="button" class="nav-wk-btn" id="an-week-prev" aria-label="Previous week">
+            <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path
+              stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"/></svg>
+          </button>
+          <input type="number" class="nav-wk-input" id="an-week-input" inputmode="numeric"
+                 min="1" max="{{ completed_weeks|last }}" value="{{ completed_weeks|last }}"
+                 aria-label="Week">
+          <button type="button" class="nav-wk-btn" id="an-week-next" aria-label="Next week">
+            <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path
+              stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/></svg>
+          </button>
+        </div>
       </div>
-
-      <!-- Win Rate / Efficiency toggle -->
-      <div id="analytics-toggle" style="display:none;position:relative;align-items:center;width:138px;height:22px;background:transparent;border:1px solid rgba(255,255,255,.07);border-radius:100px;padding:2px;cursor:grab;user-select:none;touch-action:none;">
-        <div id="analytics-pill" style="position:absolute;left:2px;width:calc(50% - 2px);height:calc(100% - 4px);background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:100px;transition:left .22s cubic-bezier(.4,0,.2,1);pointer-events:none;"></div>
-        <span id="tog-wr"  style="position:relative;flex:1;text-align:center;font-size:.625rem;font-weight:500;color:var(--text);z-index:1;pointer-events:none;">Win Rate</span>
-        <span id="tog-eff" style="position:relative;flex:1;text-align:center;font-size:.625rem;font-weight:500;color:var(--muted);z-index:1;pointer-events:none;">Efficiency</span>
-      </div>
-
-      <p id="slide-label" style="font-size:.55rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin:0;"></p>
-    </div>
-
-    <!-- Right: dots + arrows -->
-    <div style="display:flex;align-items:center;gap:8px;">
-      <div id="slide-dots" style="display:flex;align-items:center;gap:5px;"></div>
-      <button class="carousel-arrow" id="prev-btn" onclick="goSlide(-1)">‹</button>
-      <button class="carousel-arrow" id="next-btn" onclick="goSlide(1)">›</button>
     </div>
   </div>
 
   {% if points_chart %}
-  <!-- Slide 0: Score / Rank -->
   <div class="slide" id="slide-0">
     <div class="slide-chart-area">
-      <canvas id="mainChart"></canvas>
-      <div class="no-data-msg" id="mainChart-nodata">No data yet</div>
+      <canvas id="scoreChart"></canvas>
+      <div class="no-data-msg" id="scoreChart-nodata">No data yet</div>
     </div>
   </div>
 
-  {% if win_rate_chart %}
-  <!-- Slide 1: Win Rate / Efficiency -->
   <div class="slide" id="slide-1">
     <div class="slide-chart-area">
-      <canvas id="analyticsChart"></canvas>
-      <div class="no-data-msg" id="analyticsChart-nodata">No data yet</div>
+      <canvas id="rankChart"></canvas>
+      <div class="no-data-msg" id="rankChart-nodata">No data yet</div>
     </div>
   </div>
 
-  <!-- Slide 2: Std. Deviation -->
+  {% comment %}
+    Panel ids track the CHARTS index, so removing a tab means renumbering the ones
+    after it — otherwise goToSlide activates a panel that is not the chart it just
+    drew.
+  {% endcomment %}
+  {% if efficiency_chart %}
   <div class="slide" id="slide-2">
     <div class="slide-chart-area">
-      <canvas id="varianceChart"></canvas>
-      <div class="no-data-msg" id="varianceChart-nodata">No data yet</div>
+      <canvas id="efficiencyChart"></canvas>
+      <div class="no-data-msg" id="efficiencyChart-nodata">No data yet</div>
+    </div>
+  </div>
+
+  <div class="slide" id="slide-3">
+    <div class="slide-chart-area">
+      <canvas id="consistencyChart"></canvas>
+      <div class="no-data-msg" id="consistencyChart-nodata">No data yet</div>
     </div>
   </div>
   {% endif %}
@@ -132,7 +141,6 @@ var chartWeek = {{ completed_weeks|last|default:1 }};
 
 const pointsData   = {{ points_chart|safe }};
 const positionData = {{ position_chart|safe }};
-const wrData       = {{ win_rate_chart|safe }};
 const effData      = {{ efficiency_chart|safe }};
 
 function filteredByWeek(data, week) {
@@ -159,82 +167,83 @@ function lineDS(data, fill, ctx, h) {
   });
 }
 
-// ── slide definitions ──────────────────────────────
-// id, title, label text, which toggle to show ('chart'|'analytics'|null), canvas id (null for picks)
-const SLIDES = [
-  { id:'main',      title:'Score',               label:'Cumulative Score',           toggle:'chart',     canvasId:'mainChart' },
-  {% if win_rate_chart %}
-  { id:'analytics', title:'Win Rate',            label:'% Correct Picks Per Week',   toggle:'analytics', canvasId:'analyticsChart' },
-  { id:'variance',  title:'Efficiency Variance', label:'Std. deviation per player',  toggle:null,        canvasId:'varianceChart' },
+/* ── The graphs ──────────────────────────────────────
+   One entry per tab, in the order they appear. `build` takes the canvas id, so a
+   graph that used to be a mode of another one is now just its own row here —
+   which is the whole point of dropping the pills. */
+const MAX_WEEK = {{ completed_weeks|last|default:1 }};
+
+/* `usesWeek` decides whether the week control appears, and every graph is drawn
+   through the same `week` argument — so a graph without the control is not
+   quietly left on whatever week was chosen elsewhere; it plots the full season by
+   being handed MAX_WEEK. */
+const CHARTS = [
+  { tab:'Score',      label:'Cumulative score, whole season',
+    canvasId:'scoreChart',      usesWeek:false, build:(c,w) => buildMainOn(c, 'score', w) },
+  { tab:'Rank',       label:'League position, whole season',
+    canvasId:'rankChart',       usesWeek:false, build:(c,w) => buildMainOn(c, 'rank', w) },
+  {% if efficiency_chart %}
+  { tab:'Efficiency', label:'Points won as a share of the points on offer, in the chosen week',
+    canvasId:'efficiencyChart', usesWeek:true,  build:(c,w) => buildEfficiencyOn(c, w) },
+  { tab:'Consistency', label:'Swing in weekly efficiency, through the chosen week — a shorter bar is a steadier player',
+    canvasId:'consistencyChart', usesWeek:true, build:(c,w) => buildConsistencyOn(c, w, false, true) },
   {% endif %}
 ];
 
 let currentSlide = 0;
 let activeChart = null;
-let currentMode = 'score';
-let analyticsMode = 'wr';
 
-// Build dots
-const dotsEl = document.getElementById('slide-dots');
-SLIDES.forEach((s, i) => {
-  const d = document.createElement('div');
-  d.className = 'slide-dot' + (i===0?' active':'');
-  d.addEventListener('click', () => goToSlide(i));
-  dotsEl.appendChild(d);
+const tabsEl = document.getElementById('an-tabs');
+CHARTS.forEach((c, i) => {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'an-tab' + (i === 0 ? ' active' : '');
+  b.textContent = c.tab;
+  b.setAttribute('role', 'tab');
+  b.setAttribute('aria-selected', i === 0 ? 'true' : 'false');
+  b.addEventListener('click', () => goToSlide(i));
+  tabsEl.appendChild(b);
 });
 
-function goSlide(dir) { goToSlide(currentSlide + dir); }
-
-function goToSlide(idx) {
-  if (idx < 0 || idx >= SLIDES.length) return;
-
-  // Deactivate old slide
-  const oldSlide = document.getElementById('slide-' + currentSlide);
-  if (oldSlide) oldSlide.classList.remove('active');
-
-  // Destroy active chart if leaving a chart slide
+/* Draw whichever graph is showing. Called on tab change and when the week picker
+   moves, so there is one place that knows how to put a chart on screen. */
+function drawCurrent() {
+  const c = CHARTS[currentSlide];
+  if (!c) return;
   if (activeChart) { activeChart.destroy(); activeChart = null; }
-
-  currentSlide = idx;
-  const s = SLIDES[idx];
-
-  // Activate new slide
-  const newSlide = document.getElementById('slide-' + currentSlide);
-  if (newSlide) newSlide.classList.add('active');
-
-  // Update header
-  document.getElementById('slide-title').textContent = s.title;
-  document.getElementById('slide-label').textContent = s.label;
-
-  // Show/hide toggles
-  const chartToggle = document.getElementById('chart-toggle');
-  const analyticsToggle = document.getElementById('analytics-toggle');
-  chartToggle.style.display = s.toggle === 'chart' ? 'flex' : 'none';
-  analyticsToggle.style.display = s.toggle === 'analytics' ? 'flex' : 'none';
-
-  // Update dots
-  dotsEl.querySelectorAll('.slide-dot').forEach((d, i) => d.classList.toggle('active', i===idx));
-
-  // Update arrows
-  document.getElementById('prev-btn').disabled = idx === 0;
-  document.getElementById('next-btn').disabled = idx === SLIDES.length - 1;
-
-  // Build chart for this slide
-  if (s.canvasId) {
-    if (s.id === 'main')      { activeChart = buildMainOn(s.canvasId, currentMode);  if (!activeChart) showNoData(s.canvasId); }
-    if (s.id === 'analytics') { activeChart = buildAnalyticsOn(s.canvasId, analyticsMode); if (!activeChart) showNoData(s.canvasId); }
-    if (s.id === 'variance')  { activeChart = buildVarianceOn(s.canvasId, false, true); if (!activeChart) showNoData(s.canvasId); }
-  }
+  activeChart = c.build(c.canvasId, c.usesWeek ? chartWeek : MAX_WEEK);
+  if (!activeChart) showNoData(c.canvasId);
 }
 
-// Initialise
+function goToSlide(idx) {
+  if (idx < 0 || idx >= CHARTS.length) return;
+
+  const oldPanel = document.getElementById('slide-' + currentSlide);
+  if (oldPanel) oldPanel.classList.remove('active');
+
+  currentSlide = idx;
+  const c = CHARTS[idx];
+
+  const panel = document.getElementById('slide-' + currentSlide);
+  if (panel) panel.classList.add('active');
+
+  document.getElementById('an-label').textContent = c.label;
+  document.getElementById('an-week').hidden = !c.usesWeek;
+  tabsEl.querySelectorAll('.an-tab').forEach((t, i) => {
+    t.classList.toggle('active', i === idx);
+    t.setAttribute('aria-selected', i === idx ? 'true' : 'false');
+  });
+
+  drawCurrent();
+}
+
 goToSlide(0);
 
 // ── Score / Rank chart ─────────────────────────────
-function buildMainOn(cid, mode, showLegend=false) {
+function buildMainOn(cid, mode, week, showLegend=false) {
   const el=document.getElementById(cid); if (!el) return null;
   hideNoData(cid);
-  const ctx=el.getContext('2d'), data=filteredByWeek(mode==='score'?pointsData:positionData,chartWeek), rev=mode==='rank';
+  const ctx=el.getContext('2d'), data=filteredByWeek(mode==='score'?pointsData:positionData,week), rev=mode==='rank';
   if (!data || data.length < 2) return null;
   const h=el.parentElement.offsetHeight||240;
   return new Chart(ctx, {type:'line',
@@ -244,24 +253,37 @@ function buildMainOn(cid, mode, showLegend=false) {
       scales:{y:SY({reverse:rev}), x:SX}, animation:{duration:600,easing:'easeInOutQuart'}}});
 }
 
-// ── Win Rate / Efficiency chart ────────────────────
-function buildAnalyticsOn(cid, mode, showLegend=false) {
+/* ── Efficiency ──
+   A bar per player for one week, not a line across all of them. The week control
+   picks which week, which is why it says "Week" rather than "Through week" — this
+   is the one chart that reads it as a single week rather than a range. */
+function buildEfficiencyOn(cid, week) {
   const el=document.getElementById(cid); if (!el) return null;
   hideNoData(cid);
-  const data=filteredByWeek(mode==='wr'?wrData:effData,chartWeek); if (!data||data.length<2) return null;
-  return new Chart(el.getContext('2d'), {type:'line',
-    data:{labels:data.slice(1).map(r=>'Wk '+r[0]), datasets:lineDS(data,false,null,0)},
-    options:{responsive:true, maintainAspectRatio:false, interaction:{mode:'index',intersect:false},
-      plugins:{legend:{...LEG,display:showLegend}, tooltip:{...TIP,callbacks:{label:c=>` ${c.dataset.label}: ${c.parsed.y}%`}}},
-      scales:{y:SY({min:0,max:100,ticks:{font:{size:10},color:'#475569',padding:6,callback:v=>v+'%'}}), x:SX},
-      animation:{duration:600,easing:'easeInOutQuart'}}});
+  if (!effData || effData.length < 2) return null;
+  const players = effData[0].slice(1);
+  // Exact week, not everything up to it. Week numbers arrive as strings.
+  const row = effData.slice(1).find(r => String(r[0]) === String(week));
+  if (!row) return null;
+  return new Chart(el.getContext('2d'), {type:'bar',
+    data:{labels:players, datasets:[{label:'Efficiency', data:row.slice(1),
+      backgroundColor:players.map((_,i)=>PALETTE[i%PALETTE.length]+'bb'),
+      borderColor:players.map((_,i)=>PALETTE[i%PALETTE.length]), borderWidth:1, borderRadius:4}]},
+    options:{responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false},
+        tooltip:{...TIP,callbacks:{label:c=>` ${c.label}: ${c.parsed.y}%`}}},
+      scales:{x:SX, y:SY({min:0,max:100,ticks:{font:{size:10},color:'#475569',padding:6,callback:v=>v+'%'}})},
+      animation:{duration:700,easing:'easeInOutQuart'}}});
 }
 
-// ── Variance chart ─────────────────────────────────
-function buildVarianceOn(cid, showLegend=false, showNames=false) {
+/* ── Consistency ──
+   Still the standard deviation of weekly efficiency, so a TALLER bar is a player
+   who swings more — the caption says so, because "Consistency" on its own would
+   read the other way round. */
+function buildConsistencyOn(cid, week, showLegend=false, showNames=false) {
   const el=document.getElementById(cid); if (!el) return null;
   hideNoData(cid);
-  const fd=filteredByWeek(effData,chartWeek); if (!fd||fd.length<2) return null;
+  const fd=filteredByWeek(effData,week); if (!fd||fd.length<2) return null;
   const players=fd[0].slice(1), rows=fd.slice(1);
   const v=players.map((_,pi)=>{const sc=rows.map(r=>r[pi+1]),m=sc.reduce((a,b)=>a+b,0)/sc.length; return parseFloat(Math.sqrt(sc.reduce((a,b)=>a+(b-m)**2,0)/sc.length).toFixed(2));});
   const xAxis={...SX,ticks:{...SX.ticks,display:showNames}};
@@ -274,66 +296,47 @@ function buildVarianceOn(cid, showLegend=false, showNames=false) {
       scales:{x:xAxis,y:SY()}, animation:{duration:700,easing:'easeInOutQuart'}}});
 }
 
-// ── Pill toggles ───────────────────────────────────
-function setupPillDrag(trackId, pillId, labelIds, modes, switchFn) {
-  function movePill(mode, animate) {
-    const tr=document.getElementById(trackId), pl=document.getElementById(pillId);
-    if (!tr||!pl) return;
-    const half=(tr.offsetWidth-4)/2;
-    pl.style.transition=animate?'left .22s cubic-bezier(.4,0,.2,1)':'none';
-    pl.style.left=mode===modes[0]?'2px':(2+half)+'px';
-    document.getElementById(labelIds[0]).style.color=mode===modes[0]?'var(--text)':'var(--muted)';
-    document.getElementById(labelIds[1]).style.color=mode===modes[1]?'var(--text)':'var(--muted)';
-  }
-  const track=document.getElementById(trackId);
-  if (!track) return movePill;
-  let startX=null;
-  function pt(e) { return e.touches?e.touches[0]:e; }
-  function onStart(e) { startX=pt(e).clientX; track.style.cursor='grabbing'; document.addEventListener('mousemove',onMove); document.addEventListener('mouseup',onEnd); document.addEventListener('touchmove',onMove,{passive:false}); document.addEventListener('touchend',onEnd); }
-  function onMove(e) { if(e.cancelable)e.preventDefault(); const rect=track.getBoundingClientRect(),half=(rect.width-4)/2,pl=document.getElementById(pillId); pl.style.transition='none'; pl.style.left=Math.max(2,Math.min(pt(e).clientX-rect.left-half/2-2,2+half))+'px'; const right=pt(e).clientX>=rect.left+rect.width/2; document.getElementById(labelIds[0]).style.color=right?'var(--muted)':'var(--text)'; document.getElementById(labelIds[1]).style.color=right?'var(--text)':'var(--muted)'; }
-  function onEnd(e) { track.style.cursor='grab'; document.removeEventListener('mousemove',onMove); document.removeEventListener('mouseup',onEnd); document.removeEventListener('touchmove',onMove); document.removeEventListener('touchend',onEnd); const rect=track.getBoundingClientRect(),ex=(e.changedTouches?e.changedTouches[0]:e).clientX; switchFn(ex>=rect.left+rect.width/2?modes[1]:modes[0]); }
-  track.addEventListener('mousedown',onStart);
-  track.addEventListener('touchstart',onStart,{passive:true});
-  return movePill;
-}
-
-let movePillMain = setupPillDrag('chart-toggle','toggle-pill',['tog-score','tog-rank'],['score','rank'], mode => {
-  if (mode === currentMode) return;
-  currentMode = mode;
-  document.getElementById('slide-label').textContent = mode==='score'?'Cumulative Score':'Rank Over Time';
-  if (activeChart) { activeChart.destroy(); activeChart=null; }
-  activeChart = buildMainOn('mainChart', mode);
-  if (!activeChart) showNoData('mainChart');
-  movePillMain(mode, true);
-});
-
-let movePillAnalytics = setupPillDrag('analytics-toggle','analytics-pill',['tog-wr','tog-eff'],['wr','eff'], mode => {
-  if (mode === analyticsMode) return;
-  analyticsMode = mode;
-  document.getElementById('slide-label').textContent = mode==='wr'?'% Correct Picks Per Week':'% of Max Available Points Captured';
-  if (activeChart) { activeChart.destroy(); activeChart=null; }
-  activeChart = buildAnalyticsOn('analyticsChart', mode);
-  if (!activeChart) showNoData('analyticsChart');
-  movePillAnalytics(mode, true);
-});
-
-// Global nav slider
+/* The card's week control. Deliberately not the nav's initWeekPicker: this
+   belongs to two of the five graphs, so it appears and disappears with the tab
+   rather than sitting across the top of the page whatever you are looking at. */
 {% if completed_weeks %}
-initNavSlider({
-  min: 1,
-  max: {{ completed_weeks|last }},
-  value: {{ completed_weeks|last }},
-  onChange: function(w) {
-    chartWeek = w;
-    if (activeChart) { activeChart.destroy(); activeChart=null; }
-    const s = SLIDES[currentSlide];
-    if (s.canvasId) {
-      if (s.id==='main')      { activeChart=buildMainOn(s.canvasId,currentMode);      if(!activeChart)showNoData(s.canvasId); }
-      if (s.id==='analytics') { activeChart=buildAnalyticsOn(s.canvasId,analyticsMode); if(!activeChart)showNoData(s.canvasId); }
-      if (s.id==='variance')  { activeChart=buildVarianceOn(s.canvasId,false,true);   if(!activeChart)showNoData(s.canvasId); }
-    }
+(function(){
+  const box  = document.getElementById('an-week-input');
+  const prev = document.getElementById('an-week-prev');
+  const next = document.getElementById('an-week-next');
+  if (!box || !prev || !next) return;
+
+  const min = 1, max = MAX_WEEK;
+  const clamp = w => Math.min(max, Math.max(min, w));
+
+  function paint() {
+    box.value = chartWeek;              // also snaps back a rejected entry
+    prev.disabled = chartWeek <= min;
+    next.disabled = chartWeek >= max;
   }
-});
+
+  function set(w) {
+    const wanted = clamp(w);
+    if (wanted === chartWeek) { paint(); return; }
+    chartWeek = wanted;
+    paint();
+    drawCurrent();
+  }
+
+  prev.addEventListener('click', () => set(chartWeek - 1));
+  next.addEventListener('click', () => set(chartWeek + 1));
+  // 'change', not 'input': typing "12" would otherwise redraw at week 1 on the way.
+  box.addEventListener('change', () => {
+    const typed = parseInt(box.value, 10);
+    if (Number.isNaN(typed)) { paint(); return; }
+    set(typed);
+  });
+  box.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); box.blur(); }
+  });
+
+  paint();
+})();
 {% endif %}
 </script>
 {% endblock %}

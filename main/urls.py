@@ -9,13 +9,13 @@ urlpatterns = [
     path('home/leaderboard/', views.ajax_leaderboard, name='ajax_leaderboard'),
     path('picks/', views.picks, name='picks'),
     path('picks/save/', views.ajax_save_pick, name='ajax_save_pick'),
-    path('emails/', views.emails, name='emails'),
     path('allpicks/', views.allpicks, name='allpicks'),
     path('history/data/', views.ajax_history, name='ajax_history'),
     path('preseason/', views.preseason, name='preseason'),
     path('standings/', views.standings_view, name='standings'),
     path('rules/', views.rules, name='rules'),
     path('seasons/', views.seasons, name='seasons'),
+    path('members/', views.members, name='members'),
     path('dashboard/picks/', views.pickdash, name='pickdash'),
     path('dashboard/accounts/', views.accountdash, name='accountdash'),
     path('dashboard/emails/', views.emaildash, name='emaildash'),
@@ -26,6 +26,9 @@ urlpatterns = [
     path('dashboard/analytics/', views.secret_analytics, name='secret_analytics'),
     path('dashboard/generate-recap/', views.generate_recap, name='generate_recap'),
     path('dashboard/send-test-email/', views.send_test_email, name='send_test_email'),
+    # Unlinked from the nav on purpose: the analysis concludes that no simple rule
+    # beats the odds, which cuts against the point of playing. Route and saved
+    # report are intact, so it is one nav entry away from coming back.
     path('strategy/', views.montecarlo_view, name='montecarlo'),
     path('dashboard/devtools/', views.devtools, name='devtools'),
     path('dashboard/devtools/sim/', views.sim_control, name='sim_control'),

@@ -213,9 +213,9 @@
     .glow { box-shadow: 0 0 20px color-mix(in srgb, var(--accent) 35%, transparent); }
 
     /* Score bar */
-    .score-bar { height: 3px; background: rgba(255,255,255,.08); border-radius: 99px; overflow: hidden; }
+    .score-bar { height: 3px; background: rgba(255,255,255,.08); overflow: hidden; }
     [data-theme="light"] .score-bar { background: rgba(0,0,0,.08); }
-    .score-bar-fill { height: 100%; background: transparent; border-radius: 99px; width: 0; transition: width 1.2s cubic-bezier(.2,.8,.2,1); }
+    .score-bar-fill { height: 100%; background: transparent; width: 0; transition: width 1.2s cubic-bezier(.2,.8,.2,1); }
 
     /* Animations */
     @keyframes fadeUp   { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:translateY(0); } }
@@ -278,16 +278,40 @@
     .timer-compact .hms-sep { font-size:.9rem;margin-bottom:13px; }
     .timer-compact .timer-label { margin-bottom:7px; }
 
-    /* Nav week slider */
-    #nav-week-slider { -webkit-appearance:none;appearance:none;width:100%;height:3px;border-radius:2px;outline:none;cursor:pointer; }
-    #nav-week-slider::-webkit-slider-thumb { -webkit-appearance:none;width:11px;height:11px;border-radius:50%;background:var(--accent);cursor:pointer; }
-    #nav-week-slider::-moz-range-thumb { width:11px;height:11px;border-radius:50%;background:var(--accent);cursor:pointer;box-sizing:border-box;border:none; }
-    /* Phones get the slider too — it is the only way to reach past weeks.
-       Give the thumb a finger-sized target. */
+    /* Nav week picker — a number you can type and two arrows to step it. */
+    .nav-wk { display:flex;align-items:center;gap:4px; }
+    .nav-wk-btn {
+      display:flex;align-items:center;justify-content:center;
+      width:24px;height:24px;padding:0;cursor:pointer;
+      background:none;color:var(--muted);
+      border:1px solid var(--border2);border-radius:6px;
+      transition:color .14s ease,background .14s ease;
+    }
+    .nav-wk-btn:hover:not(:disabled) { color:var(--text);background:var(--fill-2); }
+    /* Kept in place at the ends rather than hidden, so the box does not shift
+       under the pointer between week 1 and the middle of the season. */
+    .nav-wk-btn:disabled { opacity:.3;cursor:default; }
+    .nav-wk-input {
+      width:44px;height:24px;text-align:center;
+      background:var(--surface2);color:var(--text);
+      border:1px solid var(--border2);border-radius:6px;
+      font-size:.75rem;font-weight:700;font-family:inherit;
+      font-variant-numeric:tabular-nums;
+    }
+    .nav-wk-input:focus { outline:none;border-color:var(--accent); }
+    /* The native spinners duplicate the arrows either side and leave a 44px box
+       with barely room for two digits. */
+    .nav-wk-input::-webkit-outer-spin-button,
+    .nav-wk-input::-webkit-inner-spin-button { -webkit-appearance:none;margin:0; }
+    .nav-wk-input { -moz-appearance:textfield;appearance:textfield; }
     @media (max-width:640px) {
-      #nav-week-slider { height:4px; }
-      #nav-week-slider::-webkit-slider-thumb { width:18px;height:18px; }
-      #nav-week-slider::-moz-range-thumb { width:18px;height:18px; }
+      .nav-wk-btn { width:28px;height:28px; }
+      .nav-wk-input { width:46px;height:28px; }
+      /* The week number still shows; only the season type goes. A page putting a
+         control in #nav-week-extra shares this row, and at 390px the two together
+         overran it — the row is right-aligned, so the overflow went off the left
+         edge and took a button with it. */
+      .nav-wk-type { display:none; }
     }
   </style>
   {% block extra_head %}{% endblock %}
@@ -350,10 +374,9 @@
         <a href="{% url 'main:home' %}" class="nav-link">Home</a>
         <a href="{% url 'main:picks' %}" class="nav-link">Picks</a>
         <a href="{% url 'main:pick_history' %}" class="nav-link">Pick History</a>
-        <a href="{% url 'main:emails' %}" class="nav-link">Emails</a>
         <a href="{% url 'main:analytics' %}" class="nav-link">Analytics</a>
+        <a href="{% url 'main:members' %}" class="nav-link">Members</a>
         <a href="{% url 'main:rules' %}" class="nav-link">Rules</a>
-        <a href="{% url 'main:montecarlo' %}" class="nav-link">Strategy</a>
         {% if request.user.is_staff %}
         <div class="nav-group" style="position:relative;">
           <button class="nav-link" style="display:flex;align-items:center;gap:4px;background:none;border:none;cursor:pointer;">
@@ -364,7 +387,6 @@
             <a href="{% url 'main:pickdash' %}">Pick Dashboard</a>
             <a href="{% url 'main:accountdash' %}">Accounts</a>
             <a href="{% url 'main:emaildash' %}">Emails</a>
-            <a href="{% url 'main:devtools' %}">Developer Tools</a>
           </div>
         </div>
         {% endif %}
@@ -408,11 +430,31 @@
     </div>
   </div>
 
-  <!-- Nav week slider -->
-  <div id="nav-slider-row" style="display:none;border-top:1px solid var(--border);">
-    <div style="max-width:1280px;margin:0 auto;padding:0 24px;height:32px;display:flex;align-items:center;gap:12px;">
-      <input type="range" id="nav-week-slider" min="1" max="18" value="18" style="flex:1;">
-      <span id="nav-week-label" style="font-size:.625rem;font-weight:700;color:var(--accent);min-width:22px;text-align:right;white-space:nowrap;">W18</span>
+  <!-- Nav week picker -->
+  <div id="nav-week-row" style="display:none;border-top:1px solid var(--border);">
+    <div style="max-width:1280px;margin:0 auto;padding:0 24px;height:32px;display:flex;align-items:center;justify-content:flex-end;gap:14px;">
+      {% comment %}
+        A page can put its own control on this row beside the week picker — pick
+        history parks its game pager here, so the two sit together and both stay
+        pinned under the nav instead of one scrolling away with the page.
+      {% endcomment %}
+      <div id="nav-week-extra" style="display:flex;align-items:center;gap:8px;"></div>
+      <span id="nav-week-label" style="font-size:.625rem;font-weight:700;color:var(--accent);white-space:nowrap;">
+        <span id="nav-week-num">W18</span>
+        <span id="nav-week-type" class="nav-wk-type">Regular Season</span>
+      </span>
+      <div class="nav-wk">
+        <button type="button" id="nav-week-prev" class="nav-wk-btn" aria-label="Previous week">
+          <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path
+            stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"/></svg>
+        </button>
+        <input type="number" id="nav-week-input" class="nav-wk-input"
+               min="1" max="18" value="18" inputmode="numeric" aria-label="Week number">
+        <button type="button" id="nav-week-next" class="nav-wk-btn" aria-label="Next week">
+          <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path
+            stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/></svg>
+        </button>
+      </div>
     </div>
   </div>
 
@@ -423,16 +465,14 @@
       <a href="{% url 'main:home' %}" class="nav-link">Home</a>
       <a href="{% url 'main:picks' %}" class="nav-link">Picks</a>
       <a href="{% url 'main:pick_history' %}" class="nav-link">Pick History</a>
-      <a href="{% url 'main:emails' %}" class="nav-link">Emails</a>
       <a href="{% url 'main:analytics' %}" class="nav-link">Analytics</a>
+      <a href="{% url 'main:members' %}" class="nav-link">Members</a>
       <a href="{% url 'main:rules' %}" class="nav-link">Rules</a>
-      <a href="{% url 'main:montecarlo' %}" class="nav-link">Simulation</a>
       {% if request.user.is_staff %}
       <div style="height:1px;background:var(--border);margin:4px 0;"></div>
       <a href="{% url 'main:pickdash' %}" class="nav-link">Pick Dashboard</a>
       <a href="{% url 'main:accountdash' %}" class="nav-link">Accounts</a>
       <a href="{% url 'main:emaildash' %}" class="nav-link">Emails</a>
-      <a href="{% url 'main:devtools' %}" class="nav-link">Developer Tools</a>
       {% endif %}
       <div style="height:1px;background:var(--border);margin:4px 0;"></div>
       <a href="{% url 'accounts:user_profile' %}" class="nav-link">My Profile</a>
@@ -506,36 +546,64 @@ function _syncThemeIcons() {
   document.querySelectorAll('.theme-icon-el').forEach(el => { el.textContent = light ? '🌙' : '☀️'; });
 }
 document.addEventListener('DOMContentLoaded', _syncThemeIcons);
-function initNavSlider(config) {
-  const row=document.getElementById('nav-slider-row');
-  const slider=document.getElementById('nav-week-slider');
-  const label=document.getElementById('nav-week-label');
-  if(!row||!slider||!label)return;
-  slider.min=config.min;
-  slider.max=config.max;
-  slider.value=config.value;
+/* The week picker in the nav: type a number, or step it with the arrows.
+   Same {min, max, value, onChange} contract the slider had, so callers are
+   unchanged. Replaces a range input, which could only be dragged — imprecise for
+   picking one week out of twenty-two, and impossible to aim on a phone. */
+function initWeekPicker(config) {
+  const row  = document.getElementById('nav-week-row');
+  const box  = document.getElementById('nav-week-input');
+  const prev = document.getElementById('nav-week-prev');
+  const next = document.getElementById('nav-week-next');
+  const label= document.getElementById('nav-week-label');
+  if(!row||!box||!prev||!next||!label)return;
+
+  const min = +config.min, max = +config.max;
+  box.min = min; box.max = max;
+
+  function clamp(w){ return Math.min(max, Math.max(min, w)); }
   function wkType(w){ return w<=18?'Regular Season':w>=22?'Super Bowl':'Playoffs'; }
-  function wkLabel(w){ return 'W'+w+' '+wkType(w); }
-  label.textContent=wkLabel(config.value);
-  const accentColor=getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()||'#00897b';
-  function updateFill(){
-    const mn=+slider.min,mx=+slider.max,val=+slider.value;
-    const pct=mx>mn?((val-mn)/(mx-mn))*100:0;
-    const isLight=document.documentElement.dataset.theme==='light';
-    const fill=`color-mix(in srgb,${accentColor} 55%,transparent)`;
-    const track=isLight?'rgba(0,0,0,.15)':'rgba(255,255,255,.07)';
-    slider.style.background=`linear-gradient(to right,${fill} 0%,${fill} ${pct}%,${track} ${pct}%,${track} 100%)`;
+
+  let value = clamp(+config.value);
+
+  const num  = document.getElementById('nav-week-num');
+  const type = document.getElementById('nav-week-type');
+
+  function paint(){
+    box.value = value;                       // also snaps back a rejected entry
+    // Two spans, so a narrow screen can drop the season type and keep the number.
+    if (num && type) { num.textContent = 'W'+value; type.textContent = wkType(value); }
+    else { label.textContent = 'W'+value+' '+wkType(value); }
+    prev.disabled = value <= min;
+    next.disabled = value >= max;
   }
-  updateFill();
-  slider.addEventListener('input',()=>{ label.textContent=wkLabel(+slider.value); updateFill(); });
-  slider.addEventListener('change',()=>{
-    const val=+slider.value;
-    label.textContent=wkLabel(val);
-    updateFill();
-    if(config.onChange)config.onChange(val);
+
+  function set(w, fire){
+    const wanted = clamp(w);
+    if (wanted === value) { paint(); return; }
+    value = wanted;
+    paint();
+    if (fire && config.onChange) config.onChange(value);
+  }
+
+  prev.addEventListener('click', () => set(value-1, true));
+  next.addEventListener('click', () => set(value+1, true));
+
+  // 'change', not 'input': a number box fires input on every keystroke, so typing
+  // "12" would load week 1 on the way past and throw away the request.
+  box.addEventListener('change', () => {
+    const typed = parseInt(box.value, 10);
+    if (Number.isNaN(typed)) { paint(); return; }   // emptied — put the week back
+    set(typed, true);
   });
+  // Enter commits rather than submitting anything around it.
+  box.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); box.blur(); }
+  });
+
+  paint();
   row.style.display='';
-  document.documentElement.classList.add('nav-has-slider');
+  document.documentElement.classList.add('nav-has-weekpicker');
 }
 </script>
 <script>
@@ -543,7 +611,9 @@ function initNavSlider(config) {
   var dateOpts = {month:'short', day:'numeric'};
   var timeOpts = {hour:'numeric', minute:'2-digit', timeZoneName:'short'};
   var fullOpts = {month:'short', day:'numeric', hour:'numeric', minute:'2-digit', timeZoneName:'short'};
-  var dayOpts  = {weekday:'long'};
+  // Weekday alone was ambiguous on a status card - "Sunday" gives no clue
+  // whether it means this Sunday or one three weeks out.
+  var dayOpts  = {weekday:'short', month:'short', day:'numeric'};
   function conv(el, opts) {
     try { el.textContent = new Date(el.dataset.utc).toLocaleString(undefined, opts); } catch(e) {}
   }

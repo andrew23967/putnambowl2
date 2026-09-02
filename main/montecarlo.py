@@ -137,10 +137,17 @@ def load_multi_season(years, multiplier=1.0):
     return all_games, year_counts, errors
 
 
-def ev_by_underdog_points(games, step=0.1):
+def ev_by_underdog_points(games, step=0.1, min_games=30):
     """
     Net EV of picking underdog vs favorite, bucketed by underdog point value.
     Includes Bonferroni correction for the number of buckets tested.
+
+    The long tail is folded into one open-ended bucket. Big underdogs are rare, so
+    fixed-width buckets out there hold a handful of games that all went the same
+    way — every underdog lost, every payoff identical, zero variance. Those have no
+    computable threshold, so they appeared on the chart as bars with no band at
+    all, and their enormous error dominated the axis. One "9.00+" bucket has the
+    games to say something instead.
     """
     lined = [g for g in games if g.get('has_lines')]
     if not lined:
@@ -150,13 +157,24 @@ def ev_by_underdog_points(games, step=0.1):
     lo_start = math.floor(min(pts_values) / step) * step
     hi_end = math.ceil(max(pts_values) / step) * step
 
-    buckets = []
+    # Ranges first, so the sparse tail can be merged before anything is computed.
+    ranges = []
     lo = lo_start
     while lo < hi_end - 1e-9:
         hi = lo + step
         lo_r, hi_r = round(lo, 2), round(hi, 2)
-        bucket = [g for g in lined if lo_r <= round(g['pts_ug'], 2) < hi_r]
+        member = [g for g in lined if lo_r <= round(g['pts_ug'], 2) < hi_r]
+        ranges.append([lo_r, hi_r, member])
         lo = hi
+
+    while len(ranges) > 1 and len(ranges[-1][2]) < min_games:
+        lo_r, hi_r, member = ranges.pop()
+        ranges[-1][1] = hi_r
+        ranges[-1][2] = ranges[-1][2] + member
+    open_ended = len(ranges) > 1 and ranges[-1][1] >= hi_end - 1e-9
+
+    buckets = []
+    for idx, (lo_r, hi_r, bucket) in enumerate(ranges):
         if len(bucket) < 3:
             continue
         n = len(bucket)
@@ -174,8 +192,10 @@ def ev_by_underdog_points(games, step=0.1):
             margin = round(1.96 * se, 3)
         else:
             margin = None
+        last = idx == len(ranges) - 1
+        label = f'{lo_r:.2f}+' if (last and open_ended) else f'{lo_r:.2f}–{hi_r:.2f}'
         buckets.append({
-            'label': f'{lo_r:.2f}–{hi_r:.2f}',
+            'label': label,
             'n_games': n,
             'ug_win_pct': round(win_rate * 100, 1),
             'ev_ug': ev_ug,

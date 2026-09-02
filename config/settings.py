@@ -142,6 +142,8 @@ IMAP_MARK_SEEN = env('IMAP_MARK_SEEN', default='true')
 # tagged address, so replying to one submits picks even for the commissioner —
 # whose announcements would otherwise be published, picks and all.
 PICKS_ADDRESS_TAG = env('PICKS_ADDRESS_TAG', default='picks')
+# The +tag meaning "this is the intro for this week's league email".
+INTRO_ADDRESS_TAG = env('INTRO_ADDRESS_TAG', default='intro')
 # Only turn this off against a local test mailbox. With it off, a forged From
 # header is enough to publish to the home page.
 INBOUND_REQUIRE_AUTH = env('INBOUND_REQUIRE_AUTH', default='true')

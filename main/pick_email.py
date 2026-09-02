@@ -178,8 +178,8 @@ def build_reply(user, settings, saved, unresolved, games):
     lines.append('')
     lines.append('You can also change any of these on the site.')
     lines.append('')
-    lines.append('—')
-    lines.append("PutnamBot, reading the league's mail")
+    lines.append('──')
+    lines.append('PutnamBowl')
     return '\n'.join(lines)
 
 

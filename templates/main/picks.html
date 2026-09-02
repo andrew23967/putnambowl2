@@ -12,11 +12,30 @@
   .pk-timer { width:300px;max-width:100%;flex-shrink:0; }
 
   /* ── Game rows ── */
-  .game-row { display:flex;align-items:center;padding:10px 12px;gap:12px;transition:opacity .12s;break-inside:avoid;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.055);border-radius:0;margin-bottom:8px; }
+  /* No panel around each game: the pick control already draws its own box, and a
+     card around a box is one frame too many. */
+  /* An outline, not a panel: each game needs an edge to read as one thing, but a
+     fill would put a surface behind text that is already on the page. */
+  .game-row {
+    display:flex;align-items:center;gap:12px;transition:opacity .12s,background .14s ease;
+    break-inside:avoid;
+    border:1px solid var(--border);border-radius:var(--radius);
+    padding:9px 12px;margin-bottom:8px;
+  }
   .game-row:hover { opacity:.85; }
-  .game-sep { display:flex;align-items:center;gap:8px;margin-bottom:1px; }
-  .game-sep-text { font-size:.5rem;color:var(--muted);white-space:nowrap;opacity:.6; }
-  .game-sep-line { flex:1;height:1px;background:rgba(255,255,255,.05); }
+  /* Graded, and you had a pick on it. Faint enough to read as a tint on the card
+     rather than a block of colour — the row still has to be legible through it. */
+  .game-row-correct {
+    background:color-mix(in srgb,var(--good) 9%,transparent);
+    border-color:color-mix(in srgb,var(--good) 28%,transparent);
+  }
+  .game-row-wrong {
+    background:color-mix(in srgb,var(--bad) 9%,transparent);
+    border-color:color-mix(in srgb,var(--bad) 28%,transparent);
+  }
+  /* Kickoff and venue. Was .5rem at 60% opacity, which was decoration rather than
+     something you could read; this is the size and weight of real information. */
+  .game-sep-text { font-size:.6875rem;color:var(--muted2);white-space:nowrap;font-weight:500; }
   .team-name { font-weight:700;font-size:1rem;color:var(--text); }
   .vs-sep { color:var(--muted);font-size:.8rem;font-weight:800;flex-shrink:0; }
 
@@ -33,13 +52,14 @@
   .game-teams-row { display:flex;align-items:center;justify-content:space-between;gap:4px; }
   .game-team-side { display:flex;align-items:center;gap:4px; }
   .game-pts { font-size:.75rem;color:var(--muted); }
-  .game-bottom-row { display:flex;align-items:center;justify-content:space-between;margin-top:2px; }
-  .game-dist-row { display:flex;align-items:center;gap:5px; }
-  .dist-pct-t1 { font-size:.7rem;font-weight:700;color:#3b82f6;white-space:nowrap; }
-  .dist-pct-t2 { font-size:.7rem;font-weight:700;color:#ef4444;white-space:nowrap; }
-  .game-pie { width:22px;height:22px;border-radius:50%;flex-shrink:0;position:relative; }
-  .game-pie-hole { width:13px;height:13px;border-radius:50%;background:var(--bg);position:absolute;top:50%;left:50%;transform:translate(-50%,-50%); }
-  .game-check { font-size:.95rem; }
+  .game-bottom-row { display:flex;align-items:center;justify-content:space-between;margin-top:6px; }
+  /* What you took on this game. The league's split used to sit here as two
+     percentages either side of a donut; this is the one fact the person reading
+     their own picks actually wants back. */
+  .game-picked { display:flex;align-items:baseline;gap:5px;font-size:.6875rem;
+                 color:var(--muted);white-space:nowrap; }
+  .game-picked strong { font-weight:700;color:var(--text); }
+  .game-picked-none { font-style:italic;opacity:.7; }
 
   /* ── Pick control ──
      Two tappable halves backed by real radio inputs. Selection is expressed
@@ -93,8 +113,6 @@
      The pick control needs none of these; it is built on the --fill and --border
      tokens, which already flip with the theme. */
   [data-theme="light"] .vs-sep { color: var(--muted); }
-  [data-theme="light"] .game-sep-line { background: rgba(0,0,0,.07); }
-  [data-theme="light"] .game-row { background:rgba(0,0,0,.03);border-color:rgba(0,0,0,.07); }
   [data-theme="light"] #games-track { background: rgba(0,0,0,.07); }
 
   /* ── Viewport-fill layout (tablet + desktop) ──
@@ -107,12 +125,11 @@
       overflow: hidden !important;
       box-sizing: border-box !important;
     }
-    html.nav-has-slider main { height: calc(100vh - 86px) !important; }
+    html.nav-has-weekpicker main { height: calc(100vh - 86px) !important; }
   }
   @media (max-width:1024px) and (min-width:641px) {
     main { padding:clamp(12px,2.4vw,24px) !important; }
-    .game-row { padding:clamp(8px,1.1vw,12px) clamp(8px,1.1vw,12px); }
-    .game-sep { margin-bottom:clamp(2px,.3vw,3px); }
+    .game-row { padding:clamp(7px,1vw,10px) clamp(9px,1.1vw,12px); }
     .hms-wrap .cd-digit { font-size:clamp(1.25rem,3.2vw,2rem) !important;padding:clamp(6px,1vw,10px) clamp(8px,1.4vw,14px) !important; }
     .hms-sep { font-size:clamp(.9rem,1.5vw,1.5rem); }
   }
@@ -127,7 +144,7 @@
     .game-bottom-row { flex-wrap:wrap !important;gap:4px 10px !important; }
     #games-track, #games-thumb { display:none !important; }
     #games-scroll { position:static !important;overflow:visible !important; }
-    .game-row { padding:10px 12px !important; }
+    .game-row { padding:9px 11px !important; }
     /* Bigger tap targets on phones. */
     .pick-side { padding:12px 10px !important; }
     .pick-abbr { font-size:.875rem !important; }
@@ -156,10 +173,13 @@
   <div class="pk-head-text">
     <h1 class="pk-title">Week {{ settings.week }} Picks</h1>
     {% if settings.lock_picks %}
-    <p class="pk-sub">Picks are locked. Results fill in here as games are graded.</p>
+    <p class="pk-sub">Picks are locked. Results fill in here as games are graded —
+      a green card is one you got right, a red one is a game you got wrong.</p>
     {% else %}
     <p class="pk-sub">Tap a team to back it — each pick saves on its own, so there's nothing to submit.
-      Underdogs are worth more.</p>
+      The number beside each team is what you score for getting it right, set in proportion
+      to the odds Vegas implies for that team winning: the lower their chance, the more
+      they are worth.</p>
     {% endif %}
 
     {% if settings.lock_picks %}
@@ -195,8 +215,12 @@
 <div class="games-columns">
 {% for game in games %}
 {% with pick=picks_map|get_item:game.id game_id_str=game.id|stringformat:"s" %}
-{% with dist=pick_dist|get_item:game_id_str %}
-<div class="game-row">
+{% comment %}
+  The result tint only once picks are locked. A week can have graded games while
+  the form is still open — the commissioner can unlock one — and colouring the
+  form would both give the outcome away and paint a control you can still change.
+{% endcomment %}
+<div class="game-row{% if settings.lock_picks and game.winner and pick %}{% if pick.choice == game.winner %} game-row-correct{% else %} game-row-wrong{% endif %}{% endif %}">
   <div style="flex:1;min-width:0;">
     {% if not settings.lock_picks %}
     <div class="pick-2up" role="radiogroup" aria-label="{{ game.team1_abbrev }} versus {{ game.team2_abbrev }}">
@@ -218,47 +242,41 @@
     <!-- Locked / graded display -->
     <div class="game-teams-row">
       <div class="game-team-side">
-        <span class="team-name" style="{% if pick and pick.choice == 'team1' %}text-decoration:underline;text-underline-offset:3px;text-decoration-thickness:1.5px;{% endif %}{% if game.winner == 'team1' %}color:#34d399;{% elif game.winner == 'team2' %}color:#f87171;{% endif %}">{{ game.team1_abbrev }}</span>
+        <span class="team-name" style="{% if game.winner == 'team1' %}color:#34d399;{% elif game.winner == 'team2' %}color:#f87171;{% endif %}">{{ game.team1_abbrev }}</span>
         <span class="game-pts">{{ game.points1 }}</span>
       </div>
       <span class="vs-sep">{% if game.winner == 'team1' %}◀{% elif game.winner == 'team2' %}▶{% elif game.winner %}T{% else %}vs{% endif %}</span>
       <div class="game-team-side">
         <span class="game-pts">{{ game.points2 }}</span>
-        <span class="team-name" style="{% if pick and pick.choice == 'team2' %}text-decoration:underline;text-underline-offset:3px;text-decoration-thickness:1.5px;{% endif %}{% if game.winner == 'team2' %}color:#34d399;{% elif game.winner == 'team1' %}color:#f87171;{% endif %}">{{ game.team2_abbrev }}</span>
+        <span class="team-name" style="{% if game.winner == 'team2' %}color:#34d399;{% elif game.winner == 'team1' %}color:#f87171;{% endif %}">{{ game.team2_abbrev }}</span>
       </div>
     </div>
     {% endif %}
-    <div class="game-sep"><div class="game-sep-line"></div></div>
     {% if settings.lock_picks %}
+    {% comment %}
+      One order, whichever side is at home: the split on the left, the kickoff and
+      venue on the right. It used to mirror itself on team1_is_home, so the date
+      wandered from column to column down the page and there was nothing to read
+      along. Only which team the venue names still depends on it.
+    {% endcomment %}
     <div class="game-bottom-row">
-      {% if not game.home_team %}
-      <span class="game-sep-text">{% if game.game_dt_iso %}<span data-utc-full="{{ game.game_dt_iso }}">{{ game.game_dt_iso }}</span> · {% endif %}@ {{ game.team1_abbrev }}</span>
-      <div class="game-dist-row">
-        {% if dist %}<span class="dist-pct-t1">{{ dist.team1_pct }}%</span>
-        <div class="game-pie" style="background:conic-gradient(rgba(59,130,246,.8) 0% {{ dist.team1_pct }}%,rgba(239,68,68,.7) {{ dist.team1_pct }}% 100%);"><div class="game-pie-hole"></div></div>
-        <span class="dist-pct-t2">{{ dist.team2_pct }}%</span>{% endif %}
-        {% if game.winner and pick %}<span class="game-check" style="{% if pick.choice == game.winner %}color:#22c55e;{% else %}color:#ef4444;{% endif %}">{% if pick.choice == game.winner %}✓{% else %}✗{% endif %}</span>{% endif %}
-      </div>
+      {% if pick %}
+      <span class="game-picked">You picked:
+        <strong>{% if pick.choice == 'team1' %}{{ game.team1_abbrev }}{% else %}{{ game.team2_abbrev }}{% endif %}</strong></span>
       {% else %}
-      <div class="game-dist-row">
-        {% if dist %}<span class="dist-pct-t1">{{ dist.team1_pct }}%</span>
-        <div class="game-pie" style="background:conic-gradient(rgba(59,130,246,.8) 0% {{ dist.team1_pct }}%,rgba(239,68,68,.7) {{ dist.team1_pct }}% 100%);"><div class="game-pie-hole"></div></div>
-        <span class="dist-pct-t2">{{ dist.team2_pct }}%</span>{% endif %}
-        {% if game.winner and pick %}<span class="game-check" style="{% if pick.choice == game.winner %}color:#22c55e;{% else %}color:#ef4444;{% endif %}">{% if pick.choice == game.winner %}✓{% else %}✗{% endif %}</span>{% endif %}
-      </div>
-      <span class="game-sep-text">{% if game.game_dt_iso %}<span data-utc-full="{{ game.game_dt_iso }}">{{ game.game_dt_iso }}</span> · {% endif %}@ {{ game.team2_abbrev }}</span>
+      <span class="game-picked game-picked-none">No pick</span>
       {% endif %}
+      <span class="game-sep-text">{% if game.game_dt_iso %}<span data-utc-full="{{ game.game_dt_iso }}">{{ game.game_dt_iso }}</span> · {% endif %}@ {% if game.team1_is_home %}{{ game.team1_abbrev }}{% else %}{{ game.team2_abbrev }}{% endif %}</span>
     </div>
     {% else %}
     {% if game.game_dt_iso %}
-    <div style="display:flex;justify-content:{% if game.home_team %}flex-end{% else %}flex-start{% endif %};margin-top:2px;">
-      <span class="game-sep-text"><span data-utc-full="{{ game.game_dt_iso }}">{{ game.game_dt_iso }}</span> · @ {% if game.home_team %}{{ game.team2_abbrev }}{% else %}{{ game.team1_abbrev }}{% endif %}</span>
+    <div style="display:flex;justify-content:flex-end;margin-top:6px;">
+      <span class="game-sep-text"><span data-utc-full="{{ game.game_dt_iso }}">{{ game.game_dt_iso }}</span> · @ {% if game.team1_is_home %}{{ game.team1_abbrev }}{% else %}{{ game.team2_abbrev }}{% endif %}</span>
     </div>
     {% endif %}
     {% endif %}
   </div>
 </div>
-{% endwith %}
 {% endwith %}
 {% endfor %}
 </div>{# end games columns wrapper #}
