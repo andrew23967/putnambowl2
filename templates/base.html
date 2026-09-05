@@ -5,7 +5,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}{% endblock %} · {% if league %}{{ league.name }}{% else %}PutnamBowl{% endif %}</title>
-  <link rel="icon" type="image/png" href="{% static 'main/favicon.png' %}">
+  <link rel="icon" type="image/svg+xml" href="{% static 'main/logo.svg' %}">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -17,7 +17,7 @@
 {% with current=request.resolver_match.url_name %}
 <nav class="nav">
   <div class="nav-in">
-    <a class="nav-brand" href="{% if league %}{% url 'main:home' %}{% else %}{% url 'leagues:index' %}{% endif %}"><img class="nav-icon" src="{% static 'main/favicon.png' %}" alt="">{% if league %}{{ league.name }}{% else %}Site admin{% endif %}</a>
+    <a class="nav-brand" href="{% if league %}{% url 'main:home' %}{% else %}{% url 'leagues:index' %}{% endif %}"><img class="nav-icon" src="{% static 'main/logo.svg' %}" alt="">{% if league %}{{ league.name }}{% else %}Site admin{% endif %}</a>
 
     {% if league %}
     <div class="nav-links">
