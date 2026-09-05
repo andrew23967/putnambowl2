@@ -3,7 +3,7 @@
 
 {% block extra_head %}
 <style>
-  .mb-row { display: grid; grid-template-columns: 1fr minmax(300px, 30%) 92px; gap: 0 22px; padding: 14px 0; border-bottom: 1px solid var(--rule-2); }
+  .mb-row { display: grid; grid-template-columns: 1fr minmax(300px, 30%); gap: 0 22px; padding: 14px 0; border-bottom: 1px solid var(--rule-2); }
   .mb-row.is-me { background: var(--fill-me); margin: 0 calc(-1 * var(--pad-x)); padding-left: var(--pad-x); padding-right: var(--pad-x); }
   .mb-name { font-size: 14.5px; font-weight: 600; letter-spacing: -.01em; }
   .mb-handle { font: 400 11px var(--mono); color: var(--muted-3); }
@@ -14,15 +14,8 @@
   .mb-fin a { color: var(--muted-2); }
   .mb-fin a:hover { color: var(--ink); }
   .mb-fin b { color: var(--ink-3); font-weight: 500; }
-  .mb-score { font: 600 18px var(--mono); letter-spacing: -.02em; line-height: 1; }
-  .mb-rank { margin-top: 4px; font: 400 10.5px var(--mono); color: var(--muted-3); }
-  .mb-rank.top { color: var(--ink); }
   .mb-bots { display: flex; align-items: baseline; gap: 10px; padding: 14px 0 18px; font-size: 12.5px; color: var(--muted); }
-  .mb-cols { display: grid; grid-template-columns: 1fr minmax(300px, 30%) 92px; gap: 0 22px; padding: 8px 0; border-bottom: 1px solid var(--rule-strong); }
-  .sort { display: flex; gap: 6px; }
-  .sort a { display: inline-block; padding: 6px 10px; border: 1px solid var(--rule-3); background: #fff; border-radius: 4px; font: 600 10.5px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--muted-2); }
-  .sort a:hover { border-color: #b6b4ae; }
-  .sort a.is-on { background: var(--fill); border-color: var(--ink); color: var(--ink); }
+  .mb-cols { display: grid; grid-template-columns: 1fr minmax(300px, 30%); gap: 0 22px; padding: 22px 0 8px; border-bottom: 1px solid var(--rule-strong); }
   @media (max-width: 760px) {
     .mb-row, .mb-cols { grid-template-columns: 1fr auto; }
     .mb-row .kv, .mb-cols .col-pre { display: none; }
@@ -31,24 +24,9 @@
 {% endblock %}
 
 {% block content %}
-<div class="page-head">
-  <div class="page-head-title">
-    <p class="eyebrow">Members</p>
-    <p class="meta">{{ members|length }} player{{ members|length|pluralize }}{% if bot_count %}, {{ bot_count }} bot{{ bot_count|pluralize }}{% endif %} · sorted by {{ sort }}</p>
-  </div>
-  <div class="page-head-end">
-    <div class="sort">
-      <a href="?sort=points" {% if sort == 'points' %}class="is-on"{% endif %}>points</a>
-      <a href="?sort=name" {% if sort == 'name' %}class="is-on"{% endif %}>name</a>
-      <a href="?sort=joined" {% if sort == 'joined' %}class="is-on"{% endif %}>joined</a>
-    </div>
-  </div>
-</div>
-
 <div class="mb-cols">
   <span class="eyebrow" style="letter-spacing:.12em;">Player</span>
   <span class="eyebrow col-pre" style="letter-spacing:.12em;">Preseason picks</span>
-  <span class="eyebrow r" style="letter-spacing:.12em;">Points</span>
 </div>
 
 {% for m in members %}
@@ -82,11 +60,6 @@
     <dt>Preseason</dt><dd class="dim">Not in yet</dd>
     {% endif %}
   </dl>
-
-  <div class="r">
-    <p class="mb-score">{{ m.score }}</p>
-    <p class="mb-rank{% if m.rank <= 3 %} top{% endif %}">{{ m.rank_label }}</p>
-  </div>
 </div>
 {% empty %}
 <p class="empty" style="padding:20px 0;">No members yet.</p>

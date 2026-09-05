@@ -666,7 +666,8 @@ def season(request, year):
 
 @league_required
 def members(request):
-    """The league roster, one ruled row per member.
+    """The league roster, one ruled row per member, alphabetical. Standings
+    live on the home page; this page is about who is in the league.
 
     Bots are folded into one line at the bottom: they play and they score, so
     the standings need them, but a page about who is in the league does not
@@ -675,11 +676,7 @@ def members(request):
     from . import seasons as seasons_mod
 
     league = current_league(request)
-    sort = request.GET.get('sort', 'points')
-    if sort not in ('points', 'name', 'joined'):
-        sort = 'points'
     people = list(User.objects.select_related('profile').filter(profile__league=league))
-    ranks = competition_ranks({u.username: round(u.profile.score, 1) for u in people})
     finishes = seasons_mod.finishes_by_username(league)
 
     rows = []
@@ -687,7 +684,6 @@ def members(request):
         profile = user.profile
         if profile.is_bot:
             continue
-        rank = ranks[user.username]
         rows.append({
             'username': user.username,
             'display_name': profile.display_name,
@@ -695,9 +691,6 @@ def members(request):
             'bio': profile.bio.strip(),
             'joined': user.date_joined,
             'team': profile.favorite_team,
-            'score': profile.score_display,
-            'rank': rank,
-            'rank_label': _ordinal(rank),
             'finishes': [dict(f, rank_label=_ordinal(f['rank']))
                          for f in finishes.get(user.username, [])],
             # Only when they actually submitted. Every preseason field has a team
@@ -710,17 +703,11 @@ def members(request):
                 'superbowl': profile.superbowl_winner,
             } if profile.preseason_submitted else None,
         })
-    if sort == 'name':
-        rows.sort(key=lambda r: r['display_name'].lower())
-    elif sort == 'joined':
-        rows.sort(key=lambda r: (r['joined'], r['username']))
-    else:
-        rows.sort(key=lambda r: (-float(r['score']), r['username']))
+    rows.sort(key=lambda r: (r['display_name'].lower(), r['username']))
 
     bot_count = sum(1 for u in people if u.profile.is_bot)
     return render(request, 'main/members.html', {
         'members': rows,
-        'sort': sort,
         'bot_count': bot_count,
         'bot_line': f'{bot_count} bot{"s" if bot_count != 1 else ""} also play, scored like everyone else.',
         # Kept for the tests.
