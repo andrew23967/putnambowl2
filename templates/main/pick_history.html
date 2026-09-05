@@ -60,9 +60,8 @@
   </div>
   {% if completed_weeks %}
   <div class="ph-ctl" style="margin-left:auto;">
-    <button type="button" class="icon-btn" id="wk-prev" aria-label="Previous week">‹</button>
-    <input class="input n" id="wk-input" type="number" min="1" max="{{ completed_weeks|last }}" value="{{ initial_week }}" inputmode="numeric" aria-label="Week">
-    <button type="button" class="icon-btn" id="wk-next" aria-label="Next week">›</button>
+    <label class="eyebrow" for="wk-input" style="margin:0 6px 0 0;">Week</label>
+    <input class="input n" id="wk-input" type="number" min="1" max="{{ completed_weeks|last }}" value="{{ initial_week }}" inputmode="numeric">
   </div>
   <div class="ph-ctl" id="ph-pager" style="display:none;">
     <button type="button" class="icon-btn" id="ph-prev" aria-label="Previous games">‹</button>
@@ -284,16 +283,12 @@ document.addEventListener('keydown', e => {
 /* The week box commits on change, not input: typing "12" would otherwise load
    week 1 on the way past. */
 const wkInput = document.getElementById('wk-input');
-const wkPrev = document.getElementById('wk-prev'), wkNext = document.getElementById('wk-next');
 function setWeek(w, fire) {
   w = Math.min(MAX_WEEK, Math.max(1, w));
   wkInput.value = w;
-  wkPrev.disabled = w <= 1; wkNext.disabled = w >= MAX_WEEK;
   if (fire && w !== currentWeek) { currentWeek = w; loadPicks(w); }
   else if (fire) loadPicks(w);
 }
-wkPrev.addEventListener('click', () => setWeek(currentWeek - 1, true));
-wkNext.addEventListener('click', () => setWeek(currentWeek + 1, true));
 wkInput.addEventListener('change', () => {
   const typed = parseInt(wkInput.value, 10);
   if (Number.isNaN(typed)) { setWeek(currentWeek, false); return; }
