@@ -1,0 +1,83 @@
+{% extends 'base.html' %}
+{% block title %}{% if creating %}New league{% else %}{{ target.name }}{% endif %}{% endblock %}
+
+{% block content %}
+<div style="max-width:640px;margin:0 auto;padding:24px 16px;font-size:.875rem;">
+  <p style="margin:0 0 16px;"><a href="{% url 'leagues:index' %}">Leagues</a></p>
+  <h1 style="margin:0 0 18px;font-size:1.25rem;">{% if creating %}New league{% else %}{{ target.name }}{% endif %}</h1>
+
+  {% if not creating %}
+  <div style="border-top:1px solid var(--border);padding:14px 0;">
+    <p style="margin:0 0 6px;color:var(--muted);">Join code</p>
+    <p style="margin:0;font-family:monospace;font-size:1.125rem;">{{ target.join_code }}</p>
+    <p style="margin:6px 0 0;color:var(--muted);">{{ request.scheme }}://{{ request.get_host }}{% url 'accounts:join' target.join_code %}</p>
+    <form method="post" style="margin-top:10px;">
+      {% csrf_token %}
+      <button name="rotate_code" class="btn-ghost" type="submit">Rotate join code</button>
+    </form>
+  </div>
+  {% endif %}
+
+  <form method="post" style="border-top:1px solid var(--border);padding:14px 0;">
+    {% csrf_token %}
+    {% if form.non_field_errors %}<p style="color:var(--bad);">{{ form.non_field_errors|join:" " }}</p>{% endif %}
+    <label style="display:block;margin-bottom:12px;">Name
+      <input name="name" type="text" value="{{ form.name.value|default:'' }}" required style="display:block;width:100%;margin-top:4px;">
+      {% for e in form.name.errors %}<span style="color:var(--bad);">{{ e }}</span>{% endfor %}
+    </label>
+    <label style="display:block;margin-bottom:12px;">Slug
+      <input name="slug" type="text" value="{{ form.slug.value|default:'' }}" style="display:block;width:100%;margin-top:4px;">
+      {% for e in form.slug.errors %}<span style="color:var(--bad);">{{ e }}</span>{% endfor %}
+    </label>
+    <label style="display:block;margin-bottom:12px;">
+      <input name="is_active" type="checkbox" {% if form.is_active.value %}checked{% endif %}> Active
+    </label>
+    {% if creating %}
+    <p style="margin:18px 0 8px;color:var(--muted);">Manager account (optional)</p>
+    {% if manager_form.non_field_errors %}<p style="color:var(--bad);">{{ manager_form.non_field_errors|join:" " }}</p>{% endif %}
+    <label style="display:block;margin-bottom:12px;">Username
+      <input name="username" type="text" value="{{ manager_form.username.value|default:'' }}" style="display:block;width:100%;margin-top:4px;">
+    </label>
+    <label style="display:block;margin-bottom:12px;">Email
+      <input name="email" type="email" value="{{ manager_form.email.value|default:'' }}" style="display:block;width:100%;margin-top:4px;">
+    </label>
+    <label style="display:block;margin-bottom:12px;">Password
+      <input name="password" type="password" style="display:block;width:100%;margin-top:4px;">
+    </label>
+    <button type="submit" class="btn-accent">Create league</button>
+    {% else %}
+    <button name="save" type="submit" class="btn-accent">Save</button>
+    {% endif %}
+  </form>
+
+  {% if not creating %}
+  <div style="border-top:1px solid var(--border);padding:14px 0;">
+    <p style="margin:0 0 8px;color:var(--muted);">Managers · {{ member_count }} member{{ member_count|pluralize }}</p>
+    {% for m in managers %}
+    <form method="post" style="display:flex;gap:10px;align-items:center;margin:0 0 6px;">
+      {% csrf_token %}
+      <input type="hidden" name="username" value="{{ m.username }}">
+      <span>{{ m.username }}</span>
+      <button name="remove_manager" class="btn-ghost" type="submit">Make member</button>
+    </form>
+    {% empty %}
+    <p style="margin:0 0 8px;">No managers yet.</p>
+    {% endfor %}
+    <form method="post" style="display:flex;gap:8px;align-items:center;margin-top:10px;">
+      {% csrf_token %}
+      <input name="username" type="text" placeholder="Existing member's username">
+      <button name="add_manager" class="btn-ghost" type="submit">Make manager</button>
+    </form>
+    <form method="post" style="margin-top:14px;">
+      {% csrf_token %}
+      <p style="margin:0 0 8px;color:var(--muted);">Create a manager account</p>
+      {% if manager_form.errors %}<p style="color:var(--bad);">{{ manager_form.errors|join:" " }}</p>{% endif %}
+      <input name="username" type="text" placeholder="Username" style="margin-bottom:6px;">
+      <input name="email" type="email" placeholder="Email" style="margin-bottom:6px;">
+      <input name="password" type="password" placeholder="Password" style="margin-bottom:6px;">
+      <button name="create_manager" class="btn-ghost" type="submit">Create manager</button>
+    </form>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

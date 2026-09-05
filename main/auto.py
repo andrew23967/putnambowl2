@@ -4,7 +4,7 @@ from datetime import datetime, timezone, timedelta
 from django.contrib.auth.models import User
 from django.db.models import Min
 
-from .models import SiteSettings, Game, Pick, WeeklyLeaderboard
+from .models import LeagueSettings, Game, Pick, WeeklyLeaderboard
 from .scoring import calculate_points
 from .teams import (TEAM_ABBREV, canonical_abbrev,
                     canonical_game_id as _canon_game_id, team_from_abbrev)
@@ -42,7 +42,7 @@ def _this_or_next_weekday_hour(weekday, hour, minute=0):
 
 DEFAULT_RECAP_PROMPT = (
     "You are the commissioner of a private NFL pick'em fantasy league called "
-    "PutnamBowl.\n"
+    "{league}.\n"
     "Write a factual weekly recap for Week {week} in 3 short paragraphs. Report "
     "what happened: who won, who lost, the scores, and how people's picks went. "
     "Straightforward and informative — no jokes, no sarcasm, no filler."
@@ -55,7 +55,7 @@ RECAP_FORMAT_RULES = (
 )
 
 
-def recap_data_block(week):
+def recap_data_block(league, week):
     """The facts a recap is written from.
 
     Delegates to `recap_stats`, which computes the angles - best week, biggest
@@ -67,26 +67,25 @@ def recap_data_block(week):
     gets included.
     """
     from . import recap_stats
-    return recap_stats.data_block(week)
+    return recap_stats.data_block(league, week)
 
 
-def build_recap_prompt(week, instructions=None):
+def build_recap_prompt(league, week, instructions=None):
     """Editable instructions, then the data, then the format rules."""
-    from .models import SiteSettings
-
-    block, _ = recap_data_block(week)
+    block, _ = recap_data_block(league, week)
     if block is None:
         return None
     if instructions is None:
-        instructions = (SiteSettings.get().recap_prompt or '').strip()
+        instructions = (LeagueSettings.for_league(league).recap_prompt or '').strip()
     instructions = instructions or DEFAULT_RECAP_PROMPT
     # replace() not format(): the text is user-edited, and a stray brace should
     # not raise.
-    instructions = instructions.replace('{week}', str(week))
+    instructions = (instructions.replace('{week}', str(week))
+                    .replace('{league}', league.name))
     return f'{instructions}\n\n{block}\n\n{RECAP_FORMAT_RULES}'
 
 
-def build_recap(week):
+def build_recap(league, week):
     """The week's recap: Gemini if it is available, a plain summary if not.
 
     The facts come from `recap_stats`, the same place the prompt gets them. This
@@ -98,11 +97,11 @@ def build_recap(week):
     """
     from . import recap_stats
 
-    block, ranked = recap_stats.data_block(week)
+    block, ranked = recap_stats.data_block(league, week)
     if not ranked:
         return None
 
-    prompt = build_recap_prompt(week)
+    prompt = build_recap_prompt(league, week)
     if prompt:
         try:
             from django.conf import settings as django_settings
@@ -134,16 +133,17 @@ def build_recap(week):
     return f"{p1}\n\n{p2}"
 
 
-def make_bot_picks(week=None):
-    """Create picks for all bot users based on their underdog percentage.
+def make_bot_picks(league, week=None):
+    """Create picks for a league's bots based on their underdog percentage.
 
-    Scoped to a single week — picking across every game ever would retroactively
+    Scoped to a single week - picking across every game ever would retroactively
     add bot picks to completed weeks and rewrite league history.
     """
     import random as _random
-    week = SiteSettings.get().week if week is None else week
-    bots = list(User.objects.select_related('profile').filter(profile__is_bot=True))
-    games = list(Game.objects.filter(week=week))
+    week = LeagueSettings.for_league(league).week if week is None else week
+    bots = list(User.objects.select_related('profile')
+                .filter(profile__league=league, profile__is_bot=True))
+    games = list(Game.objects.filter(league=league, week=week))
     if not bots or not games:
         return
 
@@ -254,7 +254,7 @@ def scrape_week_games(settings, year=None):
 
         # Scope to this week - games persist across weeks, and division rivals
         # play the same matchup twice a season.
-        existing = Game.match_existing(settings.week, team1, team2, game_id)
+        existing = Game.match_existing(settings.league, settings.week, team1, team2, game_id)
         if existing is not None:
             # Re-scraping refreshes the fixture in place rather than skipping it,
             # so a line that moved, a kickoff that got flexed, or a favorite that
@@ -278,6 +278,7 @@ def scrape_week_games(settings, year=None):
             continue
 
         Game.objects.create(
+            league=settings.league,
             team1=team1, team2=team2,
             points1=float(settings.multiplier), points2=pts2,
             team1_is_home=g[4], game_id=game_id, game_dt=game_dt,
@@ -288,7 +289,7 @@ def scrape_week_games(settings, year=None):
     return {
         'added': added,
         'updated': updated,
-        'stored': Game.objects.filter(week=settings.week).count(),
+        'stored': Game.objects.filter(league=settings.league, week=settings.week).count(),
         'unpriced': unpriced,
         'cross_check': _cross_check_count(settings, year, day_set),
     }
@@ -341,7 +342,7 @@ def publish_week(settings, year=None):
     # shut picks 2.7 days before the first game anyone could pick. The dashboard's
     # Scrape button has always computed it this way; now both paths agree.
     first_dt = Game.objects.filter(
-        week=settings.week, game_dt__isnull=False
+        league=settings.league, week=settings.week, game_dt__isnull=False
     ).aggregate(Min('game_dt'))['game_dt__min']
     if first_dt is None:
         first_dt = scrape_module.get_first_game_dt(week=settings.week, year=year)
@@ -358,7 +359,7 @@ def publish_week(settings, year=None):
     settings.save()
     log.info('Auto publish: week %s, first kickoff %s, grading from %s',
              settings.week, first_dt, settings.auto_grade_dt)
-    make_bot_picks(week=settings.week)
+    make_bot_picks(settings.league, week=settings.week)
 
     try:
         from .email_utils import send_picks_published_email
@@ -418,7 +419,7 @@ def do_grade(settings, year=None, week=None):
     week = settings.week if week is None else week
     results = scrape_module.grade(week=week, api_type=settings.grade_api, year=year)
     graded = 0
-    for game in Game.objects.filter(week=week, graded=False):
+    for game in Game.objects.filter(league=settings.league, week=week, graded=False):
         # `team1_is_home` is the whole ballgame here: team1 is the favorite, so
         # which side is at home has to come off the flag, not off the ordering.
         home_side, away_side = (
@@ -457,12 +458,13 @@ def do_grade(settings, year=None, week=None):
 
 
 def do_advance_week(settings):
-    games = list(Game.objects.filter(week=settings.week))
-    players = list(User.objects.select_related('profile').all())
+    games = list(Game.objects.filter(league=settings.league, week=settings.week))
+    players = list(User.objects.select_related('profile').filter(profile__league=settings.league))
     all_picks = {(p.user_id, p.game_id): p for p in Pick.objects.filter(game__in=games)}
 
     lb_entries = [{'username': p.username, 'score': round(p.profile.score, 1)} for p in players]
-    WeeklyLeaderboard.objects.update_or_create(week=settings.week, defaults={'entries': lb_entries})
+    WeeklyLeaderboard.objects.update_or_create(
+        league=settings.league, week=settings.week, defaults={'entries': lb_entries})
 
     max_score = 0
     for g in games:
@@ -514,18 +516,19 @@ def do_advance_week(settings):
     settings.reminder_sent_week = 0
     settings.save()
 
-    recap = build_recap(completed_week)
+    recap = build_recap(settings.league, completed_week)
     if recap:
         settings.refresh_from_db()
         settings.weekly_recap = recap
         settings.save()
-        WeeklyLeaderboard.objects.filter(week=completed_week).update(recap=recap)
+        WeeklyLeaderboard.objects.filter(
+            league=settings.league, week=completed_week).update(recap=recap)
         try:
             # Recorded in the feed, not mailed. The recap goes to the league at
             # the top of next week's picks-are-live email - one mail a week
             # rather than two, which is what people actually read.
             from .email_utils import record_recap_email
-            record_recap_email(completed_week, recap)
+            record_recap_email(settings.league, completed_week, recap)
         except Exception as e:
             # A recap that fails to record must not abort the advance.
             log.error('Recording the recap failed: %s', e)
@@ -533,8 +536,9 @@ def do_advance_week(settings):
     log.info('Auto: advanced to week %s', settings.week)
 
 
-def auto_tick():
-    settings = SiteSettings.get()
+def auto_tick(league):
+    """One pass of the state machine for one league."""
+    settings = LeagueSettings.for_league(league)
     if not settings.auto_enabled:
         return
 
@@ -543,8 +547,8 @@ def auto_tick():
     def _fmt(dt):
         return dt.strftime('%m/%d %H:%M') if dt else '-'
 
-    log.info('tick %s UTC | week=%s publish=%s lock=%s scrape=%s lock_dt=%s grade=%s',
-             now.strftime('%H:%M'), settings.week, settings.publish, settings.lock_picks,
+    log.info('tick %s UTC | %s week=%s publish=%s lock=%s scrape=%s lock_dt=%s grade=%s',
+             now.strftime('%H:%M'), league.slug, settings.week, settings.publish, settings.lock_picks,
              _fmt(settings.auto_scrape_dt), _fmt(settings.auto_lock_dt),
              _fmt(settings.auto_grade_dt))
 
@@ -585,7 +589,7 @@ def auto_tick():
     if not settings.lock_picks:
         return
 
-    games = list(Game.objects.filter(week=settings.week))
+    games = list(Game.objects.filter(league=settings.league, week=settings.week))
     if not games:
         return
 
@@ -599,7 +603,7 @@ def auto_tick():
             return
         do_grade(settings)
         settings.refresh_from_db()
-        games = list(Game.objects.filter(week=settings.week))
+        games = list(Game.objects.filter(league=settings.league, week=settings.week))
 
     if not all(g.graded for g in games):
         return
@@ -616,3 +620,27 @@ def auto_tick():
         return
 
     do_advance_week(settings)
+
+
+def tick_all_leagues():
+    """One pass of the worker: poll the mailbox once, tick every active league.
+
+    Returns the seconds to sleep before the next pass - the shortest tick
+    interval any league asked for. One league raising must not stop the
+    others, so each tick is fenced on its own.
+    """
+    from leagues.models import League
+    from . import inbound_email
+
+    # One mailbox for every league, and deliberately outside auto_tick(): that
+    # returns immediately when a league's autopilot is off, and mail should
+    # still be collected for a league running its weeks by hand.
+    inbound_email.fetch()
+    leagues = list(League.objects.filter(is_active=True))
+    for league in leagues:
+        try:
+            auto_tick(league)
+        except Exception:
+            log.exception('tick failed for %s', league.slug)
+    intervals = [LeagueSettings.for_league(l).tick_interval for l in leagues]
+    return min((i for i in intervals if i), default=300)

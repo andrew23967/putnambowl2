@@ -150,12 +150,18 @@ def _auth_ok(msg):
 
 
 def _league_addresses():
-    """Members who could plausibly be on a league email: humans with addresses."""
-    return {
-        (u.email or '').strip().lower(): u
-        for u in User.objects.select_related('profile')
-                     .exclude(email='').exclude(profile__is_bot=True)
-    }
+    """{email: [users]} for every human with an address, across all leagues.
+
+    A list, because one mailbox serves every league and the same person may
+    hold an account in two of them. The router refuses that case rather than
+    guess which league the message was for.
+    """
+    out = {}
+    for u in (User.objects.select_related('profile', 'profile__league')
+              .exclude(email='').exclude(profile__is_bot=True)
+              .exclude(profile__league__isnull=True).order_by('id')):
+        out.setdefault((u.email or '').strip().lower(), []).append(u)
+    return out
 
 
 def _addressed_to(msg):
@@ -260,9 +266,15 @@ def ingest_message(raw_bytes):
         return None, f'authentication failed ({detail})'
 
     members = _league_addresses()
-    author = members.get(from_email)
-    if author is None:
+    candidates = members.get(from_email) or []
+    if not candidates:
         return None, f'sender {from_email} is not a league member'
+    if len({u.profile.league_id for u in candidates}) > 1:
+        # Deliberately not recorded as processed: once the accounts are sorted
+        # out the next poll picks the message up again.
+        return None, f'sender {from_email} belongs to more than one league'
+    author = candidates[-1]
+    league = author.profile.league
 
     try:
         sent_at = parsedate_to_datetime(msg.get('Date'))
@@ -278,9 +290,9 @@ def ingest_message(raw_bytes):
 
     # The +intro address, before the picks/announcement split: this is neither.
     if _is_intro_submission(msg, author):
-        from .models import SiteSettings
+        from .models import LeagueSettings
 
-        site_settings = SiteSettings.get()
+        site_settings = LeagueSettings.for_league(league)
         site_settings.weekly_intro = body
         site_settings.save(update_fields=['weekly_intro'])
         ProcessedEmail.objects.update_or_create(
@@ -338,6 +350,7 @@ def ingest_message(raw_bytes):
         LeagueEmail.objects.update_or_create(
             message_id=message_id[:400],
             defaults={
+                'league': league,
                 'author': author, 'from_email': from_email,
                 'from_name': _decode(from_name),
                 'subject': _decode(msg.get('Subject')) or '(no subject)',
@@ -350,6 +363,7 @@ def ingest_message(raw_bytes):
     obj, _ = LeagueEmail.objects.update_or_create(
         message_id=message_id[:400],
         defaults={
+            'league': league,
             'author': author,
             'from_email': from_email,
             'from_name': _decode(from_name),
@@ -415,7 +429,7 @@ def verify():
         f'connected to {host} as {user}',
         f'folder {folder}: {len(total)} message(s), {len(unseen)} unread',
         f'{len(members)} league member(s) with an address',
-        f'{sum(1 for u in members.values() if u.profile.email_posts_enabled)} '
+        f'{sum(1 for us in members.values() for u in us if u.profile.email_posts_enabled)} '
         f'allowed to publish by email',
     ]
     from .email_utils import picks_address

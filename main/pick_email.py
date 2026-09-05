@@ -38,7 +38,7 @@ import logging
 
 from django.conf import settings as django_settings
 
-from .models import Game, Pick, SiteSettings
+from .models import Game, Pick, LeagueSettings
 
 log = logging.getLogger(__name__)
 
@@ -179,11 +179,11 @@ def build_reply(user, settings, saved, unresolved, games):
     lines.append('You can also change any of these on the site.')
     lines.append('')
     lines.append('──')
-    lines.append('PutnamBowl')
+    lines.append(settings.league.name)
     return '\n'.join(lines)
 
 
-def send_reply(to_email, subject, body, in_reply_to=None):
+def send_reply(to_email, subject, body, in_reply_to=None, settings=None):
     """Reply to the sender only. Never to the list — these are private picks.
 
     Sent from the league mailbox when SMTP is configured, which is both simpler
@@ -195,7 +195,9 @@ def send_reply(to_email, subject, body, in_reply_to=None):
     from .email_utils import (outbound_suppressed, picks_address,
                               send_via_mailbox, smtp_ready)
 
-    if not SiteSettings.get().email_confirmations:
+    if settings is None:
+        raise TypeError('send_reply needs the league settings')
+    if not settings.email_confirmations:
         log.info('[pick_email] confirmations switched off - %s not told what was recorded',
                  to_email)
         return False
@@ -253,7 +255,7 @@ def handle(user, text, reply_to=None, message_id=None, subject=None,
     threads as a reply to it, rather than arriving as an unrelated message — which
     matters most for the members this exists for.
     """
-    settings = SiteSettings.get()
+    settings = LeagueSettings.for_league(user.profile.league)
     reply_to = reply_to or user.email
     week = settings.week
 
@@ -265,7 +267,7 @@ def handle(user, text, reply_to=None, message_id=None, subject=None,
     def _reply(body, subject_override=None):
         if reply_to:
             send_reply(reply_to, subject_override or base, body,
-                       in_reply_to=message_id)
+                       in_reply_to=message_id, settings=settings)
 
     if not settings.publish:
         _reply(f"Week {week} isn't open for picks yet — the commissioner is still "
@@ -278,7 +280,7 @@ def handle(user, text, reply_to=None, message_id=None, subject=None,
                f'Sorry — they came in too late. Nothing has been changed.')
         return 'picks locked — nothing saved, sender told', False
 
-    games = list(Game.objects.filter(week=week))
+    games = list(Game.objects.filter(league=settings.league, week=week))
     games.sort(key=lambda g: (g.game_dt is None, g.game_dt, g.id))
     if not games:
         _reply(f'There are no games scheduled for Week {week} yet, so I could not '

@@ -57,8 +57,9 @@ def relay_to_league(league_email, sender_email, already_copied=(), author_name='
     that is what direct mail means; pointing replies at the commissioner both
     avoids that and is what someone hitting reply expects.
     """
-    from .models import SiteSettings
-    if not SiteSettings.get().email_relay:
+    from .models import LeagueSettings
+    league = league_email.league
+    if not LeagueSettings.for_league(league).email_relay:
         log.info('[relay] forwarding switched off on the Emails page')
         return 0
 
@@ -68,7 +69,7 @@ def relay_to_league(league_email, sender_email, already_copied=(), author_name='
     if mailbox:
         copied.add(mailbox)
 
-    recipients = [a for a in league_recipients() if a.lower() not in copied]
+    recipients = [a for a in league_recipients(league) if a.lower() not in copied]
     if not recipients:
         log.info('[relay] nobody to forward to - everyone was already copied')
         return 0
@@ -77,7 +78,7 @@ def relay_to_league(league_email, sender_email, already_copied=(), author_name='
     who = author_name or sender_email
     body = (f'{league_email.body}\n\n'
             f'—\n'
-            f'Sent to the league by {who} via PutnamBowl. '
+            f'Sent to the league by {who} via {league.name}. '
             f'Reply to reach {sender_email}.\n'
             f'{site_url.rstrip("/")}/home/')
 
@@ -121,8 +122,8 @@ def build_ballot(games):
     return '\n'.join(lines)
 
 
-def record_site_email(subject, body, recipient_count, author=None, sent_at=None,
-                      slug=None):
+def record_site_email(league, subject, body, recipient_count, author=None,
+                      sent_at=None, slug=None):
     """Put a message the site sent into the Emails feed.
 
     Recorded at send time rather than ingested back out of the mailbox, so the
@@ -150,8 +151,9 @@ def record_site_email(subject, body, recipient_count, author=None, sent_at=None,
     obj, created = LeagueEmail.objects.update_or_create(
         message_id=message_id,
         defaults={
+            'league': league,
             'author': author,
-            'from_name': getattr(author, 'username', '') or 'PutnamBowl',
+            'from_name': getattr(author, 'username', '') or league.name,
             'from_email': getattr(django_settings, 'RESEND_FROM', '') or '',
             'subject': subject,
             'body': body,
@@ -165,11 +167,12 @@ def record_site_email(subject, body, recipient_count, author=None, sent_at=None,
 
 
 # League mail is from the commissioner, full stop. Recaps used to append a
-# LEAGUE_SIGNOFF introducing an "AI commissioner", and the feed credited them
+# signoff introducing an "AI commissioner", and the feed credited them
 # to the `putnambot` account - so the league had two commissioners, one of whom
 # was a bot that also competed in the standings. PutnamBot is still a *player*;
 # it is not a correspondent.
-LEAGUE_SIGNOFF = "──\nPutnamBowl"
+def signoff(league):
+    return f"──\n{league.name}"
 
 
 def picks_address():
@@ -202,7 +205,7 @@ def intro_address():
     """The tagged address that means "this is this week's intro".
 
     Mail here from a member whose posting is enabled becomes
-    `SiteSettings.weekly_intro`, so the commissioner can write the week's opening
+    `LeagueSettings.weekly_intro`, so the commissioner can write the week's opening
     line from their phone. The recap and the ballot are appended by the send path
     as usual - the intro is only ever the top section.
     """
@@ -281,19 +284,25 @@ def send_via_mailbox(to, subject, body, in_reply_to=None, reply_to=None):
         return False, str(e)
 
 
-def league_recipients():
-    """Everyone who should get league mail: real members with an address.
+def league_recipients(league, weekly=False):
+    """Everyone in a league who should get its mail: real members with an address.
+
+    `weekly=True` is the picks-are-live mail and honours the member's own
+    opt-out; league correspondence relayed from the commissioner does not.
 
     One address per person, not one per account. Three accounts share
     agvdog@gmail.com, so without this that inbox received three copies of every
     email the league sent. Compared case-insensitively, since addresses are, and
     kept in account order so the list is stable.
     """
+    qs = (User.objects.filter(profile__league=league)
+          .exclude(email='').exclude(email__isnull=True)
+          .exclude(profile__is_bot=True))
+    if weekly:
+        qs = qs.filter(profile__email_weekly=True)
     seen = set()
     out = []
-    for address in (User.objects.exclude(email='').exclude(email__isnull=True)
-                    .exclude(profile__is_bot=True)
-                    .values_list('email', flat=True)):
+    for address in qs.order_by('id').values_list('email', flat=True):
         key = address.strip().lower()
         if key and key not in seen:
             seen.add(key)
@@ -301,8 +310,8 @@ def league_recipients():
     return out
 
 
-def recap_slug(week, year=None):
-    """Storage key for a *weekly* recap: one row per season and week.
+def recap_slug(league, week, year=None):
+    """Storage key for a *weekly* recap: one row per league, season and week.
 
     So regenerating week 3's recap replaces week 3's entry rather than leaving two
     versions in the feed. A season preview gets no slug — there is no natural "one
@@ -313,11 +322,11 @@ def recap_slug(week, year=None):
     if year is None:
         from . import scrape
         year = scrape.current_season_year()
-    return f'recap-{year}-w{week}'
+    return f'{league.slug}-recap-{year}-w{week}'
 
 
-def record_recap_email(week, recap_text, recipient_count=0, subject=None, year=None,
-                       slug=None):
+def record_recap_email(league, week, recap_text, recipient_count=0, subject=None,
+                       year=None, slug=None):
     """Record a weekly recap in the Emails feed, without sending it.
 
     Keyed per season and week, so regenerating a recap replaces its row instead of
@@ -332,14 +341,15 @@ def record_recap_email(week, recap_text, recipient_count=0, subject=None, year=N
     # mail. Crediting the `putnambot` account put a robot avatar on it in the
     # feed and read as a second commissioner.
     return record_site_email(
+        league,
         subject=subject or f'Week {week} recap',
-        body=f'{recap_text.strip()}\n\n{LEAGUE_SIGNOFF}',
+        body=f'{recap_text.strip()}\n\n{signoff(league)}',
         recipient_count=recipient_count,
-        slug=slug or recap_slug(week, year),
+        slug=slug or recap_slug(league, week, year),
     )
 
 
-def members_missing_picks(week):
+def members_missing_picks(league, week):
     """(user, made, total) for everyone whose ballot is still incomplete.
 
     Incomplete, not merely empty. The rules are all-or-nothing - "if we do not
@@ -349,16 +359,18 @@ def members_missing_picks(week):
     """
     from .models import Game, Pick
 
-    total = Game.objects.filter(week=week).count()
+    total = Game.objects.filter(league=league, week=week).count()
     if not total:
         return []
 
     made = {}
-    for user_id in Pick.objects.filter(game__week=week).values_list('user_id', flat=True):
+    for user_id in (Pick.objects.filter(game__league=league, game__week=week)
+                    .values_list('user_id', flat=True)):
         made[user_id] = made.get(user_id, 0) + 1
 
     out = []
-    for user in (User.objects.exclude(email='').exclude(email__isnull=True)
+    for user in (User.objects.filter(profile__league=league, profile__email_reminder=True)
+                 .exclude(email='').exclude(email__isnull=True)
                  .exclude(profile__is_bot=True).select_related('profile')):
         n = made.get(user.id, 0)
         if n < total:
@@ -373,6 +385,7 @@ def send_pick_reminder_email(site_settings):
     still owes, and that is nobody else's business.
     """
     week = site_settings.week
+    league = site_settings.league
     if not site_settings.email_reminder:
         log.info('[email] reminder switched off on the Emails page.')
         return 0
@@ -383,7 +396,7 @@ def send_pick_reminder_email(site_settings):
         log.info('[email] no transport available - skipping reminder.')
         return 0
 
-    outstanding = members_missing_picks(week)
+    outstanding = members_missing_picks(league, week)
     # Mark the week done either way. Nobody outstanding is a finished job, and
     # re-checking every tick for the rest of the window buys nothing.
     site_settings.reminder_sent_week = week
@@ -414,17 +427,18 @@ def send_pick_reminder_email(site_settings):
             standing = f'You have not picked any of this week\'s {total} games yet.\n'
         body = (f'{standing}\n{lock_line}'
                 f'\nMake your picks: {picks_url}\n'
-                f'\n\n──\nPutnamBowl')
+                f'\n\n{signoff(league)}')
         messages.append((user.email, body))
 
     # One feed entry for the batch, not one per member: the feed is the league's
     # record of what went out, and nineteen near-identical rows would bury it.
     record_site_email(
+        league,
         subject=subject,
         body=(f'Reminder sent to {len(messages)} member(s) with incomplete picks '
               f'for week {week}.\n\n{lock_line}'),
         recipient_count=len(messages),
-        slug=f'reminder-w{week}',
+        slug=f'{league.slug}-reminder-w{week}',
     )
 
     def _send_each():
@@ -474,12 +488,8 @@ def send_picks_published_email(site_settings):
         log.info('[email] no transport available - skipping.')
         return
 
-    recipients = list(
-        User.objects.filter(email__isnull=False)
-        .exclude(email='')
-        .exclude(profile__is_bot=True)
-        .values_list('email', flat=True)
-    )
+    league = site_settings.league
+    recipients = league_recipients(league, weekly=True)
     log.info(f'[email] {len(recipients)} recipient(s)')
     if not recipients:
         log.info('[email] No recipients - skipping.')
@@ -496,7 +506,7 @@ def send_picks_published_email(site_settings):
     inbox = picks_address()
 
     from .models import Game
-    games = list(Game.objects.filter(week=week))
+    games = list(Game.objects.filter(league=league, week=week))
     games.sort(key=lambda g: (g.game_dt is None, g.game_dt, g.id))
     ballot = build_ballot(games) if (inbox and site_settings.email_ballot) else ''
     if games and not inbox:
@@ -521,7 +531,8 @@ def send_picks_published_email(site_settings):
         # never format(): the text is hand-edited and a stray brace must not
         # raise mid-send.
         intro_section = (site_settings.weekly_intro.strip()
-                         .replace('{week}', str(week)) + '\n\n')
+                         .replace('{week}', str(week))
+                         .replace('{league}', league.name) + '\n\n')
 
     # Week 1 has no previous week in this season, so it never carries a recap.
     # `weekly_recap` is a single field that persists across a season boundary,
@@ -545,14 +556,15 @@ def send_picks_published_email(site_settings):
         f'\nMake your picks on the site: {picks_url}\n'
         f'{recap_section}'
         f'{ballot_section}'
-        f'\n\n──\nPutnamBowl'
+        f'\n\n{signoff(league)}'
     )
 
     # Into the feed before the send thread starts: the page should show what the
     # league was told even if Resend then fails on every address.
     record_site_email(
+        league,
         subject=subject, body=body, recipient_count=len(recipients),
-        slug=f'picks-live-w{week}',
+        slug=f'{league.slug}-picks-live-w{week}',
     )
 
     # Deliberately per recipient rather than one post to the list, even though the

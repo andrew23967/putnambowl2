@@ -3,7 +3,12 @@ from django.contrib.auth.models import User
 from .teams import TEAMS, canonical_game_id
 
 
-class SiteSettings(models.Model):
+class LeagueSettings(models.Model):
+    """One row per league: the week it is on, and how its autopilot, email and
+    recap behave. This was the site-wide `SiteSettings` singleton; nothing may
+    reach it without a league - see `LeagueSettings.for_league`."""
+    league = models.OneToOneField('leagues.League', on_delete=models.CASCADE,
+                                  related_name='league_settings')
     week = models.IntegerField(default=1)
     publish = models.BooleanField(default=False)
     lock_picks = models.BooleanField(default=False)
@@ -110,12 +115,8 @@ class SiteSettings(models.Model):
     recap_prompt = models.TextField(blank=True, default='')
 
     class Meta:
-        verbose_name = 'Site Settings'
-        verbose_name_plural = 'Site Settings'
-
-    def save(self, *args, **kwargs):
-        self.pk = 1
-        super().save(*args, **kwargs)
+        verbose_name = 'League settings'
+        verbose_name_plural = 'League settings'
 
     def scrape_day_set(self):
         """Weekdays the league plays, as a set of ints. Empty set = every day.
@@ -132,12 +133,15 @@ class SiteSettings(models.Model):
         return days
 
     @classmethod
-    def get(cls):
-        obj, _ = cls.objects.get_or_create(pk=1)
+    def for_league(cls, league):
+        """The settings row for a league, created on first use."""
+        if league is None:
+            raise ValueError('LeagueSettings.for_league needs a league')
+        obj, _ = cls.objects.get_or_create(league=league)
         return obj
 
     def __str__(self):
-        return f'Site Settings (Week {self.week})'
+        return f'{self.league} settings (week {self.week})'
 
 
 class Game(models.Model):
@@ -164,9 +168,11 @@ class Game(models.Model):
     game_id = models.CharField(max_length=50, blank=True, default='')
     game_dt = models.DateTimeField(null=True, blank=True)
     week = models.IntegerField(default=1)
+    league = models.ForeignKey('leagues.League', on_delete=models.CASCADE,
+                               related_name='games')
 
     @classmethod
-    def match_existing(cls, week, team1, team2, game_id=''):
+    def match_existing(cls, league, week, team1, team2, game_id=''):
         """The stored row for this fixture, or None.
 
         Keyed on **who is playing**, never on the odds. team1/team2 are
@@ -184,7 +190,7 @@ class Game(models.Model):
         game_id is tried first where both sides have one, canonicalised so the
         two sources' spellings compare equal.
         """
-        in_week = cls.objects.filter(week=week)
+        in_week = cls.objects.filter(league=league, week=week)
         canon = canonical_game_id(game_id)
         if canon:
             for g in in_week:
@@ -258,12 +264,15 @@ class Pick(models.Model):
 
 
 class WeeklyLeaderboard(models.Model):
-    week = models.IntegerField(default=1, unique=True)
+    league = models.ForeignKey('leagues.League', on_delete=models.CASCADE,
+                               related_name='leaderboards')
+    week = models.IntegerField(default=1)
     entries = models.JSONField(default=list)
     recap = models.TextField(blank=True, default='')
 
     class Meta:
         ordering = ['week']
+        unique_together = [('league', 'week')]
 
     def __str__(self):
         return f'Week {self.week} Leaderboard'
@@ -319,6 +328,8 @@ class LeagueEmail(models.Model):
         (SOURCE_SITE, 'Sent by the site'),
     ]
 
+    league = models.ForeignKey('leagues.League', on_delete=models.CASCADE,
+                               related_name='emails')
     author = models.ForeignKey(
         User, on_delete=models.SET_NULL, null=True, blank=True,
         related_name='league_emails',
@@ -372,6 +383,8 @@ class SeasonRecord(models.Model):
     week k - closed with one more entry holding the final scores, so
     "score after week k" is always entry k+1.
     """
+    league = models.ForeignKey('leagues.League', on_delete=models.CASCADE,
+                               related_name='seasons')
     year = models.IntegerField()
     winner_username = models.CharField(max_length=150)
     final_standings = models.JSONField(default=list)
@@ -382,6 +395,7 @@ class SeasonRecord(models.Model):
 
     class Meta:
         ordering = ['-year']
+        unique_together = [('league', 'year')]
 
     def __str__(self):
         return f'{self.year} Season — Winner: {self.winner_username}'
@@ -399,12 +413,15 @@ class IntroTemplate(models.Model):
     not when the template is chosen, so a template written once stays correct
     every time it is reused.
     """
-    name = models.CharField(max_length=60, unique=True)
+    league = models.ForeignKey('leagues.League', on_delete=models.CASCADE,
+                               related_name='intro_templates')
+    name = models.CharField(max_length=60)
     body = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ['name']
+        unique_together = [('league', 'name')]
 
     def __str__(self):
         return self.name
@@ -415,4 +432,5 @@ class IntroTemplate(models.Model):
         `replace`, never `format`: the text is user-edited and a stray brace -
         an emoticon, a bit of pasted JSON - must not raise inside the send path.
         """
-        return (self.body or '').replace('{week}', str(week))
+        return ((self.body or '').replace('{week}', str(week))
+                .replace('{league}', self.league.name))

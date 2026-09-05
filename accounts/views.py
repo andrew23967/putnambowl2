@@ -6,25 +6,54 @@ from django.contrib.auth.decorators import login_required
 from .forms import RegisterForm, ProfileForm
 
 
-def register(request):
+def register(request, code=None):
+    """Create an account in the league whose join code was given.
+
+    `/join/<code>/` pre-fills the code so an invite link needs no typing.
+    """
+    from leagues.models import League
+
     if request.user.is_authenticated:
         return redirect('main:home')
-    form = RegisterForm(request.POST or None)
+    initial = {'join_code': code} if code else None
+    form = RegisterForm(request.POST or None, initial=initial)
     if form.is_valid():
         user = form.save()
+        user.profile.league = form.league
+        user.profile.role = 'member'
+        user.profile.save(update_fields=['league', 'role'])
         login(request, user)
         return redirect('main:home')
-    return render(request, 'accounts/register.html', {'form': form})
+    join_league = League.objects.filter(join_code=code, is_active=True).first() if code else None
+    return render(request, 'accounts/register.html', {
+        'form': form, 'join_code': code or '', 'join_league': join_league,
+    })
+
+
+def _safe_next(request):
+    from django.utils.http import url_has_allowed_host_and_scheme
+    nxt = request.POST.get('next') or request.GET.get('next') or ''
+    if nxt and url_has_allowed_host_and_scheme(nxt, allowed_hosts={request.get_host()}):
+        return nxt
+    return None
+
+
+def _after_login(request, user):
+    # A superuser with no league of their own belongs on the site admin.
+    profile = getattr(user, 'profile', None)
+    if user.is_superuser and (profile is None or profile.league_id is None):
+        return redirect('leagues:index')
+    return redirect(_safe_next(request) or 'main:home')
 
 
 def login_view(request):
     if request.user.is_authenticated:
-        return redirect('main:home')
-    form = AuthenticationForm(data=request.POST or None)
+        return _after_login(request, request.user)
+    form = AuthenticationForm(request, data=request.POST or None)
     if request.method == 'POST' and form.is_valid():
         user = form.get_user()
         login(request, user)
-        return redirect('main:home')
+        return _after_login(request, user)
     return render(request, 'accounts/login.html', {'form': form})
 
 

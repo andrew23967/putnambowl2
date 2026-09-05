@@ -10,14 +10,35 @@ from django.test import TestCase
 
 from . import scrape
 from .auto import do_grade, do_scrape_and_publish, make_bot_picks
-from .models import (Game, LeagueEmail, Pick, SiteSettings,
+from .models import (Game, LeagueEmail, Pick, LeagueSettings,
                      WeeklyLeaderboard)
+from leagues.models import League
+
+
+def default_league():
+    """The league every test runs in unless it says otherwise (seeded by a migration)."""
+    league, _ = League.objects.get_or_create(slug='putnambowl', defaults={'name': 'PutnamBowl'})
+    return league
+
+
+def make_league(slug, name=None):
+    return League.objects.create(slug=slug, name=name or slug.title())
+
+
+def make_member(*args, league=None, role='member', **kwargs):
+    """A user in a league. Every account must be in one, or every page 403s."""
+    user = User.objects.create_user(*args, **kwargs)
+    user.profile.league = league or default_league()
+    user.profile.role = role
+    user.profile.save()
+    return user
 
 
 def make_game(week, team1='Chicago Bears', team2='Green Bay Packers',
-              points1=1.0, points2=2.5, **kw):
+              points1=1.0, points2=2.5, league=None, **kw):
     """team1 is the favorite (1.0x), team2 the underdog (worth more)."""
     return Game.objects.create(
+        league=league or default_league(),
         team1=team1, team2=team2, points1=points1, points2=points2, week=week, **kw
     )
 
@@ -27,10 +48,10 @@ class BotPickScopeTests(TestCase):
     added bot picks to completed weeks and rewrote league history."""
 
     def setUp(self):
-        self.settings = SiteSettings.get()
+        self.settings = LeagueSettings.for_league(default_league())
         self.settings.week = 3
         self.settings.save()
-        self.bot = User.objects.create_user('bot_a')
+        self.bot = make_member('bot_a')
         self.bot.profile.is_bot = True
         self.bot.profile.bot_underdog_pct = 50
         self.bot.profile.save()
@@ -38,21 +59,21 @@ class BotPickScopeTests(TestCase):
         self.current = make_game(week=3, team1='Miami Dolphins', team2='New York Jets')
 
     def test_only_picks_current_week(self):
-        make_bot_picks()
+        make_bot_picks(default_league())
         picked_weeks = set(Pick.objects.filter(user=self.bot).values_list('game__week', flat=True))
         self.assertEqual(picked_weeks, {3})
 
     def test_does_not_touch_completed_weeks(self):
-        make_bot_picks()
+        make_bot_picks(default_league())
         self.assertFalse(Pick.objects.filter(user=self.bot, game=self.past).exists())
 
     def test_is_idempotent(self):
-        make_bot_picks()
-        make_bot_picks()
+        make_bot_picks(default_league())
+        make_bot_picks(default_league())
         self.assertEqual(Pick.objects.filter(user=self.bot, game=self.current).count(), 1)
 
     def test_explicit_week_overrides_current(self):
-        make_bot_picks(week=1)
+        make_bot_picks(default_league(), week=1)
         self.assertTrue(Pick.objects.filter(user=self.bot, game=self.past).exists())
 
 
@@ -61,7 +82,7 @@ class RematchTests(TestCase):
     later in the season was silently skipped."""
 
     def test_same_matchup_allowed_in_a_later_week(self):
-        settings = SiteSettings.get()
+        settings = LeagueSettings.for_league(default_league())
         make_game(week=2)
         settings.week = 12
         settings.save()
@@ -79,7 +100,7 @@ class FirstGameDtTests(TestCase):
 
     def test_scoped_to_current_week(self):
         from django.db.models import Min
-        settings = SiteSettings.get()
+        settings = LeagueSettings.for_league(default_league())
         settings.week = 5
         settings.save()
 
@@ -104,7 +125,7 @@ class AutoLockRespectsDayFilterTests(TestCase):
     def setUp(self):
         from . import auto
         self.auto = auto
-        self.settings = SiteSettings.get()
+        self.settings = LeagueSettings.for_league(default_league())
         self.settings.week = 3
         self.settings.lock_mode = 'offset'
         self.settings.auto_lock_offset_minutes = 20
@@ -131,7 +152,7 @@ class AutoLockRespectsDayFilterTests(TestCase):
             setattr(auto.scrape_module, name, repl)
 
         self.addCleanup(setattr, auto, 'make_bot_picks', auto.make_bot_picks)
-        auto.make_bot_picks = lambda **kw: None
+        auto.make_bot_picks = lambda *a, **kw: None
 
     def test_lock_uses_earliest_game_in_the_slate(self):
         self.auto.do_scrape_and_publish(self.settings, year=2026)
@@ -196,14 +217,14 @@ class InboundEmailTests(TestCase):
         self.addCleanup(setattr, pick_email, '_ask_model', pick_email._ask_model)
         pick_email._ask_model = lambda text, games: '{}'
 
-        self.boss = User.objects.create_user('boss', email='boss@example.com')
+        self.boss = make_member('boss', email='boss@example.com')
         self.boss.profile.email_posts_enabled = True
         self.boss.profile.save()
         self.members = []
         for i in range(4):
-            u = User.objects.create_user(f'member{i}', email=f'm{i}@example.com')
+            u = make_member(f'member{i}', email=f'm{i}@example.com')
             self.members.append(u)
-        bot = User.objects.create_user('bot_x')
+        bot = make_member('bot_x')
         bot.profile.is_bot = True
         bot.profile.save()
 
@@ -297,7 +318,7 @@ class RecapEmailTests(TestCase):
         from main.models import LeagueEmail
         self.email_utils = email_utils
         self.LeagueEmail = LeagueEmail
-        User.objects.create_user('putnambot')
+        make_member('putnambot')
 
     def test_outbound_is_suppressed_while_testing(self):
         """The suite talks to Resend and smtplib directly, so Django's locmem
@@ -310,7 +331,7 @@ class RecapEmailTests(TestCase):
         self.assertIn('suppressed', why)
 
     def test_recap_is_recorded(self):
-        obj, created = self.email_utils.record_recap_email(3, 'Week 3 belonged to the underdogs.')
+        obj, created = self.email_utils.record_recap_email(default_league(), 3, 'Week 3 belonged to the underdogs.')
         self.assertTrue(created)
         row = self.LeagueEmail.objects.get(subject='Week 3 recap')
         self.assertIn('PutnamBowl', row.body)
@@ -320,33 +341,33 @@ class RecapEmailTests(TestCase):
         """Recaps used to append an "I'm PutnamBot, the AI commissioner" signoff
         and be credited to the `putnambot` account. PutnamBot is a player; the
         mailbox is the commissioner."""
-        self.email_utils.record_recap_email(3, 'Week 3 belonged to the underdogs.')
+        self.email_utils.record_recap_email(default_league(), 3, 'Week 3 belonged to the underdogs.')
         row = self.LeagueEmail.objects.get(subject='Week 3 recap')
         self.assertNotIn('PutnamBot', row.body)
         self.assertIsNone(row.author, "a recap is the league's own mail")
 
     def test_a_weekly_recap_keeps_one_row_per_week(self):
         """Regenerating replaces week 3's entry rather than adding a version."""
-        self.email_utils.record_recap_email(3, 'first write-up', year=2026)
-        self.email_utils.record_recap_email(3, 'a better write-up', year=2026)
+        self.email_utils.record_recap_email(default_league(), 3, 'first write-up', year=2026)
+        self.email_utils.record_recap_email(default_league(), 3, 'a better write-up', year=2026)
         rows = self.LeagueEmail.objects.filter(subject='Week 3 recap')
         self.assertEqual(rows.count(), 1)
         self.assertIn('a better write-up', rows.first().body)
 
     def test_an_unkeyed_record_is_its_own_row(self):
-        self.email_utils.record_recap_email(None, 'Welcome to the season.', subject='Season preview')
-        self.email_utils.record_recap_email(None, 'Welcome again.', subject='Season preview')
+        self.email_utils.record_recap_email(default_league(), None, 'Welcome to the season.', subject='Season preview')
+        self.email_utils.record_recap_email(default_league(), None, 'Welcome again.', subject='Season preview')
         self.assertEqual(
             self.LeagueEmail.objects.filter(subject='Season preview').count(), 2)
 
     def test_next_season_week_one_is_a_new_row(self):
-        self.email_utils.record_recap_email(1, 'Week 1 of 2026.', year=2026)
-        self.email_utils.record_recap_email(1, 'Week 1 of 2027.', year=2027)
+        self.email_utils.record_recap_email(default_league(), 1, 'Week 1 of 2026.', year=2026)
+        self.email_utils.record_recap_email(default_league(), 1, 'Week 1 of 2027.', year=2027)
         self.assertEqual(
             self.LeagueEmail.objects.filter(subject='Week 1 recap').count(), 2)
 
     def test_empty_recap_does_nothing(self):
-        self.assertEqual(self.email_utils.record_recap_email(3, '   '), (None, False))
+        self.assertEqual(self.email_utils.record_recap_email(default_league(), 3, '   '), (None, False))
         self.assertEqual(self.LeagueEmail.objects.count(), 0)
 
 
@@ -363,18 +384,18 @@ class PickEmailHandleTests(TestCase):
         self.pick_email = pick_email
         self.sent = []
         self.addCleanup(setattr, pick_email, 'send_reply', pick_email.send_reply)
-        pick_email.send_reply = lambda to, subject, body, in_reply_to=None: (
+        pick_email.send_reply = lambda to, subject, body, in_reply_to=None, **kw: (
             self.sent.append((to, subject, body, in_reply_to)) or True)
 
         self.addCleanup(setattr, pick_email, '_ask_model', pick_email._ask_model)
         self.model_reply = None
         pick_email._ask_model = lambda text, games: self.model_reply
 
-        self.user = User.objects.create_user('gramps', email='gramps@example.com')
+        self.user = make_member('gramps', email='gramps@example.com')
         self.user.profile.real_name = 'Bill'
         self.user.profile.save()
 
-        self.settings = SiteSettings.get()
+        self.settings = LeagueSettings.for_league(default_league())
         self.settings.week = 5
         self.settings.publish = True
         self.settings.lock_picks = False
@@ -481,16 +502,16 @@ class EmailSwitchTests(TestCase):
         from main import auto, email_utils
         self.auto = auto
         self.email_utils = email_utils
-        self.settings_obj = SiteSettings.get()
+        self.settings_obj = LeagueSettings.for_league(default_league())
         self.settings_obj.week = 4
         self.settings_obj.save()
-        User.objects.create_user('putnambot')
+        make_member('putnambot')
 
     def test_relay_switch_off_forwards_to_nobody(self):
         from main.models import LeagueEmail
         self.settings_obj.email_relay = False
         self.settings_obj.save()
-        row = LeagueEmail.objects.create(
+        row = LeagueEmail.objects.create(league=default_league(), 
             subject='Notice', body='hello', sent_at=datetime(2026, 1, 1,
                                                              tzinfo=timezone.utc),
             message_id='<x@example.com>')
@@ -501,17 +522,17 @@ class EmailSwitchTests(TestCase):
         from main import pick_email
         self.settings_obj.email_confirmations = False
         self.settings_obj.save()
-        self.assertFalse(pick_email.send_reply('a@example.com', 's', 'b'))
+        self.assertFalse(pick_email.send_reply('a@example.com', 's', 'b', settings=self.settings_obj))
 
     def test_editing_the_prompt_cannot_remove_the_data(self):
         """The instructions are the commissioner's; the standings and results are
         not optional. Whatever they write, the facts are appended."""
         make_game(week=3, winner='team1', graded=True)
-        user = User.objects.create_user('player')
+        user = make_member('player')
         Pick.objects.create(user=user, game=Game.objects.get(week=3),
                             choice='team1')
 
-        prompt = self.auto.build_recap_prompt(3, instructions='Be brief.')
+        prompt = self.auto.build_recap_prompt(default_league(), 3, instructions='Be brief.')
         self.assertTrue(prompt.startswith('Be brief.'))
         # Both halves of the data survive: the computed angles and the table.
         self.assertIn('things worth writing about', prompt)
@@ -522,30 +543,30 @@ class EmailSwitchTests(TestCase):
 
     def test_week_placeholder_is_substituted(self):
         make_game(week=3, winner='team1', graded=True)
-        user = User.objects.create_user('player')
+        user = make_member('player')
         Pick.objects.create(user=user, game=Game.objects.get(week=3), choice='team1')
 
-        prompt = self.auto.build_recap_prompt(3, instructions='Recap week {week}.')
+        prompt = self.auto.build_recap_prompt(default_league(), 3, instructions='Recap week {week}.')
         self.assertIn('Recap week 3.', prompt)
 
     def test_a_stray_brace_in_the_prompt_does_not_raise(self):
         """User-edited text, so replace() not format() — a stray brace must not
         blow up recap generation."""
         make_game(week=3, winner='team1', graded=True)
-        user = User.objects.create_user('player')
+        user = make_member('player')
         Pick.objects.create(user=user, game=Game.objects.get(week=3), choice='team1')
 
-        prompt = self.auto.build_recap_prompt(3, instructions='Use {curly} braces {')
+        prompt = self.auto.build_recap_prompt(default_league(), 3, instructions='Use {curly} braces {')
         self.assertIn('{curly}', prompt)
 
     def test_blank_prompt_falls_back_to_the_default(self):
         make_game(week=3, winner='team1', graded=True)
-        user = User.objects.create_user('player')
+        user = make_member('player')
         Pick.objects.create(user=user, game=Game.objects.get(week=3), choice='team1')
 
         self.settings_obj.recap_prompt = ''
         self.settings_obj.save()
-        prompt = self.auto.build_recap_prompt(3)
+        prompt = self.auto.build_recap_prompt(default_league(), 3)
         self.assertIn('factual weekly recap', prompt)
 
 
@@ -563,9 +584,9 @@ class PublishTogglePicksLiveTests(TestCase):
         # Patched where views looks it up: it imports inside the branch.
         email_utils.send_picks_published_email = lambda s: self.sent.append(s.week)
 
-        self.boss = User.objects.create_user('boss', password='pw', is_staff=True,
+        self.boss = make_member('boss', password='pw', is_staff=True,
                                              is_superuser=True)
-        self.settings_obj = SiteSettings.get()
+        self.settings_obj = LeagueSettings.for_league(default_league())
         self.settings_obj.week = 4
         self.settings_obj.publish = False
         self.settings_obj.save()
@@ -624,13 +645,13 @@ class RelayTests(TestCase):
             return _T()
         threading.Thread = inline
 
-        self.boss = User.objects.create_user('boss', email='boss@example.com')
+        self.boss = make_member('boss', email='boss@example.com')
         self.boss.profile.email_posts_enabled = True
         self.boss.profile.real_name = 'The Commissioner'
         self.boss.profile.save()
         for i in range(4):
-            User.objects.create_user(f'member{i}', email=f'm{i}@example.com')
-        bot = User.objects.create_user('bot_x')
+            make_member(f'member{i}', email=f'm{i}@example.com')
+        bot = make_member('bot_x')
         bot.profile.is_bot = True
         bot.profile.save()
 
@@ -724,7 +745,7 @@ class RelayTests(TestCase):
             self.assertIn('not a league member', reason)
 
             # They get an account, and the next poll picks the message up.
-            newcomer = User.objects.create_user('newcomer',
+            newcomer = make_member('newcomer',
                                                 email='newcomer@example.com')
             newcomer.profile.email_posts_enabled = True
             newcomer.profile.save()
@@ -744,7 +765,7 @@ class RelayTests(TestCase):
         self.addCleanup(setattr, pick_email, '_ask_model', pick_email._ask_model)
         pick_email._ask_model = lambda text, games: None      # unreachable
 
-        s = SiteSettings.get()
+        s = LeagueSettings.for_league(default_league())
         s.week = 5
         s.publish = True
         s.lock_picks = False
@@ -780,7 +801,7 @@ class RelayTests(TestCase):
         self.addCleanup(setattr, pick_email, 'send_reply', pick_email.send_reply)
         pick_email.send_reply = lambda *a, **kw: True
 
-        s = SiteSettings.get()
+        s = LeagueSettings.for_league(default_league())
         s.week = 5
         s.publish = True
         s.lock_picks = False
@@ -788,7 +809,7 @@ class RelayTests(TestCase):
         game = make_game(week=5)
 
         # A row already exists for this message, as it would after a first attempt.
-        LeagueEmail.objects.create(
+        LeagueEmail.objects.create(league=default_league(), 
             message_id='<r1@example.com>', subject='old', body='old',
             sent_at=datetime(2026, 1, 1, tzinfo=timezone.utc), published=False)
 
@@ -815,7 +836,7 @@ class RelayTests(TestCase):
         self.addCleanup(setattr, pick_email, '_ask_model', pick_email._ask_model)
         pick_email._ask_model = lambda text, games: None
 
-        s = SiteSettings.get()
+        s = LeagueSettings.for_league(default_league())
         s.week = 5
         s.publish = True
         s.lock_picks = False
@@ -863,17 +884,17 @@ class PickEmailRoutingTests(TestCase):
         self.LeagueEmail = LeagueEmail
         self.addCleanup(setattr, pick_email, 'send_reply', pick_email.send_reply)
         self.sent = []
-        pick_email.send_reply = lambda to, subject, body, in_reply_to=None: (
+        pick_email.send_reply = lambda to, subject, body, in_reply_to=None, **kw: (
             self.sent.append((to, subject, body, in_reply_to)) or True)
 
-        self.user = User.objects.create_user('gramps', email='gramps@example.com')
+        self.user = make_member('gramps', email='gramps@example.com')
         # Deliberately WITHOUT email_posts_enabled: submitting picks needs no
         # publishing privilege.
         self.user.profile.save()
         for i in range(4):
-            User.objects.create_user(f'member{i}', email=f'm{i}@example.com')
+            make_member(f'member{i}', email=f'm{i}@example.com')
 
-        s = SiteSettings.get()
+        s = LeagueSettings.for_league(default_league())
         s.week = 5
         s.publish = True
         s.lock_picks = False
@@ -935,7 +956,7 @@ class GradeScopeTests(TestCase):
     """The manual grade handler looped over every game ever and re-graded them."""
 
     def test_does_not_regrade_other_weeks(self):
-        settings = SiteSettings.get()
+        settings = LeagueSettings.for_league(default_league())
         settings.week = 4
         settings.grade_api = 'espn'
         settings.save()
@@ -952,7 +973,7 @@ class GradeScopeTests(TestCase):
         self.assertTrue(past.graded)
 
     def test_week_argument_selects_the_week(self):
-        settings = SiteSettings.get()
+        settings = LeagueSettings.for_league(default_league())
         settings.week = 4
         settings.save()
         target = make_game(week=2, game_id='G2', team1_is_home=False)
@@ -1011,10 +1032,10 @@ class AiBotPickTests(TestCase):
     """putnambot uses Gemini; a failure must degrade to random, never block."""
 
     def setUp(self):
-        self.settings = SiteSettings.get()
+        self.settings = LeagueSettings.for_league(default_league())
         self.settings.week = 2
         self.settings.save()
-        self.bot = User.objects.create_user('putnambot')
+        self.bot = make_member('putnambot')
         self.bot.profile.is_bot = True
         self.bot.profile.bot_strategy = 'gemini'
         self.bot.profile.save()
@@ -1028,13 +1049,13 @@ class AiBotPickTests(TestCase):
 
     def test_uses_gemini_choices(self):
         self._patch(lambda games: {self.g1.id: 'team2', self.g2.id: 'team1'})
-        make_bot_picks()
+        make_bot_picks(default_league())
         picks = {p.game_id: p.choice for p in Pick.objects.filter(user=self.bot)}
         self.assertEqual(picks, {self.g1.id: 'team2', self.g2.id: 'team1'})
 
     def test_partial_response_is_filled_in(self):
         self._patch(lambda games: {self.g1.id: 'team2'})
-        make_bot_picks()
+        make_bot_picks(default_league())
         picks = Pick.objects.filter(user=self.bot)
         self.assertEqual(picks.count(), 2, 'every game must get a pick')
         self.assertEqual(picks.get(game=self.g1).choice, 'team2')
@@ -1043,7 +1064,7 @@ class AiBotPickTests(TestCase):
         def boom(games):
             raise RuntimeError('gemini exploded')
         self._patch(boom)
-        make_bot_picks()
+        make_bot_picks(default_league())
         self.assertEqual(Pick.objects.filter(user=self.bot).count(), 2)
 
     def test_random_bots_never_call_gemini(self):
@@ -1051,7 +1072,7 @@ class AiBotPickTests(TestCase):
         self._patch(lambda games: called.append(1) or {})
         self.bot.profile.bot_strategy = 'random'
         self.bot.profile.save()
-        make_bot_picks()
+        make_bot_picks(default_league())
         self.assertEqual(called, [], 'random bots must not hit the API')
         self.assertEqual(Pick.objects.filter(user=self.bot).count(), 2)
 
@@ -1060,7 +1081,7 @@ class AiBotPickTests(TestCase):
         Pick.objects.create(user=self.bot, game=self.g2, choice='team1')
         called = []
         self._patch(lambda games: called.append(1) or {})
-        make_bot_picks()
+        make_bot_picks(default_league())
         self.assertEqual(called, [], 'should not re-ask for a fully picked week')
 
 
@@ -1070,7 +1091,7 @@ class ApiSplitTests(TestCase):
     from one setting made the useful combination impossible."""
 
     def test_defaults_are_independent_fields(self):
-        s = SiteSettings.get()
+        s = LeagueSettings.for_league(default_league())
         s.scrape_api = 'nfl_data_py'
         s.grade_api = 'espn'
         s.save()
@@ -1080,7 +1101,7 @@ class ApiSplitTests(TestCase):
 
     def test_scrape_uses_scrape_api(self):
         from . import auto
-        s = SiteSettings.get()
+        s = LeagueSettings.for_league(default_league())
         s.scrape_api = 'nfl_data_py'
         s.grade_api = 'espn'
         s.week = 3
@@ -1104,7 +1125,7 @@ class ApiSplitTests(TestCase):
 
     def test_grade_uses_grade_api(self):
         from . import auto
-        s = SiteSettings.get()
+        s = LeagueSettings.for_league(default_league())
         s.scrape_api = 'nfl_data_py'
         s.grade_api = 'espn'
         s.week = 3
@@ -1184,7 +1205,7 @@ class ConferenceSplitTests(TestCase):
     def test_champion_fields_only_offer_their_own_conference(self):
         from .forms import PreseasonForm
         from .teams import NFC_TEAMS, AFC_TEAMS
-        user = User.objects.create_user('confuser', password='pw')
+        user = make_member('confuser', password='pw')
         form = PreseasonForm(user)
         self.assertEqual(list(form.fields['nfc_champ'].choices), list(NFC_TEAMS))
         self.assertEqual(list(form.fields['afc_champ'].choices), list(AFC_TEAMS))
@@ -1196,9 +1217,9 @@ class PreseasonEditWindowTests(TestCase):
     saved."""
 
     def setUp(self):
-        self.user = User.objects.create_user('presuser', password='pw')
+        self.user = make_member('presuser', password='pw')
         self.client.login(username='presuser', password='pw')
-        self.settings = SiteSettings.get()
+        self.settings = LeagueSettings.for_league(default_league())
 
     def _post(self):
         return self.client.post('/preseason/', {
@@ -1269,14 +1290,14 @@ class NavPageRenderTests(TestCase):
     PAGES = ['main:home', 'main:picks', 'main:rules', 'main:analytics',
              'main:pick_history', 'main:preseason', 'main:members',
              'main:pickdash', 'main:emaildash', 'main:accountdash',
-             'accounts:user_profile']
+             'accounts:user_profile', 'accounts:password_change', 'leagues:index']
 
     def setUp(self):
-        self.user = User.objects.create_user('nav_tester', password='pw', email='n@x.com')
+        self.user = make_member('nav_tester', password='pw', email='n@x.com')
         self.user.is_staff = True
         self.user.is_superuser = True
         self.user.save()
-        SiteSettings.get()
+        LeagueSettings.for_league(default_league())
 
     def _ok(self, name, **kw):
         from django.urls import reverse
@@ -1341,7 +1362,7 @@ class HomeSideAndGameIdTests(TestCase):
     """
 
     def setUp(self):
-        self.settings = SiteSettings.get()
+        self.settings = LeagueSettings.for_league(default_league())
         self.settings.week = 1
         self.settings.save()
         self.addCleanup(setattr, scrape, 'grade', scrape.grade)
@@ -1428,7 +1449,7 @@ class HomeSideAndGameIdTests(TestCase):
         import re
         from datetime import datetime as _dt, timezone as _tz
 
-        user = User.objects.create_user('venue', password='pw', email='v@x.com')
+        user = make_member('venue', password='pw', email='v@x.com')
         user.profile.preseason_submitted = True
         user.profile.save()
         self.settings.publish = True
@@ -1438,7 +1459,7 @@ class HomeSideAndGameIdTests(TestCase):
 
         for flag, expected in ((True, 'PHI'), (False, 'DAL')):
             Game.objects.all().delete()
-            Game.objects.create(
+            Game.objects.create(league=default_league(), 
                 team1='Philadelphia Eagles', team2='Dallas Cowboys',
                 points1=1.0, points2=3.3, team1_is_home=flag, week=1,
                 game_id='2025_01_DAL_PHI',
@@ -1462,7 +1483,7 @@ class SlateValidationTests(TestCase):
     def setUp(self):
         from . import auto
         self.auto = auto
-        self.settings = SiteSettings.get()
+        self.settings = LeagueSettings.for_league(default_league())
         self.settings.week = 3
         self.settings.auto_tz = 'UTC'
         self.settings.auto_retry_window_minutes = 360
@@ -1477,7 +1498,7 @@ class SlateValidationTests(TestCase):
                             getattr(auto.scrape_module, name))
             setattr(auto.scrape_module, name, repl)
         self.addCleanup(setattr, auto, 'make_bot_picks', auto.make_bot_picks)
-        auto.make_bot_picks = lambda **kw: None
+        auto.make_bot_picks = lambda *a, **kw: None
 
     def _rows(self, priced=True):
         ml = (150, -170) if priced else (0, 0)
@@ -1544,7 +1565,7 @@ class GameDaySetTests(TestCase):
     """The old from/to range could not express a non-contiguous set of days."""
 
     def setUp(self):
-        self.settings = SiteSettings.get()
+        self.settings = LeagueSettings.for_league(default_league())
 
     def _dt(self, day):
         # 2026-09-21 is a Monday, so +day lands on weekday `day`.
@@ -1577,7 +1598,7 @@ class AutoTickScheduleTests(TestCase):
     def setUp(self):
         from . import auto
         self.auto = auto
-        self.settings = SiteSettings.get()
+        self.settings = LeagueSettings.for_league(default_league())
         self.settings.auto_enabled = True
         self.settings.week = 3
         self.settings.publish = True
@@ -1599,28 +1620,28 @@ class AutoTickScheduleTests(TestCase):
         self._game(graded=False)
         self.settings.auto_grade_dt = datetime.now(timezone.utc) + timedelta(hours=5)
         self.settings.save()
-        self.auto.auto_tick()
+        self.auto.auto_tick(default_league())
         self.assertEqual(self.graded, [], 'must not grade before the grade time')
 
     def test_grading_runs_once_the_grade_time_has_passed(self):
         self._game(graded=False)
         self.settings.auto_grade_dt = datetime.now(timezone.utc) - timedelta(minutes=1)
         self.settings.save()
-        self.auto.auto_tick()
+        self.auto.auto_tick(default_league())
         self.assertEqual(len(self.graded), 1)
 
     def test_advance_is_skipped_when_the_toggle_is_off(self):
         self._game(graded=True)
         self.settings.auto_advance = False
         self.settings.save()
-        self.auto.auto_tick()
+        self.auto.auto_tick(default_league())
         self.assertEqual(self.advanced, [], 'auto_advance off must hold the week')
 
     def test_advance_runs_when_the_toggle_is_on(self):
         self._game(graded=True)
         self.settings.auto_advance = True
         self.settings.save()
-        self.auto.auto_tick()
+        self.auto.auto_tick(default_league())
         self.assertEqual(len(self.advanced), 1)
 
     def test_the_final_week_is_scored_then_the_season_stops(self):
@@ -1629,7 +1650,7 @@ class AutoTickScheduleTests(TestCase):
         self.settings.week = 22
         self.settings.auto_advance = True
         self.settings.save()
-        self.auto.auto_tick()
+        self.auto.auto_tick(default_league())
         self.assertEqual(len(self.advanced), 1, 'the last week still gets scored')
 
     def test_nothing_happens_past_the_end_of_the_season(self):
@@ -1639,7 +1660,7 @@ class AutoTickScheduleTests(TestCase):
         self.settings.publish = False
         self.settings.auto_scrape_dt = datetime.now(timezone.utc) - timedelta(hours=1)
         self.settings.save()
-        self.auto.auto_tick()
+        self.auto.auto_tick(default_league())
         self.settings.refresh_from_db()
         self.assertFalse(self.settings.publish, 'must not publish past the season')
         self.assertEqual(self.advanced, [])
@@ -1653,11 +1674,11 @@ class AutoSettingsFormTests(TestCase):
     """
 
     def setUp(self):
-        self.user = User.objects.create_user('boss', password='pw', email='b@x.com')
+        self.user = make_member('boss', password='pw', email='b@x.com')
         self.user.is_staff = self.user.is_superuser = True
         self.user.save()
         self.client.force_login(self.user)
-        self.settings = SiteSettings.get()
+        self.settings = LeagueSettings.for_league(default_league())
         self.settings.auto_tz = 'UTC'
         self.settings.save()
 
@@ -1739,7 +1760,7 @@ class ScrapeIsIdempotentTests(TestCase):
     def setUp(self):
         from . import auto
         self.auto = auto
-        self.settings = SiteSettings.get()
+        self.settings = LeagueSettings.for_league(default_league())
         self.settings.week = 3
         self.settings.save()
         self.kick = datetime(2026, 9, 27, 17, 0, tzinfo=timezone.utc)
@@ -1750,7 +1771,7 @@ class ScrapeIsIdempotentTests(TestCase):
                             getattr(auto.scrape_module, name))
             setattr(auto.scrape_module, name, repl)
         self.addCleanup(setattr, auto, 'make_bot_picks', auto.make_bot_picks)
-        auto.make_bot_picks = lambda **k: None
+        auto.make_bot_picks = lambda *a, **k: None
         self.addCleanup(setattr, auto.scrape_module, 'scrape', auto.scrape_module.scrape)
 
     def _serve(self, rows):
@@ -1786,7 +1807,7 @@ class ScrapeIsIdempotentTests(TestCase):
 
     def test_a_row_with_no_game_id_still_matches(self):
         """A game added by hand on the dashboard carries no source id."""
-        Game.objects.create(week=3, team1='Green Bay Packers',
+        Game.objects.create(league=default_league(), week=3, team1='Green Bay Packers',
                             team2='Atlanta Falcons', points1=1.0, points2=2.5,
                             game_id='', game_dt=self.kick, team1_is_home=True)
         self._serve(self._atl_favored())
@@ -1795,7 +1816,7 @@ class ScrapeIsIdempotentTests(TestCase):
 
     def test_an_old_format_game_id_still_matches(self):
         """Ids stored before the two sources agreed on a format."""
-        Game.objects.create(week=3, team1='Green Bay Packers',
+        Game.objects.create(league=default_league(), week=3, team1='Green Bay Packers',
                             team2='Atlanta Falcons', points1=1.0, points2=2.5,
                             game_id='2026_3_ATL_GB', game_dt=self.kick,
                             team1_is_home=True)
@@ -1847,29 +1868,29 @@ class ScrapeIsIdempotentTests(TestCase):
 
     def test_match_existing_ignores_team_order(self):
         """The matcher itself, with no game_id to short-circuit on."""
-        g = Game.objects.create(week=3, team1='Green Bay Packers',
+        g = Game.objects.create(league=default_league(), week=3, team1='Green Bay Packers',
                                 team2='Atlanta Falcons', points1=1.0, points2=2.5,
                                 game_id='', team1_is_home=True)
         # Same pair, either way round.
         self.assertEqual(
-            Game.match_existing(3, 'Green Bay Packers', 'Atlanta Falcons'), g)
+            Game.match_existing(default_league(), 3, 'Green Bay Packers', 'Atlanta Falcons'), g)
         self.assertEqual(
-            Game.match_existing(3, 'Atlanta Falcons', 'Green Bay Packers'), g)
+            Game.match_existing(default_league(), 3, 'Atlanta Falcons', 'Green Bay Packers'), g)
         # A different fixture must not match.
         self.assertIsNone(
-            Game.match_existing(3, 'Chicago Bears', 'Atlanta Falcons'))
+            Game.match_existing(default_league(), 3, 'Chicago Bears', 'Atlanta Falcons'))
         # Nor the same fixture in another week.
         self.assertIsNone(
-            Game.match_existing(4, 'Green Bay Packers', 'Atlanta Falcons'))
+            Game.match_existing(default_league(), 4, 'Green Bay Packers', 'Atlanta Falcons'))
 
     def test_match_existing_matches_across_id_spellings(self):
         """nfl_data_py's LA and ESPN's LAR are the same fixture."""
-        g = Game.objects.create(week=3, team1='Los Angeles Rams',
+        g = Game.objects.create(league=default_league(), week=3, team1='Los Angeles Rams',
                                 team2='San Francisco 49ers', points1=1.0,
                                 points2=2.1, game_id='2026_03_SF_LA',
                                 team1_is_home=True)
         self.assertEqual(
-            Game.match_existing(3, 'Los Angeles Rams', 'San Francisco 49ers',
+            Game.match_existing(default_league(), 3, 'Los Angeles Rams', 'San Francisco 49ers',
                                 '2026_3_SF_LAR'), g)
 
 
@@ -1880,11 +1901,11 @@ class ManualScrapeWeekTests(TestCase):
     is scoped by week."""
 
     def setUp(self):
-        self.user = User.objects.create_user('sc', password='pw', email='s@x.com')
+        self.user = make_member('sc', password='pw', email='s@x.com')
         self.user.is_staff = self.user.is_superuser = True
         self.user.save()
         self.client.force_login(self.user)
-        self.settings = SiteSettings.get()
+        self.settings = LeagueSettings.for_league(default_league())
         self.settings.week = 2
         self.settings.publish = False
         self.settings.save()
@@ -1930,13 +1951,13 @@ class GradingStartsAtFirstKickoffTests(TestCase):
     def setUp(self):
         from . import auto
         self.auto = auto
-        self.settings = SiteSettings.get()
+        self.settings = LeagueSettings.for_league(default_league())
         self.settings.week = 3
         self.settings.save()
         self.thursday = datetime(2026, 9, 24, 23, 15, tzinfo=timezone.utc)
         self.sunday = datetime(2026, 9, 27, 17, 0, tzinfo=timezone.utc)
         self.addCleanup(setattr, auto, 'make_bot_picks', auto.make_bot_picks)
-        auto.make_bot_picks = lambda **k: None
+        auto.make_bot_picks = lambda *a, **k: None
         self.addCleanup(setattr, auto.scrape_module, 'get_first_game_dt',
                         auto.scrape_module.get_first_game_dt)
         auto.scrape_module.get_first_game_dt = lambda **k: None
@@ -1969,7 +1990,7 @@ class GradingStartsAtFirstKickoffTests(TestCase):
         calls = []
         self.addCleanup(setattr, self.auto, 'do_grade', self.auto.do_grade)
         self.auto.do_grade = lambda s, **kw: calls.append(1)
-        self.auto.auto_tick()
+        self.auto.auto_tick(default_league())
         self.assertEqual(calls, [], 'nothing can be graded before kickoff')
 
 
@@ -1984,18 +2005,18 @@ class WeeklyEmailShapeTests(TestCase):
     def setUp(self):
         from . import email_utils
         self.email_utils = email_utils
-        self.settings = SiteSettings.get()
+        self.settings = LeagueSettings.for_league(default_league())
         self.settings.week = 3
         self.settings.weekly_recap = 'RECAP TEXT HERE'
         self.settings.weekly_intro = 'INTRO TEXT HERE'
         self.settings.save()
         make_game(week=3)
-        User.objects.create_user('m1', email='m1@x.com')
+        make_member('m1', email='m1@x.com')
 
         self.captured = {}
         self.addCleanup(setattr, email_utils, 'record_site_email',
                         email_utils.record_site_email)
-        email_utils.record_site_email = lambda **kw: self.captured.update(kw)
+        email_utils.record_site_email = lambda *a, **kw: self.captured.update(kw)
         # `outbound_suppressed` is TESTING-gated so the suite cannot post real
         # mail. Lifted here because every transport below is stubbed, and the
         # point of these tests is the body that gets built.
@@ -2051,7 +2072,7 @@ class WeeklyEmailShapeTests(TestCase):
     def test_advancing_clears_the_intro(self):
         from . import auto
         self.addCleanup(setattr, auto, 'build_recap', auto.build_recap)
-        auto.build_recap = lambda week: None
+        auto.build_recap = lambda league, week: None
         auto.do_advance_week(self.settings)
         self.settings.refresh_from_db()
         self.assertEqual(self.settings.weekly_intro, '',
@@ -2065,7 +2086,7 @@ class PickReminderTests(TestCase):
     def setUp(self):
         from . import email_utils
         self.email_utils = email_utils
-        self.settings = SiteSettings.get()
+        self.settings = LeagueSettings.for_league(default_league())
         self.settings.week = 3
         self.settings.email_reminder = True
         self.settings.save()
@@ -2073,9 +2094,9 @@ class PickReminderTests(TestCase):
         self.g1 = make_game(week=3)
         self.g2 = make_game(week=3, team1='Buffalo Bills', team2='Miami Dolphins')
 
-        self.done = User.objects.create_user('done', email='d@x.com')
-        self.partial = User.objects.create_user('partial', email='p@x.com')
-        self.none = User.objects.create_user('none', email='n@x.com')
+        self.done = make_member('done', email='d@x.com')
+        self.partial = make_member('partial', email='p@x.com')
+        self.none = make_member('none', email='n@x.com')
         for g in (self.g1, self.g2):
             Pick.objects.create(user=self.done, game=g, choice='team1')
         Pick.objects.create(user=self.partial, game=self.g1, choice='team1')
@@ -2093,11 +2114,11 @@ class PickReminderTests(TestCase):
         email_utils.send_via_mailbox = lambda *a, **kw: (True, '')
         self.addCleanup(setattr, email_utils, 'record_site_email',
                         email_utils.record_site_email)
-        email_utils.record_site_email = lambda **kw: None
+        email_utils.record_site_email = lambda *a, **kw: None
 
     def test_it_targets_incomplete_ballots_not_just_empty_ones(self):
         names = {u.username for u, _, _ in
-                 self.email_utils.members_missing_picks(3)}
+                 self.email_utils.members_missing_picks(default_league(), 3)}
         self.assertEqual(names, {'partial', 'none'},
                          'a partial ballot scores nothing, so it counts as missing')
 
@@ -2115,11 +2136,11 @@ class PickReminderTests(TestCase):
             self.email_utils.send_pick_reminder_email(self.settings), 0)
 
     def test_bots_are_never_reminded(self):
-        bot = User.objects.create_user('bot', email='b@x.com')
+        bot = make_member('bot', email='b@x.com')
         bot.profile.is_bot = True
         bot.profile.save()
         names = {u.username for u, _, _ in
-                 self.email_utils.members_missing_picks(3)}
+                 self.email_utils.members_missing_picks(default_league(), 3)}
         self.assertNotIn('bot', names)
 
     def test_the_tick_fires_it_inside_the_window(self):
@@ -2137,7 +2158,7 @@ class PickReminderTests(TestCase):
         self.addCleanup(setattr, self.email_utils, 'send_pick_reminder_email',
                         self.email_utils.send_pick_reminder_email)
         self.email_utils.send_pick_reminder_email = lambda s: calls.append(1)
-        auto.auto_tick()
+        auto.auto_tick(default_league())
         self.assertEqual(len(calls), 1)
 
     def test_the_tick_holds_off_outside_the_window(self):
@@ -2153,7 +2174,7 @@ class PickReminderTests(TestCase):
         self.addCleanup(setattr, self.email_utils, 'send_pick_reminder_email',
                         self.email_utils.send_pick_reminder_email)
         self.email_utils.send_pick_reminder_email = lambda s: calls.append(1)
-        auto.auto_tick()
+        auto.auto_tick(default_league())
         self.assertEqual(calls, [], 'five days out is not "closing soon"')
 
 
@@ -2168,8 +2189,8 @@ class RecapStatsTests(TestCase):
     def setUp(self):
         from . import recap_stats
         self.stats = recap_stats
-        SiteSettings.get()
-        self.users = [User.objects.create_user(n, email=f'{n}@x.com')
+        LeagueSettings.for_league(default_league())
+        self.users = [make_member(n, email=f'{n}@x.com')
                       for n in ('alice', 'bob', 'carol', 'dave')]
 
     def _game(self, **kw):
@@ -2182,27 +2203,27 @@ class RecapStatsTests(TestCase):
 
     def test_nothing_gradeable_yields_nothing(self):
         self._game(graded=False, winner='')
-        lines, ranked = self.stats.summary(3)
+        lines, ranked = self.stats.summary(default_league(), 3)
         self.assertEqual(lines, [])
         self.assertIsNone(ranked)
 
     def test_a_game_nobody_got_right_is_called_out(self):
         g = self._game(winner='team2')
         self._pick_all(g, 'team1')
-        lines, _ = self.stats.summary(3)
+        lines, _ = self.stats.summary(default_league(), 3)
         self.assertTrue(any('NOBODY SAW IT' in ln for ln in lines))
 
     def test_a_game_everyone_got_right_is_called_out(self):
         g = self._game(winner='team1')
         self._pick_all(g, 'team1')
-        lines, _ = self.stats.summary(3)
+        lines, _ = self.stats.summary(default_league(), 3)
         self.assertTrue(any('EVERYONE GOT IT' in ln for ln in lines))
 
     def test_the_trap_line_does_not_repeat_the_wipeout(self):
         """Both fired on the same game and said the same thing twice."""
         g = self._game(winner='team2')
         self._pick_all(g, 'team1')
-        lines, _ = self.stats.summary(3)
+        lines, _ = self.stats.summary(default_league(), 3)
         self.assertFalse(any('TRAP GAME' in ln for ln in lines))
 
     def test_a_perfect_week_is_flagged(self):
@@ -2211,35 +2232,35 @@ class RecapStatsTests(TestCase):
                         team2='Miami Dolphins')
         self._pick_all(g1, 'team1', [self.users[0]])
         self._pick_all(g2, 'team1', [self.users[0]])
-        lines, _ = self.stats.summary(3)
+        lines, _ = self.stats.summary(default_league(), 3)
         self.assertTrue(any('PERFECT WEEK' in ln for ln in lines))
 
     def test_an_incomplete_ballot_is_flagged(self):
         g1 = self._game(winner='team1')
         self._game(winner='team1', team1='Buffalo Bills', team2='Miami Dolphins')
         self._pick_all(g1, 'team1')
-        lines, _ = self.stats.summary(3)
+        lines, _ = self.stats.summary(default_league(), 3)
         self.assertTrue(any('INCOMPLETE BALLOTS' in ln for ln in lines))
 
     def test_standings_movement_needs_a_prior_leaderboard(self):
         g = self._game(winner='team1')
         self._pick_all(g, 'team1')
-        lines, _ = self.stats.summary(3)
+        lines, _ = self.stats.summary(default_league(), 3)
         self.assertFalse(any('OVERALL LEADER' in ln for ln in lines),
                          'no snapshot to compare against yet')
 
-        WeeklyLeaderboard.objects.create(week=3, entries=[
+        WeeklyLeaderboard.objects.create(league=default_league(), week=3, entries=[
             {'username': 'alice', 'score': 10.0},
             {'username': 'bob', 'score': 9.5},
         ])
-        lines, _ = self.stats.summary(3)
+        lines, _ = self.stats.summary(default_league(), 3)
         self.assertTrue(any('OVERALL LEADER' in ln for ln in lines))
         self.assertTrue(any('TIGHT RACE' in ln for ln in lines))
 
     def test_the_data_block_carries_angles_and_the_table(self):
         g = self._game(winner='team1')
         self._pick_all(g, 'team1')
-        block, ranked = self.stats.data_block(3)
+        block, ranked = self.stats.data_block(default_league(), 3)
         self.assertIn('things worth writing about', block)
         self.assertIn('Points scored this week', block)
         self.assertTrue(ranked)
@@ -2259,14 +2280,14 @@ class IntroLibraryTests(TestCase):
     def setUp(self):
         from .models import IntroTemplate
         self.IntroTemplate = IntroTemplate
-        self.user = User.objects.create_user('boss2', password='pw', email='b@x.com')
+        self.user = make_member('boss2', password='pw', email='b@x.com')
         self.user.is_staff = self.user.is_superuser = True
         self.user.save()
         self.client.force_login(self.user)
-        self.settings = SiteSettings.get()
+        self.settings = LeagueSettings.for_league(default_league())
         self.settings.week = 7
         self.settings.save()
-        self.tpl = IntroTemplate.objects.create(
+        self.tpl = IntroTemplate.objects.create(league=default_league(), 
             name='Test intro', body='Week {week} is live. Push on.')
 
     def _post(self, **data):
@@ -2290,12 +2311,12 @@ class IntroLibraryTests(TestCase):
         self.settings.weekly_intro = 'Week {week} is live.'
         self.settings.save()
         make_game(week=7)
-        User.objects.create_user('m9', email='m9@x.com')
+        make_member('m9', email='m9@x.com')
 
         captured = {}
         self.addCleanup(setattr, email_utils, 'record_site_email',
                         email_utils.record_site_email)
-        email_utils.record_site_email = lambda **kw: captured.update(kw)
+        email_utils.record_site_email = lambda *a, **kw: captured.update(kw)
         self.addCleanup(setattr, email_utils, 'outbound_suppressed',
                         email_utils.outbound_suppressed)
         email_utils.outbound_suppressed = lambda: False
@@ -2311,7 +2332,7 @@ class IntroLibraryTests(TestCase):
 
     def test_a_stray_brace_does_not_raise(self):
         """The text is hand-edited; format() would blow up mid-send."""
-        tpl = self.IntroTemplate.objects.create(
+        tpl = self.IntroTemplate.objects.create(league=default_league(), 
             name='Braces', body='Good luck {everyone} :{ week {week}')
         self.assertEqual(tpl.render(4), 'Good luck {everyone} :{ week 4')
 
@@ -2368,17 +2389,17 @@ class IntroByEmailTests(TestCase):
         from . import inbound_email, email_utils
         self.inbound = inbound_email
         self.email_utils = email_utils
-        self.settings = SiteSettings.get()
+        self.settings = LeagueSettings.for_league(default_league())
         self.settings.week = 5
         self.settings.save()
 
         self.addCleanup(setattr, dj, 'SMTP_USER', getattr(dj, 'SMTP_USER', ''))
         dj.SMTP_USER = 'league@gmail.com'
 
-        self.boss = User.objects.create_user('boss3', email='boss@x.com')
+        self.boss = make_member('boss3', email='boss@x.com')
         self.boss.profile.email_posts_enabled = True
         self.boss.profile.save()
-        self.member = User.objects.create_user('member3', email='member@x.com')
+        self.member = make_member('member3', email='member@x.com')
 
         # Authentication is checked separately; these tests are about routing.
         self.addCleanup(setattr, inbound_email, '_auth_ok', inbound_email._auth_ok)
@@ -2464,7 +2485,7 @@ class ProfilePageTests(TestCase):
     """
 
     def setUp(self):
-        self.user = User.objects.create_user('pf', password='pw', email='pf@x.com')
+        self.user = make_member('pf', password='pw', email='pf@x.com')
         self.client.force_login(self.user)
 
     def test_every_field_renders(self):
@@ -2509,14 +2530,14 @@ class MembersPageTests(TestCase):
     """The roster: who is in the league, when they joined, what they wrote."""
 
     def setUp(self):
-        self.user = User.objects.create_user('viewer', password='pw', email='v@x.com')
+        self.user = make_member('viewer', password='pw', email='v@x.com')
         self.client.force_login(self.user)
-        self.mate = User.objects.create_user('mate', email='m@x.com')
+        self.mate = make_member('mate', email='m@x.com')
         self.mate.profile.bio = 'Long-suffering Bears fan.'
         self.mate.profile.real_name = 'Team Mate'
         self.mate.profile.favorite_team = 'Chicago Bears'
         self.mate.profile.save()
-        self.bot = User.objects.create_user('abot', email='')
+        self.bot = make_member('abot', email='')
         self.bot.profile.is_bot = True
         self.bot.profile.save()
 
@@ -2639,12 +2660,12 @@ class TiedLeaderboardTests(TestCase):
         self.tied = []
         for name, score in (('alpha', 10.0), ('bravo', 10.0),
                             ('charlie', 10.0), ('delta', 4.0)):
-            u = User.objects.create_user(name, password='pw', email=f'{name}@x.com')
+            u = make_member(name, password='pw', email=f'{name}@x.com')
             u.profile.score = score
             u.profile.preseason_submitted = True
             u.profile.save()
             self.tied.append(u)
-        self.settings = SiteSettings.get()
+        self.settings = LeagueSettings.for_league(default_league())
         self.settings.week = 2
         self.settings.save()
         self.client.force_login(self.tied[0])
@@ -2673,7 +2694,7 @@ class TiedLeaderboardTests(TestCase):
 
     def test_a_season_long_tie_shows_no_rank_change(self):
         """Positional numbering made two tied players swap places every week."""
-        WeeklyLeaderboard.objects.create(week=1, entries=[
+        WeeklyLeaderboard.objects.create(league=default_league(), week=1, entries=[
             {'username': 'alpha', 'score': 5.0},
             {'username': 'bravo', 'score': 5.0},
             {'username': 'charlie', 'score': 5.0},
@@ -2701,9 +2722,9 @@ class HomePicksCardTests(TestCase):
     in. It replaced a full-width band that carried a live countdown."""
 
     def setUp(self):
-        self.user = User.objects.create_user('hp', password='pw', email='hp@x.com')
+        self.user = make_member('hp', password='pw', email='hp@x.com')
         self.client.force_login(self.user)
-        self.settings = SiteSettings.get()
+        self.settings = LeagueSettings.for_league(default_league())
         self.settings.week = 4          # past the week-1 preseason redirect
         self.settings.auto_enabled = True
         self.settings.save()
@@ -2780,19 +2801,19 @@ class RankChangeTests(TestCase):
     """
 
     def setUp(self):
-        self.settings = SiteSettings.get()
+        self.settings = LeagueSettings.for_league(default_league())
         self.settings.week = 3
         self.settings.save()
         for name, score in (('alice', 31.0), ('bob', 21.0), ('carol', 40.0)):
-            u = User.objects.create_user(name, email=f'{name}@x.com')
+            u = make_member(name, email=f'{name}@x.com')
             u.profile.score = score
             u.profile.save()
         # Standings going into week 2: carol was last, and has since leapfrogged.
-        WeeklyLeaderboard.objects.create(week=2, entries=[
+        WeeklyLeaderboard.objects.create(league=default_league(), week=2, entries=[
             {'username': 'alice', 'score': 30.0},
             {'username': 'bob', 'score': 20.0},
             {'username': 'carol', 'score': 10.0}])
-        self.viewer = User.objects.create_user('viewer', password='pw', email='v@x.com')
+        self.viewer = make_member('viewer', password='pw', email='v@x.com')
         self.viewer.profile.score = 0
         self.viewer.profile.save()
         self.client.force_login(self.viewer)
@@ -2859,7 +2880,7 @@ class EmailAddressExplainerTests(TestCase):
     """
 
     def setUp(self):
-        self.user = User.objects.create_user('ed', password='pw', email='ed@x.com')
+        self.user = make_member('ed', password='pw', email='ed@x.com')
         self.user.is_staff = self.user.is_superuser = True
         self.user.save()
         self.client.force_login(self.user)
@@ -2921,11 +2942,11 @@ class PreseasonRedirectTests(TestCase):
     """
 
     def setUp(self):
-        self.user = User.objects.create_user('late', password='pw', email='l@x.com')
+        self.user = make_member('late', password='pw', email='l@x.com')
         self.user.profile.preseason_submitted = False
         self.user.profile.save()
         self.client.force_login(self.user)
-        self.settings = SiteSettings.get()
+        self.settings = LeagueSettings.for_league(default_league())
         self.settings.week = 1
         self.settings.save()
 
@@ -2973,7 +2994,7 @@ class PreseasonRedirectTests(TestCase):
 class DashboardDoesNotTickOnLoadTests(TestCase):
     """Opening the pick dashboard must not run the autopilot.
 
-    `pickdash` called `auto_tick()` on every GET whenever auto_enabled was set,
+    `pickdash` called `auto_tick(default_league())` on every GET whenever auto_enabled was set,
     so viewing the page scraped the week, published it and mailed the league — a
     page load with irreversible outward side effects. It fired from throwaway
     database copies too: the SMTP credentials are the same whichever database is
@@ -2982,11 +3003,11 @@ class DashboardDoesNotTickOnLoadTests(TestCase):
     """
 
     def setUp(self):
-        self.user = User.objects.create_user('dash', password='pw', email='d@x.com')
+        self.user = make_member('dash', password='pw', email='d@x.com')
         self.user.is_staff = self.user.is_superuser = True
         self.user.save()
         self.client.force_login(self.user)
-        self.settings = SiteSettings.get()
+        self.settings = LeagueSettings.for_league(default_league())
         self.settings.auto_enabled = True
         self.settings.save()
 
@@ -2994,7 +3015,7 @@ class DashboardDoesNotTickOnLoadTests(TestCase):
         self.ticks = []
         import main.auto as auto_mod
         self.addCleanup(setattr, auto_mod, 'auto_tick', auto_mod.auto_tick)
-        auto_mod.auto_tick = lambda: self.ticks.append(1)
+        auto_mod.auto_tick = lambda *a, **k: self.ticks.append(1)
 
     def test_a_page_load_does_not_tick(self):
         self.client.get('/dashboard/picks/')
@@ -3037,9 +3058,9 @@ class RecapWithoutPicksTests(TestCase):
     def setUp(self):
         from . import auto
         self.auto = auto
-        SiteSettings.get()
+        LeagueSettings.for_league(default_league())
         for i in range(3):
-            User.objects.create_user(f'p{i}', email=f'p{i}@x.com')
+            make_member(f'p{i}', email=f'p{i}@x.com')
         for i in range(4):
             make_game(week=5, team1='Chicago Bears', team2='Green Bay Packers',
                       winner='team1', graded=True)
@@ -3051,17 +3072,17 @@ class RecapWithoutPicksTests(TestCase):
         django_settings_module().GEMINI_API_KEY = ''
 
     def test_a_week_with_no_picks_still_produces_a_recap(self):
-        recap = self.auto.build_recap(5)
+        recap = self.auto.build_recap(default_league(), 5)
         self.assertIsNotNone(recap, 'no picks is not the same as nothing to say')
         self.assertIn('Week 5', recap)
 
     def test_the_data_block_and_the_recap_agree_on_who_played(self):
-        block, ranked = self.auto.recap_data_block(5)
+        block, ranked = self.auto.recap_data_block(default_league(), 5)
         self.assertIsNotNone(block)
         self.assertEqual(len(ranked), User.objects.count())
 
     def test_a_week_with_no_graded_games_has_no_recap(self):
-        self.assertIsNone(self.auto.build_recap(9))
+        self.assertIsNone(self.auto.build_recap(default_league(), 9))
 
 
 def django_settings_module():
@@ -3081,12 +3102,12 @@ class Week1HasNoRecapTests(TestCase):
     def setUp(self):
         from . import email_utils
         self.eu = email_utils
-        self.settings = SiteSettings.get()
+        self.settings = LeagueSettings.for_league(default_league())
         self.settings.publish = True
         self.settings.weekly_recap = 'LAST SEASON FINALE'
         self.settings.email_recap = True
         self.settings.save()
-        User.objects.create_user('reader', email='r@x.com')
+        make_member('reader', email='r@x.com')
         make_game(week=1)
         make_game(week=2)
 
@@ -3126,11 +3147,11 @@ class ManualAdvanceDoesNotDoubleMailTests(TestCase):
     """
 
     def setUp(self):
-        self.user = User.objects.create_user('adv', password='pw', email='a@x.com')
+        self.user = make_member('adv', password='pw', email='a@x.com')
         self.user.is_staff = self.user.is_superuser = True
         self.user.save()
         self.client.force_login(self.user)
-        self.settings = SiteSettings.get()
+        self.settings = LeagueSettings.for_league(default_league())
         self.settings.week = 3
         self.settings.save()
         make_game(week=3, winner='team1', graded=True)
@@ -3142,7 +3163,7 @@ class ManualAdvanceDoesNotDoubleMailTests(TestCase):
         email_utils.send_via_mailbox = lambda *a, **k: (
             self.delivered.append(a), (True, 'stubbed'))[1]
         self.addCleanup(setattr, auto, 'build_recap', auto.build_recap)
-        auto.build_recap = lambda week: f'RECAP FOR WEEK {week}'
+        auto.build_recap = lambda league, week: f'RECAP FOR WEEK {week}'
 
     def test_no_standalone_recap_email(self):
         from main.models import LeagueEmail
@@ -3172,13 +3193,13 @@ class NoTransportSendsNothingTests(TestCase):
     def setUp(self):
         from . import email_utils
         self.eu = email_utils
-        self.settings = SiteSettings.get()
+        self.settings = LeagueSettings.for_league(default_league())
         self.settings.publish = True
         self.settings.week = 2
         self.settings.weekly_recap = 'RECAP'
         self.settings.save()
         for i in range(3):
-            User.objects.create_user(f'm{i}', email=f'm{i}@example.com')
+            make_member(f'm{i}', email=f'm{i}@example.com')
         make_game(week=2)
 
         # No Resend key, no SMTP - exactly production's shape right now.
@@ -3223,11 +3244,11 @@ class ManualScrapeHonoursGameDaysTests(TestCase):
     """
 
     def setUp(self):
-        self.user = User.objects.create_user('sc2', password='pw', email='s@x.com')
+        self.user = make_member('sc2', password='pw', email='s@x.com')
         self.user.is_staff = self.user.is_superuser = True
         self.user.save()
         self.client.force_login(self.user)
-        self.settings = SiteSettings.get()
+        self.settings = LeagueSettings.for_league(default_league())
         self.settings.week = 1
         self.settings.auto_tz = 'America/New_York'
         self.settings.scrape_days = '4,5,6'          # Friday, Saturday, Sunday
@@ -3287,14 +3308,14 @@ class LeagueRecipientsAreDedupedTests(TestCase):
         from . import email_utils
         self.eu = email_utils
         for name in ('one', 'two', 'three'):
-            User.objects.create_user(name, email='shared@example.com')
-        User.objects.create_user('other', email='other@example.com')
-        bot = User.objects.create_user('abot', email='bot@example.com')
+            make_member(name, email='shared@example.com')
+        make_member('other', email='other@example.com')
+        bot = make_member('abot', email='bot@example.com')
         bot.profile.is_bot = True
         bot.profile.save()
 
     def test_a_shared_address_appears_once(self):
-        r = self.eu.league_recipients()
+        r = self.eu.league_recipients(default_league())
         self.assertEqual(r.count('shared@example.com'), 1)
         self.assertEqual(len(r), 2)
 
@@ -3302,10 +3323,10 @@ class LeagueRecipientsAreDedupedTests(TestCase):
         u = User.objects.get(username='other')
         u.email = 'SHARED@example.com'
         u.save()
-        self.assertEqual(len(self.eu.league_recipients()), 1)
+        self.assertEqual(len(self.eu.league_recipients(default_league())), 1)
 
     def test_bots_are_still_excluded(self):
-        self.assertNotIn('bot@example.com', self.eu.league_recipients())
+        self.assertNotIn('bot@example.com', self.eu.league_recipients(default_league()))
 
 
 class CopyLeagueAddressesTests(TestCase):
@@ -3317,12 +3338,12 @@ class CopyLeagueAddressesTests(TestCase):
     """
 
     def setUp(self):
-        self.user = User.objects.create_user('boss4', password='pw', email='b@x.com')
+        self.user = make_member('boss4', password='pw', email='b@x.com')
         self.user.is_staff = self.user.is_superuser = True
         self.user.save()
         self.client.force_login(self.user)
-        User.objects.create_user('mate1', email='mate1@example.com')
-        User.objects.create_user('mate2', email='mate2@example.com')
+        make_member('mate1', email='mate1@example.com')
+        make_member('mate2', email='mate2@example.com')
 
     def _html(self):
         return self.client.get('/dashboard/emails/').content.decode()
@@ -3361,13 +3382,13 @@ class CopyLeagueAddressesTests(TestCase):
                          len(resp.context['recipients']))
 
     def test_a_shared_address_is_offered_once(self):
-        User.objects.create_user('dupe', email='mate1@example.com')
+        make_member('dupe', email='mate1@example.com')
         resp = self.client.get('/dashboard/emails/')
         self.assertEqual(resp.context['recipient_list'].count('mate1@example.com'), 1)
 
     def test_members_cannot_see_it(self):
         self.client.logout()
-        plain = User.objects.create_user('plain', password='pw', email='p@x.com')
+        plain = make_member('plain', password='pw', email='p@x.com')
         self.client.force_login(plain)
         resp = self.client.get('/dashboard/emails/')
         self.assertIn(resp.status_code, (302, 403),
@@ -3383,8 +3404,8 @@ class ManualLockModeSurvivesAdvanceTests(TestCase):
         from . import auto
         self.auto = auto
         self.addCleanup(setattr, auto, 'build_recap', auto.build_recap)
-        auto.build_recap = lambda week: None
-        self.settings = SiteSettings.get()
+        auto.build_recap = lambda league, week: None
+        self.settings = LeagueSettings.for_league(default_league())
         self.settings.week = 3
         self.settings.lock_mode = 'manual'
         self.settings.save()
@@ -3418,25 +3439,25 @@ class NewSeasonTests(TestCase):
     (the page posted no year) and the reset ran regardless."""
 
     def setUp(self):
-        self.admin = User.objects.create_user('boss', password='pw', email='b@x.com')
+        self.admin = make_member('boss', password='pw', email='b@x.com')
         self.admin.is_staff = self.admin.is_superuser = True
         self.admin.save()
         self.client.force_login(self.admin)
-        self.alice = User.objects.create_user('alice')
+        self.alice = make_member('alice')
         self.alice.profile.score = 40
         self.alice.profile.preseason_submitted = True
         self.alice.profile.save()
-        self.bob = User.objects.create_user('bob')
+        self.bob = make_member('bob')
         self.bob.profile.score = 25.5
         self.bob.profile.save()
-        settings = SiteSettings.get()
+        settings = LeagueSettings.for_league(default_league())
         settings.week = 5
         settings.publish = True
         settings.save()
         game = make_game(week=4, graded=True, winner='team2')
         Pick.objects.create(user=self.alice, game=game, choice='team2')
         Pick.objects.create(user=self.bob, game=game, choice='team1')
-        WeeklyLeaderboard.objects.create(week=4, entries=[
+        WeeklyLeaderboard.objects.create(league=default_league(), week=4, entries=[
             {'username': 'alice', 'score': 37.5}, {'username': 'bob', 'score': 25.5}])
 
     def test_without_a_year_nothing_is_reset(self):
@@ -3447,7 +3468,7 @@ class NewSeasonTests(TestCase):
         self.assertEqual(self.alice.profile.score, 40)
         self.assertEqual(Game.objects.count(), 1)
         self.assertEqual(WeeklyLeaderboard.objects.count(), 1)
-        self.assertEqual(SiteSettings.get().week, 5)
+        self.assertEqual(LeagueSettings.for_league(default_league()).week, 5)
 
     def test_with_a_year_the_season_is_archived_then_reset(self):
         from .models import SeasonRecord
@@ -3472,16 +3493,16 @@ class NewSeasonTests(TestCase):
         self.assertEqual(Game.objects.count(), 0)
         self.assertEqual(Pick.objects.count(), 0)
         self.assertEqual(WeeklyLeaderboard.objects.count(), 0)
-        settings = SiteSettings.get()
+        settings = LeagueSettings.for_league(default_league())
         self.assertEqual((settings.week, settings.publish), (1, False))
 
     def test_finishes_read_newest_first_and_cope_with_old_records(self):
         from .models import SeasonRecord
         from .seasons import finishes_by_username
-        SeasonRecord.objects.create(year=2024, winner_username='bob', final_standings=[
+        SeasonRecord.objects.create(league=default_league(), year=2024, winner_username='bob', final_standings=[
             {'username': 'bob', 'score': 50}, {'username': 'alice', 'score': 30}])
         self.client.post('/dashboard/picks/', {'newseason': '1', 'year': '2025'})
-        fin = finishes_by_username()
+        fin = finishes_by_username(default_league())
         self.assertEqual([f['year'] for f in fin['alice']], [2025, 2024])
         self.assertEqual(fin['alice'][0]['rank'], 1)
         self.assertEqual(fin['alice'][1]['rank'], 2, 'recomputed for an old-shape record')
@@ -3494,12 +3515,12 @@ class DashboardNextWeekTests(TestCase):
     state, so last week's note went out again with this week's games."""
 
     def setUp(self):
-        admin = User.objects.create_user('boss', password='pw', email='b@x.com')
+        admin = make_member('boss', password='pw', email='b@x.com')
         admin.is_staff = admin.is_superuser = True
         admin.save()
         self.client.force_login(admin)
         now = datetime.now(timezone.utc)
-        self.settings = SiteSettings.get()
+        self.settings = LeagueSettings.for_league(default_league())
         self.settings.week = 3
         self.settings.publish = True
         self.settings.lock_picks = True
@@ -3512,11 +3533,11 @@ class DashboardNextWeekTests(TestCase):
         make_game(week=3, graded=True, winner='team1')
         from . import auto
         self.addCleanup(setattr, auto, 'build_recap', auto.build_recap)
-        auto.build_recap = lambda week: None
+        auto.build_recap = lambda league, week: None
 
     def test_advancing_by_hand_clears_the_weekly_state(self):
         self.client.post('/dashboard/picks/', {'nextweek': '1'})
-        s = SiteSettings.get()
+        s = LeagueSettings.for_league(default_league())
         self.assertEqual(s.week, 4)
         self.assertEqual(s.weekly_intro, '')
         self.assertIsNone(s.auto_grade_dt)
@@ -3534,11 +3555,11 @@ class UnpublishStopsAutopilotTests(TestCase):
     and mailed the league again within five minutes."""
 
     def setUp(self):
-        admin = User.objects.create_user('boss', password='pw', email='b@x.com')
+        admin = make_member('boss', password='pw', email='b@x.com')
         admin.is_staff = admin.is_superuser = True
         admin.save()
         self.client.force_login(admin)
-        self.settings = SiteSettings.get()
+        self.settings = LeagueSettings.for_league(default_league())
         self.settings.auto_enabled = True
         self.settings.week = 3
         self.settings.publish = True
@@ -3553,13 +3574,420 @@ class UnpublishStopsAutopilotTests(TestCase):
 
     def test_unpublishing_clears_the_scrape_time(self):
         self.client.post('/dashboard/picks/', {'toggle_publish': '1'})
-        s = SiteSettings.get()
+        s = LeagueSettings.for_league(default_league())
         self.assertFalse(s.publish)
         self.assertIsNone(s.auto_scrape_dt)
         self.assertEqual(s.auto_last_issue, '')
 
     def test_the_next_tick_does_not_republish(self):
         self.client.post('/dashboard/picks/', {'toggle_publish': '1'})
-        self.auto.auto_tick()
+        self.auto.auto_tick(default_league())
         self.assertEqual(self.scrapes, [])
-        self.assertFalse(SiteSettings.get().publish)
+        self.assertFalse(LeagueSettings.for_league(default_league()).publish)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Leagues
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class LeagueIsolationTests(TestCase):
+    """A member sees their league and nothing else - games, standings, members,
+    history, mail - and cannot act on another league's rows by id."""
+
+    def setUp(self):
+        self.a = default_league()
+        self.b = make_league('other', 'Other League')
+        self.alice = make_member('alice', password='pw', league=self.a)
+        self.bob = make_member('bob', password='pw', league=self.b)
+        for u in (self.alice, self.bob):
+            u.profile.preseason_submitted = True
+            u.profile.save()
+        for league in (self.a, self.b):
+            s = LeagueSettings.for_league(league)
+            s.week = 2
+            s.publish = True
+            s.save()
+        self.ga = make_game(week=2, league=self.a)
+        self.gb = make_game(week=2, league=self.b,
+                            team1='Buffalo Bills', team2='Miami Dolphins')
+        self.client.login(username='alice', password='pw')
+
+    def test_the_picks_page_shows_only_my_leagues_games(self):
+        games = self.client.get('/picks/').context['games']
+        self.assertEqual([g.id for g in games], [self.ga.id])
+
+    def test_a_pick_on_another_leagues_game_is_refused(self):
+        resp = self.client.post('/picks/save/', {'game_id': self.gb.id, 'choice': 'team1'})
+        self.assertFalse(resp.json()['ok'])
+        self.assertEqual(Pick.objects.count(), 0)
+
+    def test_standings_and_members_list_only_my_league(self):
+        home = self.client.get('/home/')
+        self.assertEqual([e['username'] for e in home.context['leaderboard']], ['alice'])
+        members = self.client.get('/members/')
+        self.assertEqual([m['username'] for m in members.context['members']], ['alice'])
+
+    def test_history_data_is_scoped(self):
+        data = self.client.get('/history/data/?week=2').json()
+        self.assertEqual([g['id'] for g in data['games']], [self.ga.id])
+        self.assertEqual([p['username'] for p in data['players']], ['alice'])
+
+    def test_the_mail_feed_is_scoped(self):
+        now = datetime.now(timezone.utc)
+        LeagueEmail.objects.create(league=self.b, subject='B only', body='x',
+                                   sent_at=now, message_id='<b1@x>')
+        LeagueEmail.objects.create(league=self.a, subject='A only', body='x',
+                                   sent_at=now, message_id='<a1@x>')
+        feed = self.client.get('/home/').context['emails']
+        self.assertEqual([e.subject for e in feed], ['A only'])
+
+    def test_a_manager_cannot_delete_another_leagues_game(self):
+        self.alice.profile.role = 'manager'
+        self.alice.profile.save()
+        resp = self.client.post('/dashboard/picks/delete-game/', {'game_id': self.gb.id})
+        self.assertFalse(resp.json()['ok'])
+        self.assertTrue(Game.objects.filter(pk=self.gb.pk).exists())
+
+    def test_bot_picks_stay_in_their_league(self):
+        bot = make_member('bot_a', league=self.a)
+        bot.profile.is_bot = True
+        bot.profile.save()
+        make_bot_picks(self.b)
+        self.assertEqual(Pick.objects.filter(user=bot).count(), 0)
+        make_bot_picks(self.a)
+        self.assertEqual(Pick.objects.filter(user=bot, game=self.ga).count(), 1)
+
+
+class WorkerTicksEveryLeagueTests(TestCase):
+    """The worker ticks every active league once per pass, and one league
+    raising must not stop the others."""
+
+    def setUp(self):
+        from . import auto, inbound_email
+        self.auto = auto
+        self.addCleanup(setattr, inbound_email, 'fetch', inbound_email.fetch)
+        inbound_email.fetch = lambda *a, **k: (0, 0)
+        self.ticked = []
+        self.addCleanup(setattr, auto, 'auto_tick', auto.auto_tick)
+
+        def fake_tick(league):
+            self.ticked.append(league.slug)
+            if league.slug == 'broken':
+                raise RuntimeError('boom')
+        auto.auto_tick = fake_tick
+
+    def test_every_active_league_is_ticked(self):
+        make_league('broken')
+        make_league('quiet')
+        closed = make_league('closed')
+        closed.is_active = False
+        closed.save()
+        interval = self.auto.tick_all_leagues()
+        self.assertEqual(sorted(self.ticked), ['broken', 'putnambowl', 'quiet'])
+        self.assertEqual(interval, 300)
+
+    def test_the_interval_is_the_shortest_leagues(self):
+        fast = make_league('fast')
+        s = LeagueSettings.for_league(fast)
+        s.tick_interval = 60
+        s.save()
+        s = LeagueSettings.for_league(default_league())
+        s.tick_interval = 120
+        s.save()
+        self.assertEqual(self.auto.tick_all_leagues(), 60)
+
+
+class RecipientsScopedTests(TestCase):
+    """League mail goes to that league's members and nobody else's."""
+
+    def setUp(self):
+        from . import email_utils
+        self.eu = email_utils
+        self.a = default_league()
+        self.b = make_league('b')
+        make_member('a1', email='a1@x.com', league=self.a)
+        make_member('b1', email='b1@x.com', league=self.b)
+
+    def test_recipients_are_per_league(self):
+        self.assertEqual(self.eu.league_recipients(self.a), ['a1@x.com'])
+        self.assertEqual(self.eu.league_recipients(self.b), ['b1@x.com'])
+
+    def test_missing_picks_are_per_league(self):
+        make_game(week=1, league=self.a)
+        make_game(week=1, league=self.b)
+        self.assertEqual([u.username for u, *_ in self.eu.members_missing_picks(self.a, 1)], ['a1'])
+        self.assertEqual([u.username for u, *_ in self.eu.members_missing_picks(self.b, 1)], ['b1'])
+
+    def test_the_picks_live_mail_is_recorded_against_its_league(self):
+        s = LeagueSettings.for_league(self.b)
+        s.week = 1
+        s.publish = True
+        s.save()
+        make_game(week=1, league=self.b)
+        self.addCleanup(setattr, self.eu, 'outbound_suppressed', self.eu.outbound_suppressed)
+        self.eu.outbound_suppressed = lambda: False
+        self.addCleanup(setattr, self.eu, 'smtp_ready', self.eu.smtp_ready)
+        self.eu.smtp_ready = lambda: True
+        self.addCleanup(setattr, self.eu, 'send_via_mailbox', self.eu.send_via_mailbox)
+        self.eu.send_via_mailbox = lambda *a, **k: (True, 'stubbed')
+        self.eu.send_picks_published_email(s)
+        row = LeagueEmail.objects.get(subject='Week 1 picks are live')
+        self.assertEqual(row.league, self.b)
+        self.assertIn('b-picks-live-w1', row.message_id)
+        self.assertEqual(row.recipient_count, 1)
+        self.assertEqual(LeagueEmail.objects.filter(league=self.a).count(), 0)
+
+
+class EmailPrefsTests(TestCase):
+    """A member can opt out of the weekly mail and the reminder without the
+    manager switching either off for everyone."""
+
+    def test_opt_outs_are_honoured(self):
+        from . import email_utils
+        a = default_league()
+        make_member('u1', email='u1@x.com')
+        u2 = make_member('u2', email='u2@x.com')
+        u2.profile.email_weekly = False
+        u2.profile.email_reminder = False
+        u2.profile.save()
+        make_game(week=1)
+        self.assertEqual(email_utils.league_recipients(a), ['u1@x.com', 'u2@x.com'],
+                         'relayed league correspondence still reaches everyone')
+        self.assertEqual(email_utils.league_recipients(a, weekly=True), ['u1@x.com'])
+        self.assertEqual([u.username for u, *_ in email_utils.members_missing_picks(a, 1)], ['u1'])
+
+
+class InboundRoutingTests(TestCase):
+    """One mailbox serves every league; a message is routed by its sender."""
+
+    def _raw(self, sender, to, msgid, body='Picks are open, get them in.'):
+        return '\r\n'.join([
+            f'From: Boss <{sender}>',
+            f'To: {to}',
+            'Subject: Week 1 is live',
+            f'Message-ID: {msgid}',
+            'Date: Mon, 22 Sep 2025 10:00:00 +0000',
+            'Authentication-Results: mx.example.com; dmarc=pass',
+            'Content-Type: text/plain; charset="utf-8"',
+            '', body,
+        ]).encode()
+
+    def setUp(self):
+        from . import inbound_email
+        self.ingest = inbound_email.ingest_message
+        self.a = default_league()
+        self.b = make_league('b', 'Bravo')
+        for name, email, league in (('bossa', 'boss@a.com', self.a), ('bossb', 'boss@b.com', self.b)):
+            u = make_member(name, email=email, league=league)
+            u.profile.email_posts_enabled = True
+            u.profile.save()
+
+    def test_an_announcement_lands_in_the_senders_league(self):
+        with self.settings(SMTP_USER='mailbox@gmail.com'):
+            obj, reason = self.ingest(self._raw('boss@b.com', 'mailbox@gmail.com', '<m1@x>'))
+        self.assertIsNotNone(obj, reason)
+        self.assertEqual(obj.league, self.b)
+
+    def test_a_sender_in_two_leagues_is_refused_and_left_for_later(self):
+        from .models import ProcessedEmail
+        dup = make_member('dup', email='boss@b.com', league=self.a)
+        dup.profile.email_posts_enabled = True
+        dup.profile.save()
+        with self.settings(SMTP_USER='mailbox@gmail.com'):
+            obj, reason = self.ingest(self._raw('boss@b.com', 'mailbox@gmail.com', '<m2@x>'))
+        self.assertIsNone(obj)
+        self.assertIn('more than one league', reason)
+        self.assertEqual(ProcessedEmail.objects.count(), 0, 'fixing the accounts must re-ingest it')
+
+    def test_an_intro_by_email_sets_the_senders_league_intro(self):
+        with self.settings(SMTP_USER='mailbox@gmail.com'):
+            self.ingest(self._raw('boss@b.com', 'mailbox+intro@gmail.com', '<m3@x>',
+                                  body='Week {week} is here.'))
+        self.assertEqual(LeagueSettings.for_league(self.b).weekly_intro, 'Week {week} is here.')
+        self.assertEqual(LeagueSettings.for_league(self.a).weekly_intro, '')
+
+
+class JoinCodeTests(TestCase):
+    """An account cannot exist outside a league, so registration needs a code."""
+
+    def _post(self, **extra):
+        data = {'username': 'newbie', 'email': 'n@x.com',
+                'password1': 'Str0ngpass!', 'password2': 'Str0ngpass!'}
+        data.update(extra)
+        return self.client.post('/register/', data)
+
+    def test_no_code_no_account(self):
+        self._post()
+        self.assertFalse(User.objects.filter(username='newbie').exists())
+
+    def test_a_wrong_code_is_refused(self):
+        resp = self._post(join_code='NOPE1234')
+        self.assertFalse(User.objects.filter(username='newbie').exists())
+        self.assertContains(resp, 'does not match')
+
+    def test_a_valid_code_joins_that_league(self):
+        b = make_league('b')
+        self._post(join_code=b.join_code.lower())
+        user = User.objects.get(username='newbie')
+        self.assertEqual(user.profile.league, b)
+        self.assertEqual(user.profile.role, 'member')
+
+    def test_the_join_link_prefills_the_code_and_names_the_league(self):
+        b = make_league('b', 'Bravo League')
+        resp = self.client.get(f'/join/{b.join_code}/')
+        self.assertContains(resp, b.join_code)
+        self.assertContains(resp, 'Bravo League')
+
+    def test_a_closed_league_cannot_be_joined(self):
+        b = make_league('b')
+        b.is_active = False
+        b.save()
+        self._post(join_code=b.join_code)
+        self.assertFalse(User.objects.filter(username='newbie').exists())
+
+    def test_rotating_the_code_invalidates_the_old_one(self):
+        b = make_league('b')
+        old = b.join_code
+        new = b.rotate_join_code()
+        self.assertNotEqual(old, new)
+        self._post(join_code=old)
+        self.assertFalse(User.objects.filter(username='newbie').exists())
+        self._post(join_code=new)
+        self.assertTrue(User.objects.filter(username='newbie').exists())
+
+
+class LoginRoutingTests(TestCase):
+    def test_a_superuser_without_a_league_goes_to_the_site_admin(self):
+        User.objects.create_superuser('root', 'r@x.com', 'pw')
+        resp = self.client.post('/login/', {'username': 'root', 'password': 'pw'})
+        self.assertRedirects(resp, '/leagues/', fetch_redirect_response=False)
+
+    def test_a_member_goes_home(self):
+        make_member('m', password='pw')
+        resp = self.client.post('/login/', {'username': 'm', 'password': 'pw'})
+        self.assertRedirects(resp, '/home/', fetch_redirect_response=False)
+
+    def test_next_is_honoured_only_when_safe(self):
+        make_member('m', password='pw')
+        resp = self.client.post('/login/?next=/picks/', {'username': 'm', 'password': 'pw'})
+        self.assertRedirects(resp, '/picks/', fetch_redirect_response=False)
+        self.client.logout()
+        resp = self.client.post('/login/?next=http://evil.example/', {'username': 'm', 'password': 'pw'})
+        self.assertRedirects(resp, '/home/', fetch_redirect_response=False)
+
+    def test_the_site_admin_login_refuses_members(self):
+        make_member('m', password='pw')
+        resp = self.client.post('/leagues/login/', {'username': 'm', 'password': 'pw'})
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'not a site admin')
+        self.assertFalse(resp.wsgi_request.user.is_authenticated)
+
+
+class ManagerAccessTests(TestCase):
+    def setUp(self):
+        self.a = default_league()
+        self.b = make_league('b')
+        self.alice = make_member('alice', password='pw', league=self.a)
+        self.mgr = make_member('mgr', password='pw', league=self.a, role='manager')
+        self.bob = make_member('bob', password='pw', league=self.b)
+
+    def test_a_member_is_refused(self):
+        self.client.login(username='alice', password='pw')
+        self.assertEqual(self.client.get('/dashboard/picks/').status_code, 403)
+        self.assertEqual(self.client.get('/dashboard/emails/').status_code, 403)
+
+    def test_a_manager_is_admitted_without_is_staff(self):
+        self.assertFalse(self.mgr.is_staff)
+        self.client.login(username='mgr', password='pw')
+        self.assertEqual(self.client.get('/dashboard/picks/').status_code, 200)
+
+    def test_a_manager_cannot_edit_another_leagues_member(self):
+        self.client.login(username='mgr', password='pw')
+        resp = self.client.post(f'/dashboard/accounts/edit/{self.bob.id}/', {'username': 'bob'})
+        self.assertEqual(resp.status_code, 404)
+
+    def test_a_manager_can_promote_a_member_of_their_own_league(self):
+        self.client.login(username='mgr', password='pw')
+        resp = self.client.post(f'/dashboard/accounts/edit/{self.alice.id}/',
+                                {'username': 'alice', 'email': 'a@x.com', 'role': 'manager'})
+        self.assertEqual(resp.status_code, 200)
+        self.alice.refresh_from_db()
+        self.assertEqual(self.alice.profile.role, 'manager')
+        self.assertFalse(self.alice.is_staff, 'managing is a league role, not the Django flag')
+
+    def test_a_superuser_in_no_league_is_sent_to_the_site_admin(self):
+        User.objects.create_superuser('root', 'r@x.com', 'pw')
+        self.client.login(username='root', password='pw')
+        resp = self.client.get('/home/')
+        self.assertRedirects(resp, '/leagues/', fetch_redirect_response=False)
+
+
+class SuperadminAreaTests(TestCase):
+    def setUp(self):
+        from .models import IntroTemplate
+        self.IntroTemplate = IntroTemplate
+        self.root = User.objects.create_superuser('root', 'r@x.com', 'pw')
+        self.client.force_login(self.root)
+
+    def test_anonymous_is_sent_to_the_admin_login(self):
+        from django.test import Client
+        resp = Client().get('/leagues/')
+        self.assertEqual(resp.status_code, 302)
+        self.assertTrue(resp['Location'].startswith('/leagues/login/'))
+
+    def test_the_index_lists_leagues(self):
+        self.assertContains(self.client.get('/leagues/'), 'PutnamBowl')
+
+    def test_creating_a_league_seeds_settings_intros_and_a_manager(self):
+        self.client.post('/leagues/new/', {
+            'name': 'Bravo League', 'slug': '', 'is_active': 'on',
+            'username': 'bmgr', 'email': 'b@x.com', 'password': 'Str0ngpass!',
+        })
+        b = League.objects.get(slug='bravo-league')
+        self.assertTrue(LeagueSettings.objects.filter(league=b).exists())
+        self.assertEqual(self.IntroTemplate.objects.filter(league=b).count(), 10)
+        mgr = User.objects.get(username='bmgr')
+        self.assertEqual((mgr.profile.league, mgr.profile.role), (b, 'manager'))
+        self.assertTrue(mgr.check_password('Str0ngpass!'))
+
+    def test_a_league_can_be_created_without_a_manager(self):
+        self.client.post('/leagues/new/', {'name': 'Solo', 'slug': 'solo', 'is_active': 'on'})
+        self.assertTrue(League.objects.filter(slug='solo').exists())
+
+    def test_rotate_and_manage_managers(self):
+        league = default_league()
+        old = league.join_code
+        self.client.post('/leagues/putnambowl/', {'rotate_code': '1'})
+        league.refresh_from_db()
+        self.assertNotEqual(league.join_code, old)
+
+        m = make_member('m')
+        self.client.post('/leagues/putnambowl/', {'add_manager': '1', 'username': 'm'})
+        m.refresh_from_db()
+        self.assertEqual(m.profile.role, 'manager')
+        self.client.post('/leagues/putnambowl/', {'remove_manager': '1', 'username': 'm'})
+        m.refresh_from_db()
+        self.assertEqual(m.profile.role, 'member')
+
+    def test_a_member_of_another_league_cannot_be_promoted_here(self):
+        b = make_league('b')
+        outsider = make_member('out', league=b)
+        self.client.post('/leagues/putnambowl/', {'add_manager': '1', 'username': 'out'})
+        outsider.refresh_from_db()
+        self.assertEqual(outsider.profile.role, 'member')
+
+
+class RecapSlugTests(TestCase):
+    def test_the_same_week_in_two_leagues_is_two_feed_rows(self):
+        from . import email_utils
+        a = default_league()
+        b = make_league('b')
+        email_utils.record_recap_email(a, 3, 'A recap', year=2026)
+        email_utils.record_recap_email(b, 3, 'B recap', year=2026)
+        rows = LeagueEmail.objects.filter(subject='Week 3 recap')
+        self.assertEqual(rows.count(), 2)
+        self.assertEqual(len({r.message_id for r in rows}), 2)
+        self.assertIn('A recap', rows.get(league=a).body)
+        self.assertIn('B recap', rows.get(league=b).body)
+        self.assertIn('B', rows.get(league=b).body.split('──')[-1])

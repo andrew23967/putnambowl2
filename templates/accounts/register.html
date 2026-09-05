@@ -50,6 +50,17 @@
     {% for e in form.password2.errors %}<p class="auth-err">{{ e }}</p>{% endfor %}
   </div>
 
+  <div class="auth-field">
+    <label class="auth-label" for="id_join_code">Join code</label>
+    <input class="auth-input" id="id_join_code" name="join_code" type="text"
+           value="{{ form.join_code.value|default:join_code }}"
+           autocapitalize="characters" autocorrect="off" spellcheck="false" required
+           {% if join_league %}readonly{% endif %}
+           {% if form.join_code.errors %}aria-invalid="true"{% endif %}>
+    {% for e in form.join_code.errors %}<p class="auth-err">{{ e }}</p>{% endfor %}
+    {% if join_league %}<p class="auth-hint">Joining {{ join_league.name }}.</p>{% endif %}
+  </div>
+
   <button type="submit" class="auth-submit">Create account</button>
 </form>
 

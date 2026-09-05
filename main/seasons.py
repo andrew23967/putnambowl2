@@ -20,8 +20,9 @@ from .rankings import competition_ranks
 
 def build_season_record(settings, year, notes=''):
     """Snapshot the season as it stands into a `SeasonRecord` and return it."""
-    players = list(User.objects.select_related('profile').all())
-    graded_ids = set(Game.objects.filter(graded=True).exclude(winner='')
+    league = settings.league
+    players = list(User.objects.select_related('profile').filter(profile__league=league))
+    graded_ids = set(Game.objects.filter(league=league, graded=True).exclude(winner='')
                      .values_list('id', flat=True))
     correct, graded = {}, {}
     for pick in (Pick.objects.filter(game_id__in=graded_ids)
@@ -56,7 +57,7 @@ def build_season_record(settings, year, notes=''):
     # series with the live scores gives "after the final week" a row too, so a
     # chart can read score-after-week-k from entry k+1 all the way to the end.
     weekly = [{'week': lb.week, 'entries': lb.entries}
-              for lb in WeeklyLeaderboard.objects.order_by('week')]
+              for lb in WeeklyLeaderboard.objects.filter(league=league).order_by('week')]
     last_week = weekly[-1]['week'] if weekly else 0
     weekly.append({'week': last_week + 1,
                    'entries': [{'username': e['username'], 'score': e['score']}
@@ -64,7 +65,7 @@ def build_season_record(settings, year, notes=''):
 
     winner = standings[0]['username'] if standings else ''
     record, _ = SeasonRecord.objects.update_or_create(
-        year=year,
+        league=league, year=year,
         defaults={
             'winner_username': winner,
             'final_standings': standings,
@@ -85,13 +86,14 @@ def archive_and_reset(settings, year, notes=''):
     with transaction.atomic():
         record = build_season_record(settings, year, notes)
 
-        for p in User.objects.select_related('profile').all():
+        league = settings.league
+        for p in User.objects.select_related('profile').filter(profile__league=league):
             p.profile.score = 0
             p.profile.preseason_submitted = False
             p.profile.save(update_fields=['score', 'preseason_submitted'])
-        Pick.objects.all().delete()
-        Game.objects.all().delete()
-        WeeklyLeaderboard.objects.all().delete()
+        Pick.objects.filter(game__league=league).delete()
+        Game.objects.filter(league=league).delete()
+        WeeklyLeaderboard.objects.filter(league=league).delete()
 
         settings.week = 1
         settings.scrape_week = 1
@@ -110,14 +112,14 @@ def archive_and_reset(settings, year, notes=''):
     return record
 
 
-def finishes_by_username():
+def finishes_by_username(league):
     """{username: [{year, rank, players}, ...]} newest season first.
 
     Reads ranks off the record where they were stored, and recomputes them for
     records written before ranks were kept.
     """
     out = {}
-    for record in SeasonRecord.objects.order_by('-year'):
+    for record in SeasonRecord.objects.filter(league=league).order_by('-year'):
         entries = [e for e in (record.final_standings or []) if e.get('username')]
         if not entries:
             continue

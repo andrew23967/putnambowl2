@@ -1,0 +1,40 @@
+{% extends 'base.html' %}
+{% block title %}Leagues{% endblock %}
+
+{% block content %}
+<div style="max-width:880px;margin:0 auto;padding:24px 16px;">
+  <div style="display:flex;align-items:baseline;justify-content:space-between;gap:16px;margin-bottom:16px;">
+    <h1 style="margin:0;font-size:1.25rem;">Leagues</h1>
+    <a class="btn-accent" href="{% url 'leagues:create' %}">New league</a>
+  </div>
+
+  {% if rows %}
+  <table style="width:100%;border-collapse:collapse;font-size:.875rem;">
+    <thead>
+      <tr style="text-align:left;color:var(--muted);">
+        <th style="padding:8px 0;">League</th>
+        <th style="padding:8px 0;">Slug</th>
+        <th style="padding:8px 0;">Members</th>
+        <th style="padding:8px 0;">Managers</th>
+        <th style="padding:8px 0;">Week</th>
+        <th style="padding:8px 0;">Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      <tr style="border-top:1px solid var(--border);">
+        <td style="padding:10px 0;"><a href="{% url 'leagues:edit' r.league.slug %}">{{ r.league.name }}</a></td>
+        <td style="padding:10px 0;color:var(--muted);">{{ r.league.slug }}</td>
+        <td style="padding:10px 0;">{{ r.members }}</td>
+        <td style="padding:10px 0;">{{ r.managers|join:", "|default:"—" }}</td>
+        <td style="padding:10px 0;">{{ r.week }}{% if r.publish %} · live{% endif %}</td>
+        <td style="padding:10px 0;">{% if not r.league.is_active %}Closed{% elif r.auto %}Auto-pilot on{% else %}Manual{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p style="color:var(--muted);">No leagues yet.</p>
+  {% endif %}
+</div>
+{% endblock %}

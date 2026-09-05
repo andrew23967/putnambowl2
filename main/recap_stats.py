@@ -13,7 +13,7 @@ actually fired** — no "nobody had a perfect week" filler — so the prompt is 
 short list of things worth writing about, and a quiet week produces a short list
 rather than a padded one.
 
-Everything here is derived; nothing is stored. Call `summary(week)`.
+Everything here is derived; nothing is stored. Call `summary(league, week)`.
 """
 from django.contrib.auth.models import User
 from django.db.models import Prefetch
@@ -38,13 +38,13 @@ def _fmt_names(names, limit=3):
     return f'{", ".join(names[:limit])} and {len(names) - limit} others'
 
 
-def collect(week):
+def collect(league, week):
     """The raw week: games, per-player weekly points, and standings movement.
 
     Returns None when the week has nothing gradeable, which is the caller's cue
     that there is no recap to write.
     """
-    games = list(Game.objects.filter(week=week).prefetch_related(
+    games = list(Game.objects.filter(league=league, week=week).prefetch_related(
         Prefetch('picks', queryset=Pick.objects.select_related('user'))
     ))
     graded = [g for g in games if g.graded and g.winner]
@@ -74,7 +74,7 @@ def collect(week):
 
     # Everyone who plays, including those who submitted nothing — a blank week is
     # itself a story, and leaving them out of `weekly` would hide it.
-    for user in User.objects.select_related('profile').all():
+    for user in User.objects.select_related('profile').filter(profile__league=league):
         weekly.setdefault(user.username, 0.0)
         made.setdefault(user.username, 0)
 
@@ -94,7 +94,7 @@ def collect(week):
     }
 
 
-def _standings_movement(week, data):
+def _standings_movement(league, week, data):
     """(before, after) cumulative standings as {name: score}, or (None, None).
 
     `WeeklyLeaderboard[week].entries` is written *before* the week's points are
@@ -102,7 +102,7 @@ def _standings_movement(week, data):
     table plus what each player scored, which avoids depending on whether
     `Profile.score` has been updated yet at the moment this runs.
     """
-    row = WeeklyLeaderboard.objects.filter(week=week).first()
+    row = WeeklyLeaderboard.objects.filter(league=league, week=week).first()
     if not row or not row.entries:
         return None, None
     before = {e['username']: e['score'] for e in row.entries if 'username' in e}
@@ -112,13 +112,13 @@ def _standings_movement(week, data):
     return before, after
 
 
-def summary(week):
+def summary(league, week):
     """A list of one-line facts about the week. Empty list if nothing happened.
 
     Order is roughly "most worth leading on" first, but the model is free to use
     them in any order — they are angles, not a script.
     """
-    data = collect(week)
+    data = collect(league, week)
     if not data:
         return [], None
 
@@ -155,7 +155,7 @@ def summary(week):
                      f'right (worth a 10-point bonus)')
 
     # 5-7. Standings, movement, and the leader's cushion.
-    before, after = _standings_movement(week, data)
+    before, after = _standings_movement(league, week, data)
     if before and after:
         rb, ra = _rank_map(before), _rank_map(after)
         order = sorted(after.items(), key=lambda kv: -kv[1])
@@ -261,13 +261,13 @@ def _all_correct(data, username):
     return True
 
 
-def data_block(week):
+def data_block(league, week):
     """The recap prompt's data section: the angles, then the week's table.
 
     The standings stay — the model needs the numbers to write accurately — but
     they come after the story, and the per-game pick dump is gone.
     """
-    lines, ranked = summary(week)
+    lines, ranked = summary(league, week)
     if not lines or ranked is None:
         return None, None
 

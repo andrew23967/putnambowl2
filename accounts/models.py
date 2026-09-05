@@ -7,6 +7,18 @@ from main.teams import TEAMS
 
 class Profile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
+    # Every account is in exactly one league. Null only for a superuser created
+    # before any league existed - createsuperuser fires the profile signal too.
+    league = models.ForeignKey('leagues.League', on_delete=models.PROTECT,
+                               null=True, blank=True, related_name='profiles')
+    ROLE_CHOICES = [('member', 'Member'), ('manager', 'Manager')]
+    role = models.CharField(max_length=10, choices=ROLE_CHOICES, default='member')
+    # Per-member opt-outs. The switches on the Emails page decide whether a kind
+    # of mail exists at all; these decide whether this person gets it.
+    email_weekly = models.BooleanField(
+        default=True, help_text='The weekly picks-are-live email.')
+    email_reminder = models.BooleanField(
+        default=True, help_text='The nudge before picks lock.')
     score = models.FloatField(default=0)
     bio = models.TextField(max_length=300, blank=True, default='')
     real_name = models.CharField(max_length=50, blank=True, default='')
@@ -56,6 +68,11 @@ class Profile(models.Model):
     def display_name(self):
         """Real name if they set one, otherwise the username."""
         return self.real_name.strip() or self.user.username
+
+    @property
+    def is_manager(self):
+        """Runs this league. Superusers run every league."""
+        return self.role == 'manager' or self.user.is_superuser
 
 
 @receiver(post_save, sender=User)

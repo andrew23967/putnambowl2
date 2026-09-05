@@ -4,15 +4,15 @@ from collections import defaultdict
 from datetime import datetime, timezone, timedelta
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.models import User
-from django.contrib.auth.decorators import login_required
-from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib import messages
 from django.db.models import Prefetch
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
+
+from leagues.access import current_league, current_settings, league_manager_required, league_required
 from . import forms, scrape
 from .models import (
-    Game, IntroTemplate, Pick, SiteSettings, WeeklyLeaderboard,
+    Game, IntroTemplate, Pick, WeeklyLeaderboard,
     LeagueEmail,
 )
 from .rankings import competition_ranks, rank_rows
@@ -82,7 +82,7 @@ def _countdown(settings, games):
     return {'milestones_json': json.dumps(milestones), 'idle_label': idle}
 
 
-def _email_feed(limit=None):
+def _email_feed(league, limit=None):
     """The Emails feed, newest first.
 
     One source of truth: `LeagueEmail`. Mail the league sends lands here through
@@ -90,15 +90,15 @@ def _email_feed(limit=None):
     ordering honest, because every row carries a real `sent_at`; a feed stitched
     together from `WeeklyLeaderboard.recap` had no timestamp to sort by.
     """
-    qs = LeagueEmail.objects.filter(published=True).select_related('author', 'author__profile')
+    qs = (LeagueEmail.objects.filter(league=league, published=True)
+          .select_related('author', 'author__profile'))
     return list(qs[:limit] if limit else qs)
 
 
+@league_required
 def home(request):
-    if not request.user.is_authenticated:
-        return redirect('accounts:login')
-
-    settings = SiteSettings.get()
+    settings = current_settings(request)
+    league = settings.league
     # Open until week 1's picks lock — the same deadline as the slate above it in
     # the bar, so the countdown there is the countdown for these too. Shown in
     # both states meanwhile: a prompt before they are in, the way back in after.
@@ -115,7 +115,7 @@ def home(request):
     if needs_preseason and not request.session.get('preseason_deferred'):
         return redirect('main:preseason')
 
-    players = User.objects.select_related('profile').all()
+    players = User.objects.select_related('profile').filter(profile__league=league)
 
     leaderboard = sorted(
         [{'score': round(p.profile.score, 1), 'username': p.username} for p in players],
@@ -129,7 +129,7 @@ def home(request):
     prev_ranks = {}
     if settings.week > 1:
         try:
-            prev_lb = WeeklyLeaderboard.objects.get(week=settings.week - 1)
+            prev_lb = WeeklyLeaderboard.objects.get(league=league, week=settings.week - 1)
             prev_ranks = competition_ranks(
                 (e['username'], e['score']) for e in prev_lb.entries)
         except WeeklyLeaderboard.DoesNotExist:
@@ -141,7 +141,7 @@ def home(request):
         entry['rank_change_abs'] = abs(change)
 
     # On-fire streak: 3+ consecutive weeks with >= 50% correct
-    past_games = list(Game.objects.filter(week__lt=settings.week).prefetch_related(
+    past_games = list(Game.objects.filter(league=league, week__lt=settings.week).prefetch_related(
         Prefetch('picks', queryset=Pick.objects.select_related('user'))
     ).order_by('week'))
     games_by_past_week = defaultdict(list)
@@ -168,12 +168,12 @@ def home(request):
 
     # This week at a glance. The slate itself lives on /picks/ now, so the home
     # page only needs enough to say what state the week is in.
-    games = list(Game.objects.filter(week=settings.week))
+    games = list(Game.objects.filter(league=league, week=settings.week))
     my_picks = list(
         Pick.objects.filter(user=request.user, game__in=games).select_related('game')
     )
 
-    feed = _email_feed()
+    feed = _email_feed(league)
     countdown = _countdown(settings, games)
 
     # allow_network=False is required in a page view: the week-number fallback is
@@ -204,18 +204,19 @@ def home(request):
     })
 
 
-@login_required
+@league_required
 def analytics(request):
-    settings = SiteSettings.get()
+    settings = current_settings(request)
+    league = settings.league
 
-    past_games = list(Game.objects.filter(week__lt=settings.week).prefetch_related(
+    past_games = list(Game.objects.filter(league=league, week__lt=settings.week).prefetch_related(
         Prefetch('picks', queryset=Pick.objects.select_related('user'))
     ).order_by('week'))
     games_by_past_week = defaultdict(list)
     for pg in past_games:
         games_by_past_week[pg.week].append(pg)
 
-    leaderboards = WeeklyLeaderboard.objects.order_by('week')
+    leaderboards = WeeklyLeaderboard.objects.filter(league=league).order_by('week')
     chart_players = sorted({e['username'] for lb in leaderboards for e in lb.entries})
 
     points_chart = [['Week'] + chart_players]
@@ -260,11 +261,12 @@ def analytics(request):
     })
 
 
-@login_required
+@league_required
 def pick_history(request):
-    settings = SiteSettings.get()
+    settings = current_settings(request)
+    league = settings.league
     completed_weeks = sorted(
-        Game.objects.filter(week__lt=settings.week).values_list('week', flat=True).distinct()
+        Game.objects.filter(league=league, week__lt=settings.week).values_list('week', flat=True).distinct()
     )
     if settings.lock_picks and settings.week not in completed_weeks:
         completed_weeks = sorted(completed_weeks + [settings.week])
@@ -274,10 +276,11 @@ def pick_history(request):
     })
 
 
-@login_required
+@league_required
 @require_POST
 def ajax_save_pick(request):
-    settings = SiteSettings.get()
+    settings = current_settings(request)
+    league = settings.league
     if settings.lock_picks:
         return JsonResponse({'ok': False, 'error': 'Picks are locked'})
     game_id = request.POST.get('game_id')
@@ -285,7 +288,7 @@ def ajax_save_pick(request):
     if choice not in ('team1', 'team2'):
         return JsonResponse({'ok': False, 'error': 'Invalid choice'})
     try:
-        game = Game.objects.get(id=game_id)
+        game = Game.objects.get(id=game_id, league=league)
     except Game.DoesNotExist:
         return JsonResponse({'ok': False, 'error': 'Game not found'})
     Pick.objects.update_or_create(
@@ -295,27 +298,28 @@ def ajax_save_pick(request):
     return JsonResponse({'ok': True})
 
 
-@login_required
+@league_required
 def site_state(request):
-    s = SiteSettings.get()
+    s = current_settings(request)
     return JsonResponse({'week': s.week, 'publish': s.publish, 'lock_picks': s.lock_picks})
 
 
-@login_required
+@league_required
 def ajax_leaderboard(request):
     week = request.GET.get('week')
     if not week:
         return JsonResponse({'error': 'week required'}, status=400)
     week = int(week)
-    settings = SiteSettings.get()
-    players = list(User.objects.select_related('profile').all())
+    settings = current_settings(request)
+    league = settings.league
+    players = list(User.objects.select_related('profile').filter(profile__league=league))
     live_grading = False
 
     if week == settings.week:
         if settings.lock_picks:
             # Sum points earned so far from graded picks this week without touching profile.score
             live_grading = True
-            all_picks = Pick.objects.filter(game__week=week).select_related('game', 'user')
+            all_picks = Pick.objects.filter(game__league=league, game__week=week).select_related('game', 'user')
             live_gained = {}
             for pick in all_picks:
                 uname = pick.user.username
@@ -336,7 +340,7 @@ def ajax_leaderboard(request):
             )
     else:
         try:
-            lb = WeeklyLeaderboard.objects.get(week=week)
+            lb = WeeklyLeaderboard.objects.get(league=league, week=week)
             entries = sorted(lb.entries, key=lambda x: x['score'], reverse=True)
         except WeeklyLeaderboard.DoesNotExist:
             entries = []
@@ -363,7 +367,7 @@ def ajax_leaderboard(request):
         baseline_week = week - 1
         if baseline_week > 0:
             try:
-                prev_lb = WeeklyLeaderboard.objects.get(week=baseline_week)
+                prev_lb = WeeklyLeaderboard.objects.get(league=league, week=baseline_week)
                 prev_ranks = competition_ranks(
                     (e['username'], e['score']) for e in prev_lb.entries)
                 prev_scores = {e['username']: e['score'] for e in prev_lb.entries}
@@ -399,10 +403,11 @@ def ajax_leaderboard(request):
     return JsonResponse({'entries': result, 'live_grading': live_grading})
 
 
-@staff_member_required
+@league_manager_required
 @require_POST
 def ajax_add_game(request):
-    settings = SiteSettings.get()
+    settings = current_settings(request)
+    league = settings.league
     form = forms.GameForm(request.POST)
     if not form.is_valid():
         return JsonResponse({'ok': False, 'errors': dict(form.errors)})
@@ -419,6 +424,7 @@ def ajax_add_game(request):
     else:
         game_dt_utc = None
     game = Game.objects.create(
+        league=league,
         team1=d['underdog'],
         team2=d['favorite'],
         points1=float(settings.multiplier),
@@ -438,27 +444,29 @@ def ajax_add_game(request):
     }})
 
 
-@staff_member_required
+@league_manager_required
 @require_POST
 def ajax_delete_game(request):
+    league = current_league(request)
     game_id = request.POST.get('game_id')
     try:
-        game = Game.objects.get(id=game_id)
+        game = Game.objects.get(id=game_id, league=league)
     except Game.DoesNotExist:
         return JsonResponse({'ok': False, 'error': 'Game not found'})
     game.delete()
     return JsonResponse({'ok': True})
 
 
-@staff_member_required
+@league_manager_required
 @require_POST
 def ajax_set_winner(request):
+    league = current_league(request)
     game_id = request.POST.get('game_id')
     winner = request.POST.get('winner', '')
     if winner not in ('team1', 'tie', 'team2', ''):
         return JsonResponse({'ok': False, 'error': 'Invalid winner'})
     try:
-        game = Game.objects.get(id=game_id)
+        game = Game.objects.get(id=game_id, league=league)
     except Game.DoesNotExist:
         return JsonResponse({'ok': False, 'error': 'Game not found'})
     game.winner = winner
@@ -467,7 +475,7 @@ def ajax_set_winner(request):
     return JsonResponse({'ok': True})
 
 
-@login_required
+@league_required
 def picks(request):
     """This week's slate, in whichever of its three states applies: unpublished,
     open for picking, or locked and filling in with results as games are graded.
@@ -475,9 +483,10 @@ def picks(request):
     Picks save one at a time through ajax_save_pick, so there is no POST branch
     here — the page is the form and the receipt for it.
     """
-    settings = SiteSettings.get()
+    settings = current_settings(request)
+    league = settings.league
 
-    games = list(Game.objects.filter(week=settings.week))
+    games = list(Game.objects.filter(league=league, week=settings.week))
     picks_map = {p.game_id: p for p in Pick.objects.filter(user=request.user, game__in=games)}
     # Kickoff order, and stable regardless of what you have picked. Sorting
     # picked games to the bottom made the list reshuffle under your cursor.
@@ -495,14 +504,16 @@ def picks(request):
     })
 
 
-@login_required
+@league_required
 def ajax_history(request):
     try:
         week = int(request.GET.get('week', 1))
     except (TypeError, ValueError):
         return JsonResponse({'error': 'Invalid week.'}, status=400)
 
-    games = list(Game.objects.filter(week=week).order_by('id'))
+    settings = current_settings(request)
+    league = settings.league
+    games = list(Game.objects.filter(league=league, week=week).order_by('id'))
     if not games:
         return JsonResponse({'error': f'No games found for week {week}.'}, status=404)
 
@@ -519,7 +530,7 @@ def ajax_history(request):
     # WeeklyLeaderboard(week=N) stores scores BEFORE week N's points are added.
     # So post-week-N scores live in WeeklyLeaderboard(week=N+1).
     try:
-        lb = WeeklyLeaderboard.objects.get(week=week)
+        lb = WeeklyLeaderboard.objects.get(league=league, week=week)
         recap = lb.recap
         pre_scores = {e['username']: e['score'] for e in lb.entries}
     except WeeklyLeaderboard.DoesNotExist:
@@ -527,12 +538,12 @@ def ajax_history(request):
         pre_scores = {}
 
     try:
-        next_lb = WeeklyLeaderboard.objects.get(week=week + 1)
+        next_lb = WeeklyLeaderboard.objects.get(league=league, week=week + 1)
         week_scores = {e['username']: e['score'] for e in next_lb.entries}
     except WeeklyLeaderboard.DoesNotExist:
         # Most recent week: next snapshot doesn't exist yet, use live profile scores
         week_scores = {u.username: round(u.profile.score, 1)
-                       for u in User.objects.select_related('profile').all()}
+                       for u in User.objects.select_related('profile').filter(profile__league=league)}
 
     games_data = [{
         'id': g.id,
@@ -547,7 +558,8 @@ def ajax_history(request):
         'game_dt_iso': g.game_dt_iso,
     } for g in games]
 
-    all_usernames = list(User.objects.order_by('username').values_list('username', flat=True))
+    all_usernames = list(User.objects.filter(profile__league=league)
+                         .order_by('username').values_list('username', flat=True))
 
     rank_after = competition_ranks(week_scores)
     rank_before = competition_ranks(pre_scores)
@@ -574,7 +586,6 @@ def ajax_history(request):
         })
     players_data.sort(key=lambda x: x['week_total'], reverse=True)
 
-    settings = SiteSettings.get()
     picks_locked = week < settings.week or (week == settings.week and settings.lock_picks)
 
     return JsonResponse({
@@ -586,9 +597,9 @@ def ajax_history(request):
     })
 
 
-@login_required
+@league_required
 def preseason(request):
-    settings = SiteSettings.get()
+    settings = current_settings(request)
 
     # "I'll do this later" — remembered for the session so the prompt does not
     # reappear on every page load, but not persisted, so it comes back next
@@ -630,6 +641,7 @@ def preseason(request):
     })
 
 
+@league_required
 def rules(request):
     """The commissioner's rules, kept verbatim in the template.
 
@@ -642,7 +654,7 @@ def rules(request):
 
 
 
-@login_required
+@league_required
 def members(request):
     """The league roster: who is in it, when they joined, what they wrote.
 
@@ -651,7 +663,8 @@ def members(request):
     score, so leaving them out would make the standings not add up — but they are
     marked, and sorted last regardless of when they were created.
     """
-    people = (User.objects.select_related('profile')
+    league = current_league(request)
+    people = (User.objects.select_related('profile').filter(profile__league=league)
               .order_by('date_joined', 'username'))
     rows = []
     for user in people:
@@ -686,7 +699,7 @@ def members(request):
     })
 
 
-@staff_member_required
+@league_manager_required
 def emaildash(request):
     """Which emails go out, and what the recap is told to say.
 
@@ -700,7 +713,8 @@ def emaildash(request):
     from .email_utils import (intro_address, league_recipients, picks_address,
                               smtp_ready)
 
-    settings = SiteSettings.get()
+    settings = current_settings(request)
+    league = settings.league
 
     if request.method == 'POST':
         if 'save_switches' in request.POST:
@@ -726,7 +740,7 @@ def emaildash(request):
             # when the mail is built, so the text stays reusable and the copy can
             # be edited for this week without touching the saved one.
             tpl = IntroTemplate.objects.filter(
-                pk=request.POST.get('use_intro')).first()
+                league=league, pk=request.POST.get('use_intro')).first()
             if tpl:
                 settings.weekly_intro = tpl.body
                 settings.save(update_fields=['weekly_intro'])
@@ -737,17 +751,17 @@ def emaildash(request):
             pk = request.POST.get('tpl_id') or None
             if not name or not body:
                 messages.error(request, 'An intro needs both a name and some text.')
-            elif IntroTemplate.objects.filter(name=name).exclude(pk=pk).exists():
+            elif IntroTemplate.objects.filter(league=league, name=name).exclude(pk=pk).exists():
                 messages.error(request, f'There is already an intro called "{name}".')
             elif pk:
-                IntroTemplate.objects.filter(pk=pk).update(name=name, body=body)
+                IntroTemplate.objects.filter(league=league, pk=pk).update(name=name, body=body)
                 messages.success(request, f'Saved "{name}".')
             else:
-                IntroTemplate.objects.create(name=name, body=body)
+                IntroTemplate.objects.create(league=league, name=name, body=body)
                 messages.success(request, f'Added "{name}".')
         elif 'delete_template' in request.POST:
             tpl = IntroTemplate.objects.filter(
-                pk=request.POST.get('delete_template')).first()
+                league=league, pk=request.POST.get('delete_template')).first()
             if tpl:
                 name = tpl.name
                 tpl.delete()
@@ -765,31 +779,32 @@ def emaildash(request):
     # Preview the data block against the most recently completed week, so what is
     # shown is real rather than illustrative.
     preview_week = max(settings.week - 1, 1)
-    data_block, _ = auto.recap_data_block(preview_week)
+    data_block, _ = auto.recap_data_block(league, preview_week)
 
     # Who the reminder would go to if it fired now - the point of the feature is
     # knowing that before it sends, not after.
     from .email_utils import members_missing_picks
-    outstanding = members_missing_picks(settings.week)
+    outstanding = members_missing_picks(league, settings.week)
     reminder_due_dt = None
     if settings.auto_lock_dt:
         reminder_due_dt = settings.auto_lock_dt - timedelta(
             hours=settings.reminder_hours_before_lock or 0)
 
     # Rendered with this week's number so what is shown is what would go out.
-    intro_preview = (settings.weekly_intro or '').replace('{week}', str(settings.week))
+    intro_preview = ((settings.weekly_intro or '').replace('{week}', str(settings.week))
+                     .replace('{league}', league.name))
 
     return render(request, 'main/emaildash.html', {
         'settings': settings,
-        'intro_templates': IntroTemplate.objects.all(),
+        'intro_templates': IntroTemplate.objects.filter(league=league),
         'intro_preview': intro_preview,
         'outstanding': [(u.username, made, total) for u, made, total in outstanding],
         'reminder_due_dt': reminder_due_dt,
-        'recipients': league_recipients(),
+        'recipients': league_recipients(league),
         # Members only. The mailbox is deliberately not in this list: BCC is
         # stripped in transit, so copying both would have the relay forward to
         # everyone a second time.
-        'recipient_list': ', '.join(league_recipients()),
+        'recipient_list': ', '.join(league_recipients(league)),
         # Mail to the league address only counts as an announcement when the
         # sender is set to publish; otherwise inbound reads it as picks.
         'viewer_can_publish_by_email': request.user.profile.email_posts_enabled,
@@ -805,11 +820,12 @@ def emaildash(request):
     })
 
 
-@staff_member_required
+@league_manager_required
 def accountdash(request):
     from main.teams import TEAMS
+    league = current_league(request)
     players = sorted(
-        User.objects.select_related('profile').all(),
+        User.objects.select_related('profile').filter(profile__league=league),
         key=lambda u: u.profile.score, reverse=True
     )
     return render(request, 'main/accountdash.html', {
@@ -818,10 +834,11 @@ def accountdash(request):
     })
 
 
-@staff_member_required
+@league_manager_required
 @require_POST
 def edit_player(request, user_id):
-    user = get_object_or_404(User, pk=user_id)
+    league = current_league(request)
+    user = get_object_or_404(User, pk=user_id, profile__league=league)
 
     new_username = request.POST.get('username', '').strip()
     if new_username and new_username != user.username:
@@ -830,13 +847,17 @@ def edit_player(request, user_id):
         user.username = new_username
 
     user.email = request.POST.get('email', user.email).strip()
-    user.is_staff = request.POST.get('is_staff') == 'on'
     password = request.POST.get('password', '').strip()
     if password:
         user.set_password(password)
     user.save()
 
     p = user.profile
+    # Managing is a league role, not Django's site-wide is_staff flag. The old
+    # checkbox posted is_staff=on; it maps onto the role until the page is rebuilt.
+    role = request.POST.get('role') or ('manager' if request.POST.get('is_staff') == 'on' else None)
+    if role in dict(p.ROLE_CHOICES):
+        p.role = role
     try:
         p.score = float(request.POST.get('score', p.score))
     except ValueError:
@@ -866,18 +887,20 @@ def edit_player(request, user_id):
     return JsonResponse({'ok': True, 'username': user.username})
 
 
-@staff_member_required
+@league_manager_required
 @require_POST
 def delete_player(request, user_id):
-    user = get_object_or_404(User, pk=user_id)
+    league = current_league(request)
+    user = get_object_or_404(User, pk=user_id, profile__league=league)
     username = user.username
     user.delete()
     return JsonResponse({'ok': True, 'username': username})
 
 
-@staff_member_required
+@league_manager_required
 def pickdash(request):
-    settings = SiteSettings.get()
+    settings = current_settings(request)
+    league = settings.league
 
     # Explicit POST only. This used to run on every GET whenever auto_enabled was
     # set, which made *opening this page* scrape the week, publish it and mail
@@ -891,15 +914,15 @@ def pickdash(request):
     if settings.auto_enabled and request.method == 'POST' and 'run_tick' in request.POST:
         try:
             from .auto import auto_tick
-            auto_tick()
-            settings = SiteSettings.get()
+            auto_tick(league)
+            settings.refresh_from_db()
             messages.success(request, 'Auto-pilot tick run.')
         except Exception as _e:
             log.exception('manual auto_tick failed')
             messages.error(request, f'Auto-pilot tick failed: {_e}')
 
     if 'delete_all_games' in request.POST:
-        current_games = Game.objects.filter(week=settings.week)
+        current_games = Game.objects.filter(league=league, week=settings.week)
         Pick.objects.filter(game__in=current_games).delete()
         current_games.delete()
 
@@ -933,7 +956,7 @@ def pickdash(request):
         settings.multiplier = new_mult
         settings.save()
         ratio = new_mult / old_mult
-        for game in Game.objects.filter(week=settings.week):
+        for game in Game.objects.filter(league=league, week=settings.week):
             game.points1 = round(game.points1 * ratio, 2)
             game.points2 = round(game.points2 * ratio, 2)
             game.save()
@@ -1042,7 +1065,7 @@ def pickdash(request):
             # Match on who is playing, unordered — team1/team2 are favorite and
             # underdog, so they swap when a line crosses pick'em, and comparing
             # them in order stored the fixture twice with the teams reversed.
-            existing = Game.match_existing(week, team1, team2, game_id)
+            existing = Game.match_existing(league, week, team1, team2, game_id)
             if existing is not None:
                 existing.game_dt = g[6]
                 existing.game_id = game_id
@@ -1060,6 +1083,7 @@ def pickdash(request):
                 continue
 
             Game.objects.create(
+                league=league,
                 team1=team1, team2=team2,
                 points1=float(settings.multiplier), points2=pts2,
                 team1_is_home=g[4], game_id=game_id, game_dt=g[6],
@@ -1078,7 +1102,7 @@ def pickdash(request):
         # kickoff that is still a fortnight away.
         if week == settings.week:
             first_dt = Game.objects.filter(
-                week=settings.week, game_dt__isnull=False
+                league=league, week=settings.week, game_dt__isnull=False
             ).aggregate(Min('game_dt'))['game_dt__min']
             settings.first_game_dt = first_dt
             if first_dt and settings.lock_mode == 'offset' and settings.auto_lock_offset_minutes:
@@ -1092,7 +1116,7 @@ def pickdash(request):
                 log.exception('manual scrape: picks-live email failed')
             try:
                 from .auto import make_bot_picks
-                make_bot_picks()
+                make_bot_picks(league)
             except Exception:
                 log.exception('manual scrape: bot picks failed')
         msg = f'Scraped week {week}: {added} added, {dupes} updated.'
@@ -1144,7 +1168,7 @@ def pickdash(request):
     # Kickoff order, matching the player-facing list. Ordering by `graded` put
     # games in a different place depending on whether they were scored yet,
     # which shuffled the list while grading.
-    games = Game.objects.filter(week=settings.week).order_by('game_dt', 'id')
+    games = Game.objects.filter(league=league, week=settings.week).order_by('game_dt', 'id')
     all_graded = all(g.graded for g in games) if games else False
     save_season_form = forms.SaveSeasonForm()
     default_scrape_year = scrape.current_season_year()
@@ -1207,35 +1231,36 @@ def pickdash(request):
     })
 
 
-@staff_member_required
+@league_manager_required
 @require_POST
 def generate_recap(request):
     from .auto import build_recap
-    settings = SiteSettings.get()
+    settings = current_settings(request)
+    league = settings.league
     last_week = settings.week - 1
     if last_week < 1:
         return JsonResponse(
             {'error': 'Week 1 has no previous week to recap.'}, status=400)
-    recap = build_recap(last_week)
+    recap = build_recap(league, last_week)
     if recap is None:
         return JsonResponse({'error': f'No history saved for week {last_week}.'}, status=404)
     settings.weekly_recap = recap
     settings.save()
     # Keep the archive in step with the live copy, the same way do_advance_week
     # does. Without this the feed would keep serving the superseded text.
-    WeeklyLeaderboard.objects.filter(week=last_week).update(recap=recap)
+    WeeklyLeaderboard.objects.filter(league=league, week=last_week).update(recap=recap)
     # Record but deliberately do not send: regenerating is a correction, and the
     # league has already had this week's recap in their inbox.
     from .email_utils import record_recap_email
-    record_recap_email(last_week, recap)
+    record_recap_email(league, last_week, recap)
     return JsonResponse({'recap': recap})
 
 
-@staff_member_required
+@league_manager_required
 @require_POST
 def send_test_email(request):
     from .email_utils import send_picks_published_email
-    settings = SiteSettings.get()
+    settings = current_settings(request)
     send_picks_published_email(settings)
     messages.success(request, 'Test email queued — check logs for result.')
     return redirect('main:pickdash')

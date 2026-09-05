@@ -2,7 +2,7 @@
 Create (or update) the `putnambot` league entry — a bot whose picks come from
 Gemini rather than a coin flip.
 
-    python manage.py create_putnambot
+    python manage.py create_putnambot --league putnambowl
 
 Safe to re-run; it updates the existing account rather than duplicating it.
 """
@@ -23,10 +23,12 @@ class Command(BaseCommand):
     help = 'Create the PutnamBot AI player'
 
     def add_arguments(self, parser):
-        parser.add_argument('--theme', default='#7c5cff', help='Accent colour')
+        parser.add_argument('--league', required=True, help='League slug')
         parser.add_argument('--favorite-team', default='Detroit Lions')
 
     def handle(self, *args, **options):
+        from leagues.models import League
+        league = League.objects.get(slug=options['league'])
         user, created = User.objects.get_or_create(username=USERNAME)
         if created:
             # No one logs in as PutnamBot; give it an unusable random password.
@@ -40,9 +42,10 @@ class Command(BaseCommand):
         user.save()
 
         p = user.profile
+        p.league = league
+        p.role = 'member'
         p.real_name = 'PutnamBot'
         p.bio = BIO
-        p.theme = options['theme']
         p.favorite_team = options['favorite_team']
         p.is_bot = True
         p.bot_strategy = 'gemini'
@@ -54,6 +57,6 @@ class Command(BaseCommand):
 
         verb = 'Created' if created else 'Updated'
         self.stdout.write(self.style.SUCCESS(
-            f'{verb} {USERNAME} (strategy={p.bot_strategy}, theme={p.theme})'
+            f'{verb} {USERNAME} in {league.name} (strategy={p.bot_strategy})'
         ))
         self.stdout.write(f'  bio: {p.bio}')
