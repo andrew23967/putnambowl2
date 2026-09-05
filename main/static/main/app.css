@@ -40,8 +40,10 @@
   --mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
 
   --r: 5px;
-  --w-page: 1060px;
-  --w-narrow: 880px;
+  /* Fluid between a floor and a ceiling: 1060px up to a 1280px window,
+     then ~82% of the window, never past 1400px. Reading measures stay fixed. */
+  --w-page: max(1060px, min(1400px, 82vw));
+  --w-narrow: max(880px, min(1100px, 62vw));
   --w-read: 680px;
   --pad-x: 28px;
 }
@@ -120,7 +122,7 @@ img, svg { max-width: 100%; }
 .page-head-title .status { margin-top: 4px; }
 .page-head-end { margin-left: auto; display: flex; align-items: center; gap: 12px; }
 
-.split { display: grid; grid-template-columns: 1fr 300px; }
+.split { display: grid; grid-template-columns: 1fr minmax(300px, 24%); }
 .split-main { padding: 24px 0 30px; min-width: 0; }
 .rail { border-left: 1px solid var(--rule); margin-left: 28px; padding: 24px 0 30px 26px; min-width: 0; }
 @media (max-width: 999px) {

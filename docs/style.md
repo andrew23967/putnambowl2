@@ -32,9 +32,11 @@ tabular numerals — use it on every number.
 Radius: `--r: 5px` on buttons, inputs, dialogs. Chips are 3–4px. Avatars and
 dots are circles. Nothing else is rounded.
 
-Widths: `--w-page` 1060px, `--w-narrow` 880px (admin pages), `--w-read` 680px
-(rules, preseason, league form). Horizontal padding `--pad-x` 28px, 18px under
-800px.
+Widths are fluid between a floor and a ceiling. `--w-page` is 1060px up to a
+1280px window, then 82% of the window, never past 1400px; `--w-narrow` (admin
+pages) runs 880px to 1100px the same way; `--w-read` (rules, preseason, league
+form) is a fixed 680px reading measure. Rails are `minmax(300px, 24%)` so they
+grow with the page. Horizontal padding `--pad-x` 28px, 18px under 800px.
 
 ## Type scale
 
