@@ -419,47 +419,6 @@ def _ordinal(n):
     return f'{n}{suffix}'
 
 
-def _last_week_summary(league, settings, user):
-    """What the picks page shows while the new week is not out: how the last
-    one went for you, and its graded list."""
-    week = settings.week - 1
-    if week < 1:
-        return None
-    games = list(Game.objects.filter(league=league, week=week))
-    if not games:
-        return None
-    games.sort(key=lambda g: (g.game_dt is None, g.game_dt, g.id))
-    all_picks = list(Pick.objects.filter(game__in=games).select_related('game', 'user'))
-    mine = {p.game_id: p for p in all_picks if p.user_id == user.id}
-    per_user = {}
-    for p in all_picks:
-        per_user[p.user_id] = per_user.get(p.user_id, 0) + p.points_earned
-    n_players = User.objects.filter(profile__league=league).count() or 1
-    graded = [g for g in games if g.graded]
-    rows, _ = standings_rows(league, settings, user.username)
-    my_rank = next((r['rank'] for r in rows if r['me']), None)
-    out_games = []
-    for g in games:
-        pick = mine.get(g.id)
-        right = bool(pick and g.graded and pick.choice == g.winner)
-        out_games.append({
-            't1': g.team1_abbrev, 't2': g.team2_abbrev, 'winner': g.winner,
-            'home1': g.team1_is_home,
-            'took': (g.team1_abbrev if pick.choice == 'team1' else g.team2_abbrev) if pick else '',
-            'mark': '' if not (pick and g.graded) else ('pos' if right else 'neg'),
-            'result': '—' if not (pick and g.graded) else (f'+{pick.points_earned}' if right else '0'),
-        })
-    return {
-        'week': week,
-        'points': round(sum(p.points_earned for p in mine.values()), 1),
-        'record': f"{sum(1 for p in mine.values() if p.is_correct)}/{len(graded)}",
-        'average': round(sum(per_user.values()) / n_players, 1),
-        'rank': _ordinal(my_rank) if my_rank else '—',
-        'graded': len(graded), 'total': len(games), 'final': len(graded) == len(games),
-        'games': out_games,
-    }
-
-
 @league_required
 def picks(request):
     """This week's slate, in whichever of its three states applies: not out,
@@ -490,7 +449,6 @@ def picks(request):
         'my_correct': sum(1 for p in my_picks if p.is_correct),
         'week_points': round(sum(p.points_earned for p in my_picks), 1),
         'pct_made': round(len(picks_map) / total * 100) if total else 0,
-        'last_week': _last_week_summary(league, settings, request.user) if not settings.publish else None,
         'countdown_json': countdown['milestones_json'],
         'countdown_idle': countdown['idle_label'],
     })

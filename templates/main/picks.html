@@ -33,7 +33,6 @@
   .res-took { font: 400 12.5px var(--mono); color: var(--muted-3); flex-shrink: 0; white-space: nowrap; }
   .res-took b { color: var(--ink); font-weight: 600; }
   .res-result { font: 600 14px var(--mono); width: 44px; text-align: right; flex-shrink: 0; }
-  .last-week .res { opacity: .72; }
   #pick-error { position: fixed; left: 50%; transform: translateX(-50%); bottom: 20px; z-index: 200; }
   @media (max-width: 900px) {
     .pk-head { grid-template-columns: 1fr; gap: 14px; }
@@ -75,41 +74,6 @@
   </div>
   <div></div>
 </div>
-
-{% if last_week %}
-<div class="last-week" style="padding:20px 0 26px;">
-  <div class="section-head">
-    <p class="eyebrow">Week {{ last_week.week }} · {% if last_week.final %}final{% else %}{{ last_week.graded }} of {{ last_week.total }} graded{% endif %}</p>
-    <a href="{% url 'main:pick_history' %}?week={{ last_week.week }}" style="font-size:11.5px;">Full pick history</a>
-  </div>
-  <div class="stats" style="border-top:1px solid var(--rule-2);border-bottom:1px solid var(--rule-2);">
-    <div class="stat" style="padding:14px 20px 14px 0;"><p class="stat-label">your points</p><p class="stat-value big">{{ last_week.points }}</p></div>
-    <div class="stat" style="padding:14px 20px;"><p class="stat-label">your record</p><p class="stat-value big">{{ last_week.record }}</p></div>
-    <div class="stat" style="padding:14px 20px;"><p class="stat-label">league average</p><p class="stat-value big">{{ last_week.average }}</p></div>
-    <div class="stat" style="padding:14px 20px;"><p class="stat-label">your rank</p><p class="stat-value big">{{ last_week.rank }}</p></div>
-  </div>
-  <div class="pk-list" style="margin-top:6px;">
-    {% for g in last_week.games %}
-    <div class="res">
-      <span class="res-mark {{ g.mark }}"></span>
-      <div class="res-teams">
-        {% if g.home1 %}
-        <span class="res-team{% if g.winner == 'team2' %} won{% endif %}">{{ g.t2 }}</span>
-        <span class="res-at">at</span>
-        <span class="res-team{% if g.winner == 'team1' %} won{% endif %}">{{ g.t1 }}</span>
-        {% else %}
-        <span class="res-team{% if g.winner == 'team1' %} won{% endif %}">{{ g.t1 }}</span>
-        <span class="res-at">at</span>
-        <span class="res-team{% if g.winner == 'team2' %} won{% endif %}">{{ g.t2 }}</span>
-        {% endif %}
-      </div>
-      <span class="res-took">{% if g.took %}took <b>{{ g.took }}</b>{% else %}no pick{% endif %}</span>
-      <span class="res-result {{ g.mark }}">{{ g.result }}</span>
-    </div>
-    {% endfor %}
-  </div>
-</div>
-{% endif %}
 
 {% elif not settings.lock_picks %}
 <div class="pk-head">
