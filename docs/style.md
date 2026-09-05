@@ -88,7 +88,7 @@ end markers, the `.chart-ymax` scale label and the `.chart-x` week ticks are HTM
 percentage so they never distort).
 
 Nav: `.nav` > `.nav-in` > `.nav-brand` (the league name), `.nav-links`, `.nav-right`
-(`.nav-week`, `<details class="nav-menu">` menus), `<details class="nav-burger">`
+(`<details class="nav-menu">` menus), `<details class="nav-burger">`
 for phones. `aria-current="page"` comes from `request.resolver_match.url_name`.
 
 ## Page patterns

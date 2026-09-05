@@ -22,7 +22,7 @@ leagues and hands each one to a manager.
 - `@league_manager_required` — plus `is_manager(user, league)`.
 - `@superuser_required` — the site admin pages; login at `/leagues/login/`.
 
-`leagues/context_processors.py` puts `league`, `is_manager` and `site_week` on
+`leagues/context_processors.py` puts `league`, `is_manager` and `email_paused` on
 every template.
 
 ## Joining

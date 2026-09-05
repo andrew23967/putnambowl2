@@ -50,7 +50,9 @@
 
 /* ── Base ─────────────────────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; }
-html { color-scheme: light; }
+/* Reserve the scrollbar's column on every page, so the centred nav and page
+   sit in the same place whether or not the page scrolls. */
+html { color-scheme: light; scrollbar-gutter: stable; }
 body {
   margin: 0;
   background: var(--panel);
@@ -345,7 +347,6 @@ dialog.dialog::backdrop { background: rgba(20,22,26,.28); }
 .nav-link:hover { color: var(--ink); }
 .nav-link[aria-current="page"] { color: var(--ink); font-weight: 500; }
 .nav-right { margin-left: auto; display: flex; align-items: center; gap: 16px; }
-.nav-week { font: 400 11px var(--mono); color: var(--muted-2); letter-spacing: .06em; }
 .nav-menu { position: relative; }
 .nav-menu > summary { list-style: none; cursor: pointer; font-size: 12px; color: var(--muted); user-select: none; }
 .nav-menu > summary::-webkit-details-marker { display: none; }

@@ -29,7 +29,6 @@
       <a class="nav-link" href="{% url 'main:rules' %}" {% if current == 'rules' %}aria-current="page"{% endif %}>Rules</a>
     </div>
     <div class="nav-right">
-      {% if site_week %}<span class="nav-week">W{{ site_week }}</span>{% endif %}
       {% if is_manager %}
       <details class="nav-menu">
         <summary>Admin</summary>
