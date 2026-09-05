@@ -1,12 +1,12 @@
 {% comment %}
-One game on the dashboard: the three-segment result selector, delete, and the
-kickoff line. Rendered by the page and again by ajax_add_game, so there is one
+One game on the dashboard: kickoff and venue, the three-segment result
+selector, delete. Rendered by the page and again by ajax_add_game, so there is one
 copy of this markup. `data-winner` is the source of truth so clicking the
 selected segment clears the result - a plain radio cannot be unchecked.
 {% endcomment %}
 <div class="game-row" id="game-row-{{ game.id }}" data-graded="{% if game.graded %}1{% else %}0{% endif %}">
-  <div class="game-row-top">
-    <div class="grade" data-game-id="{{ game.id }}" data-winner="{{ game.winner }}"
+  <p class="game-when">{% if game.game_dt_iso %}<span data-utc-daytime="{{ game.game_dt_iso }}">{{ game.game_dt_iso }}</span>{% endif %}<small>@{% if game.team1_is_home %}{{ game.team1_abbrev }}{% else %}{{ game.team2_abbrev }}{% endif %}</small></p>
+  <div class="grade" data-game-id="{{ game.id }}" data-winner="{{ game.winner }}"
          role="radiogroup" aria-label="Result: {{ game.team1_abbrev }} versus {{ game.team2_abbrev }}">
       <input class="grade-radio" type="radio" name="w{{ game.id }}" id="w{{ game.id }}-t1" value="team1"{% if game.winner == 'team1' %} checked{% endif %}>
       <label class="seg" for="w{{ game.id }}-t1"><span>{{ game.team1_abbrev }}</span><span class="seg-pts">{{ game.points1 }}</span></label>
@@ -15,7 +15,5 @@ selected segment clears the result - a plain radio cannot be unchecked.
       <input class="grade-radio" type="radio" name="w{{ game.id }}" id="w{{ game.id }}-t2" value="team2"{% if game.winner == 'team2' %} checked{% endif %}>
       <label class="seg" for="w{{ game.id }}-t2"><span>{{ game.team2_abbrev }}</span><span class="seg-pts">{{ game.points2 }}</span></label>
     </div>
-    <button type="button" class="icon-btn" data-delete="{{ game.id }}" aria-label="Delete game">×</button>
-  </div>
-  <p class="game-when n">{% if game.game_dt_iso %}<span data-utc-full="{{ game.game_dt_iso }}">{{ game.game_dt_iso }}</span> · {% endif %}@{% if game.team1_is_home %}{{ game.team1_abbrev }}{% else %}{{ game.team2_abbrev }}{% endif %}</p>
+  <button type="button" class="icon-btn" data-delete="{{ game.id }}" aria-label="Delete game">×</button>
 </div>

@@ -3,25 +3,33 @@
 
 {% block extra_head %}
 <style>
-  .pd-actions { display: flex; flex-wrap: wrap; gap: 8px; padding: 16px 0; border-bottom: 1px solid var(--rule); }
+  /* Two columns: everything done by hand on the left, the autopilot on the right. */
+  .pd-split { grid-template-columns: 2fr 3fr; }
+  .pd-split .split-main, .pd-split .rail { padding-top: 0; }
+  .pd-col-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 54px; padding: 12px 0; border-bottom: 1px solid var(--rule); }
+  .pd-col-head form { margin: 0; }
+  .pd-actions { display: flex; flex-wrap: wrap; gap: 8px; padding: 14px 0; border-bottom: 1px solid var(--rule); }
   .pd-actions form { margin: 0; }
-  .pd-split { grid-template-columns: 1fr minmax(320px, 27%); }
-  .game-row { padding: 10px 0; border-top: 1px solid var(--rule-2); }
-  .game-row-top { display: flex; align-items: center; gap: 8px; }
+  .pd-stats { padding: 12px 0; border-bottom: 1px solid var(--rule); }
+  .pd-stats .stat { padding: 0 14px; }
+  .pd-danger { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; padding: 18px 0 0; }
+  .game-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; border-top: 1px solid var(--rule-2); }
+  .game-when { width: 92px; flex-shrink: 0; margin: 0; font: 400 10.5px var(--mono); color: var(--muted-3); line-height: 1.35; }
+  .game-when small { display: block; font-size: 10px; color: var(--placeholder); }
   .grade { display: grid; grid-template-columns: 1fr auto 1fr; gap: 4px; flex: 1; min-width: 0; position: relative; }
   .grade-radio { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
-  .seg { display: flex; align-items: baseline; justify-content: center; gap: 6px; padding: 7px 8px; border: 1px solid var(--rule-3); border-radius: 4px; background: #fff; cursor: pointer; font-size: 12.5px; font-weight: 600; color: var(--muted); user-select: none; }
+  .seg { display: flex; align-items: baseline; justify-content: center; gap: 5px; padding: 5px 6px; border: 1px solid var(--rule-3); border-radius: 4px; background: #fff; cursor: pointer; font-size: 12px; font-weight: 600; color: var(--muted); user-select: none; }
   .seg:hover { border-color: #b6b4ae; }
-  .seg-tie { font: 600 10px var(--mono); letter-spacing: .08em; text-transform: uppercase; padding: 7px 10px; }
-  .seg-pts { font: 500 10.5px var(--mono); color: var(--dim); }
-  .grade-radio:checked + .seg { background: var(--pos-fill); border-color: var(--pos); color: var(--pos); }
-  .grade-radio:checked + .seg .seg-pts { color: var(--pos); }
-  .grade-radio:checked + .seg-tie { background: var(--fill); border-color: var(--ink); color: var(--ink); }
+  .seg-tie { font: 600 9.5px var(--mono); letter-spacing: .08em; text-transform: uppercase; padding: 5px 8px; }
+  .seg-pts { font: 500 10px var(--mono); color: var(--dim); }
+  .grade-radio:checked + .seg { background: var(--fill); border-color: var(--ink); color: var(--ink); }
+  .grade-radio:checked + .seg .seg-pts { color: var(--muted); }
   .grade-radio:focus-visible + .seg { outline: 2px solid var(--ink); outline-offset: 2px; }
-  .game-when { margin: 5px 0 0; font-size: 10.5px; color: var(--muted-3); text-align: right; }
+  .pd-form { padding-top: 16px; }
   .pd-form .field { margin-bottom: 14px; }
   .pd-form .eyebrow { margin: 18px 0 10px; letter-spacing: .12em; }
-  .pd-form .eyebrow:first-child { margin-top: 0; }
+  .pd-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 28px; }
+  .pd-form-grid > div > .eyebrow:first-child, .pd-form > .eyebrow:first-child { margin-top: 0; }
   .two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   .lock-mode { display: flex; border: 1px solid var(--rule-3); border-radius: 4px; overflow: hidden; margin-bottom: 10px; }
   .lock-mode label { flex: 1; display: flex; justify-content: center; padding: 7px; cursor: pointer; font: 600 10.5px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--muted-2); position: relative; }
@@ -30,7 +38,8 @@
   .lock-mode input:checked + span { color: var(--ink); }
   .lock-mode label:has(input:checked) { background: var(--fill); }
   .issue { color: var(--neg); }
-  @media (max-width: 999px) { .pd-split { grid-template-columns: 1fr; } }
+  @media (max-width: 999px) { .pd-split { grid-template-columns: 1fr; } .pd-split .rail { padding-top: 20px; } }
+  @media (max-width: 640px) { .pd-form-grid { grid-template-columns: 1fr; } }
 </style>
 {% endblock %}
 
@@ -42,19 +51,25 @@
       {% if not settings.publish %}Not out{% elif not settings.lock_picks %}Open{% elif all_graded and games %}Final{% else %}Locked{% endif %}
     </p>
   </div>
-  <div class="page-head-end">
-    <form method="post">{% csrf_token %}
-      <button name="toggle_auto" class="btn btn-sm {% if settings.auto_enabled %}btn-primary{% else %}btn-secondary{% endif %}">Auto-pilot {% if settings.auto_enabled %}on{% else %}off{% endif %}</button>
-    </form>
-    {% if settings.auto_enabled %}
-    <form method="post" onsubmit="return confirm('Run one auto-pilot tick now? This can publish the week and email the league.');">{% csrf_token %}
-      <button name="run_tick" class="btn btn-secondary btn-sm">Run a tick</button>
-    </form>
-    {% endif %}
-  </div>
 </div>
 
-<div class="stats" style="padding:16px 0;border-bottom:1px solid var(--rule);">
+<div class="split pd-split">
+  <div class="split-main">
+    <div class="pd-col-head"><p class="eyebrow">Manual</p></div>
+<div class="pd-actions">
+  <form method="post">{% csrf_token %}<button name="toggle_publish" class="btn btn-secondary btn-sm">{% if settings.publish %}Unpublish{% else %}Publish{% endif %}</button></form>
+  <form method="post">{% csrf_token %}<button name="toggle_lock" class="btn btn-secondary btn-sm">{% if settings.lock_picks %}Unlock{% else %}Lock picks{% endif %}</button></form>
+  <button type="button" class="btn btn-secondary btn-sm" id="open-scrape">Scrape…</button>
+  <form method="post">{% csrf_token %}<button name="grade" class="btn btn-secondary btn-sm">Grade</button></form>
+  <form method="post">{% csrf_token %}<button name="cycle_multiplier" class="btn btn-secondary btn-sm">Multiplier {{ settings.multiplier }}× → {% if settings.multiplier < 4 %}{{ settings.multiplier|add:settings.multiplier }}{% else %}1{% endif %}×</button></form>
+  <button type="button" class="btn btn-secondary btn-sm" id="open-add">Add game…</button>
+  {% if all_graded %}
+  <form method="post" onsubmit="return confirm('Advance to week {{ settings.week|add:1 }}?')">{% csrf_token %}<button name="nextweek" class="btn btn-primary btn-sm">Next week</button></form>
+  {% else %}
+  <button class="btn btn-secondary btn-sm" disabled title="Every game must be graded first">Next week</button>
+  {% endif %}
+</div>
+<div class="stats pd-stats">
   <div class="stat">
     <p class="stat-label">publish</p>
     <p class="stat-value">{% if settings.publish %}Live{% elif settings.auto_scrape_dt %}<span data-utc-daytime="{{ settings.auto_scrape_dt|date:'c' }}">{{ settings.auto_scrape_dt|date:"D g:i A" }}</span>{% else %}Not set{% endif %}</p>
@@ -70,40 +85,27 @@
   <div class="stat"><p class="stat-label">last issue</p><p class="stat-value issue" style="font-weight:400;font-size:12px;">{{ settings.auto_last_issue }}</p></div>
   {% endif %}
 </div>
-
-<div class="pd-actions">
-  <form method="post">{% csrf_token %}<button name="toggle_publish" class="btn btn-secondary btn-sm">{% if settings.publish %}Unpublish{% else %}Publish{% endif %}</button></form>
-  <form method="post">{% csrf_token %}<button name="toggle_lock" class="btn btn-secondary btn-sm">{% if settings.lock_picks %}Unlock{% else %}Lock picks{% endif %}</button></form>
-  <button type="button" class="btn btn-secondary btn-sm" id="open-scrape">Scrape…</button>
-  <form method="post">{% csrf_token %}<button name="grade" class="btn btn-secondary btn-sm">Grade</button></form>
-  <form method="post">{% csrf_token %}<button name="cycle_multiplier" class="btn btn-secondary btn-sm">Multiplier {{ settings.multiplier }}× → {% if settings.multiplier < 4 %}{{ settings.multiplier|add:settings.multiplier }}{% else %}1{% endif %}×</button></form>
-  <button type="button" class="btn btn-secondary btn-sm" id="open-add">Add game…</button>
-  {% if all_graded %}
-  <form method="post" onsubmit="return confirm('Advance to week {{ settings.week|add:1 }}?')">{% csrf_token %}<button name="nextweek" class="btn btn-primary btn-sm">Next week</button></form>
-  {% else %}
-  <button class="btn btn-secondary btn-sm" disabled title="Every game must be graded first">Next week</button>
-  {% endif %}
-  <span style="flex:1;"></span>
-  <form method="post" onsubmit="return confirm('Delete every game this week, and every pick on them?')">{% csrf_token %}<button name="delete_all_games" class="btn btn-danger btn-sm">Delete all games</button></form>
-  <button type="button" class="btn btn-danger btn-sm" id="open-season">Save season &amp; reset…</button>
-</div>
-
-<div class="split pd-split">
-  <div class="split-main">
-    <div class="section-head">
-      <p class="eyebrow">Games</p>
-      <p class="n" style="font-size:10.5px;color:var(--muted-3);">click a side to grade it; click it again to clear</p>
-    </div>
     <div id="game-list">
       {% for game in games %}{% include 'main/_game_row.html' %}{% endfor %}
       <p class="empty" id="no-games" {% if games %}hidden{% endif %} style="padding:12px 0;">No games yet.</p>
     </div>
+    <div class="pd-danger">
+  <form method="post" onsubmit="return confirm('Delete every game this week, and every pick on them?')">{% csrf_token %}<button name="delete_all_games" class="btn btn-danger btn-sm">Delete all games</button></form>
+  <button type="button" class="btn btn-danger btn-sm" id="open-season">Save season &amp; reset…</button>
+    </div>
   </div>
 
   <aside class="rail">
+    <div class="pd-col-head">
+      <p class="eyebrow">Auto-pilot</p>
+      <form method="post">{% csrf_token %}
+        <button name="toggle_auto" class="btn btn-sm {% if settings.auto_enabled %}btn-primary{% else %}btn-secondary{% endif %}">Auto-pilot {% if settings.auto_enabled %}on{% else %}off{% endif %}</button>
+      </form>
+    </div>
     <form method="post" class="pd-form">
       {% csrf_token %}
-      <p class="eyebrow">Auto-pilot</p>
+      <div class="pd-form-grid">
+      <div>
       <div class="field">
         <label class="label" for="tz">Timezone</label>
         <select class="select" name="tz" id="tz">
@@ -133,6 +135,8 @@
         </div>
       </div>
 
+      </div>
+      <div>
       <p class="eyebrow">Lock</p>
       <div class="lock-mode">
         <label><input type="radio" name="lock_mode" value="offset" {% if settings.lock_mode != 'manual' %}checked{% endif %}><span>Before kickoff</span></label>
@@ -164,6 +168,8 @@
         <label class="label" for="slw">Last week of the season</label>
         <input class="input n" name="season_last_week" id="slw" type="number" min="1" max="30" value="{{ settings.season_last_week }}">
         <p class="hint">18 regular season, 22 through the Super Bowl.</p>
+      </div>
+      </div>
       </div>
 
       <p class="eyebrow">Worker</p>

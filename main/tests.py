@@ -2554,17 +2554,18 @@ class MembersPageTests(TestCase):
         self.assertNotIn('No bio yet.', html)
         self.assertIn('viewer', html)
 
-    def test_bots_are_folded_into_one_line(self):
+    def test_bots_are_listed_after_the_people(self):
         html = self.client.get('/members/').content.decode()
-        self.assertNotIn('abot', html, 'a bot is not a member row')
-        self.assertIn('1 bot also play', html)
-        self.assertGreater(html.index('also play'), html.index('mate'),
-                           'the bot line sits under the roster')
+        self.assertIn('abot', html)
+        self.assertGreater(html.index('abot'), html.index('mate'), 'bots sit under the people')
 
     def test_bots_do_not_show_a_favourite_team(self):
         """The field has a default, so every bot claimed to support Arizona."""
         resp = self.client.get('/members/')
-        self.assertEqual([m['username'] for m in resp.context['members'] if m['username'] == 'abot'], [])
+        rows = resp.context['members']
+        self.assertTrue([m for m in rows if m['username'] == 'abot'][0]['bot'])
+        people = [m for m in rows if not m['bot']]
+        self.assertEqual(resp.content.decode().count('favorite team'), len(people))
 
     def test_it_needs_a_login(self):
         self.client.logout()
@@ -2588,10 +2589,11 @@ class MembersPageTests(TestCase):
         p.afc_champ = 'Kansas City Chiefs'
         p.superbowl_winner = 'Philadelphia Eagles'
         p.save()
+        from main.teams import TEAM_ABBREV
         html = self.client.get('/members/').content.decode()
         for team in ('Carolina Panthers', 'Philadelphia Eagles', 'Kansas City Chiefs'):
             with self.subTest(team=team):
-                self.assertIn(team, html)
+                self.assertIn('>' + TEAM_ABBREV[team] + '<', html)
 
     def test_unsubmitted_preseason_is_not_passed_off_as_picks(self):
         """Every preseason field has a team as its default, so an untouched
@@ -3034,13 +3036,7 @@ class DashboardDoesNotTickOnLoadTests(TestCase):
                                                'auto_retry_window_minutes': '360'})
         self.assertEqual(self.ticks, [])
 
-    def test_the_button_ticks(self):
-        self.client.post('/dashboard/picks/', {'run_tick': '1'})
-        self.assertEqual(len(self.ticks), 1)
-
-    def test_the_button_does_nothing_with_autopilot_off(self):
-        self.settings.auto_enabled = False
-        self.settings.save()
+    def test_there_is_no_tick_button(self):
         self.client.post('/dashboard/picks/', {'run_tick': '1'})
         self.assertEqual(self.ticks, [])
 

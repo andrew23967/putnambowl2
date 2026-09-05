@@ -669,11 +669,14 @@ def members(request):
     """The league roster, one ruled row per member, alphabetical. Standings
     live on the home page; this page is about who is in the league.
 
-    Bots are folded into one line at the bottom: they play and they score, so
-    the standings need them, but a page about who is in the league does not
-    need seventeen rows all claiming Arizona as a favourite team.
+    Bots come after the people, marked as bots, without the favourite-team
+    default nobody chose.
     """
     from . import seasons as seasons_mod
+    from .teams import TEAM_ABBREV
+
+    def abbr(name):
+        return TEAM_ABBREV.get(name, name)
 
     league = current_league(request)
     people = list(User.objects.select_related('profile').filter(profile__league=league))
@@ -682,8 +685,6 @@ def members(request):
     rows = []
     for user in people:
         profile = user.profile
-        if profile.is_bot:
-            continue
         rows.append({
             'username': user.username,
             'display_name': profile.display_name,
@@ -691,28 +692,21 @@ def members(request):
             'bio': profile.bio.strip(),
             'joined': user.date_joined,
             'team': profile.favorite_team,
+            'bot': profile.is_bot,
             'finishes': [dict(f, rank_label=_ordinal(f['rank']))
                          for f in finishes.get(user.username, [])],
             # Only when they actually submitted. Every preseason field has a team
             # as its default, so an untouched profile would otherwise claim four
             # confident picks nobody made.
             'preseason': {
-                'big_loser': profile.big_loser,
-                'nfc': profile.nfc_champ,
-                'afc': profile.afc_champ,
-                'superbowl': profile.superbowl_winner,
+                'big_loser': abbr(profile.big_loser),
+                'nfc': abbr(profile.nfc_champ),
+                'afc': abbr(profile.afc_champ),
+                'superbowl': abbr(profile.superbowl_winner),
             } if profile.preseason_submitted else None,
         })
-    rows.sort(key=lambda r: (r['display_name'].lower(), r['username']))
-
-    bot_count = sum(1 for u in people if u.profile.is_bot)
-    return render(request, 'main/members.html', {
-        'members': rows,
-        'bot_count': bot_count,
-        'bot_line': f'{bot_count} bot{"s" if bot_count != 1 else ""} also play, scored like everyone else.',
-        # Kept for the tests.
-        'human_count': len(rows),
-    })
+    rows.sort(key=lambda r: (r['bot'], r['display_name'].lower(), r['username']))
+    return render(request, 'main/members.html', {'members': rows})
 
 
 @league_manager_required
@@ -929,18 +923,7 @@ def pickdash(request):
     # for real from throwaway database copies too, because the SMTP credentials
     # are the same whichever database is attached, and it sent to real members.
     #
-    # `run_auto` is what should drive the autopilot. The button exists so a tick
-    # can still be forced from here when the worker is not running, but only
-    # because someone pressed it.
-    if settings.auto_enabled and request.method == 'POST' and 'run_tick' in request.POST:
-        try:
-            from .auto import auto_tick
-            auto_tick(league)
-            settings.refresh_from_db()
-            messages.success(request, 'Auto-pilot tick run.')
-        except Exception as _e:
-            log.exception('manual auto_tick failed')
-            messages.error(request, f'Auto-pilot tick failed: {_e}')
+    # `run_auto` drives the autopilot; nothing on this page ticks it.
 
     if 'delete_all_games' in request.POST:
         current_games = Game.objects.filter(league=league, week=settings.week)

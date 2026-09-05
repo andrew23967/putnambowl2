@@ -106,5 +106,5 @@ otherwise.
 
 Every autopilot step has a button on `/dashboard/picks/` that calls the same
 function: Publish/Unpublish, Lock/Unlock, Scrape (a dialog for season, week and
-sources), Grade, Next week, Run a tick. A GET never ticks; it did once, and
+sources), Grade, Next week. Nothing on the page runs a tick; a GET did once, and
 opening the page from a throwaway database mailed real members.
