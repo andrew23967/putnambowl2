@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load static %}
 {# One shell for sign in, create account, password change and the site admin login. #}
 {% block main_class %}auth-main{% endblock %}
 {% block content %}
@@ -6,6 +7,7 @@
   <div class="auth-side">
     <p class="auth-mark">{% block auth_mark %}{% if league %}{{ league.name }}{% else %}PutnamBowl{% endif %}{% endblock %}</p>
     {% block auth_side %}{% endblock %}
+    {% block auth_art %}<div class="auth-art"><img src="{% static 'main/favicon.svg' %}" alt=""></div>{% endblock %}
   </div>
   <div class="auth-form">
     <p class="eyebrow">{% block auth_eyebrow %}{% endblock %}</p>

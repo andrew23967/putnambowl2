@@ -17,7 +17,7 @@
 {% with current=request.resolver_match.url_name %}
 <nav class="nav">
   <div class="nav-in">
-    <a class="nav-brand" href="{% if league %}{% url 'main:home' %}{% else %}{% url 'leagues:index' %}{% endif %}">{% if league %}{{ league.name }}{% else %}Site admin{% endif %}</a>
+    <a class="nav-brand" href="{% if league %}{% url 'main:home' %}{% else %}{% url 'leagues:index' %}{% endif %}"><img class="nav-icon" src="{% static 'main/favicon.svg' %}" alt="">{% if league %}{{ league.name }}{% else %}Site admin{% endif %}</a>
 
     {% if league %}
     <div class="nav-links">
