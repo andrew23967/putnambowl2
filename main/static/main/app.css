@@ -193,7 +193,6 @@ img, svg { max-width: 100%; }
 
 /* ── Buttons ──────────────────────────────────────────────────────────── */
 .btn {
-.btn[hidden] { display: none; }
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
   padding: 10px 16px;
   border: 1px solid transparent;
@@ -204,6 +203,7 @@ img, svg { max-width: 100%; }
   cursor: pointer;
   text-decoration: none;
 }
+.btn[hidden] { display: none; }
 .btn-primary { background: var(--ink); color: #fff; }
 .btn-primary:hover { background: #000; color: #fff; }
 .btn-secondary { background: #fff; border-color: var(--rule-3); color: var(--ink); }
