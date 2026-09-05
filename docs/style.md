@@ -24,6 +24,7 @@ All colours are CSS custom properties on `:root`. Use the token, never the hex.
 | `--accent` / `--accent-hover` | `#0f7a6c` / `#0b5c52` | links, "Open", the leader line |
 | `--pos` / `--pos-fill` | `#167a4b` / `#dcece2` | right, gained, climbed |
 | `--neg` / `--neg-fill` / `--neg-soft` / `--neg-text` | `#a83232` / `#f2dede` / `#f7ecec` / `#8e2b2b` | wrong, fell, errors |
+| `--pos-line` / `--neg-line` | `#a9d2bb` / `#e3b3b3` | the faint underlines in pick history |
 
 Fonts: `--sans` IBM Plex Sans 400/500/600/700, `--mono` IBM Plex Mono 400/500/600,
 both from Google Fonts with system fallbacks. `.n` puts an element in mono with
@@ -78,7 +79,7 @@ Forms: `.field`, `.label` (eyebrow-style), `.label-row` (label + note on one lin
 `.dialog-title`, `.dialog-body`, `.dialog-actions`. Flat backdrop, no blur. Open
 with `showModal()`, close on backdrop click, return focus to the opener.
 
-Chips `.chip-pos` / `.chip-neg` / `.chip-open` (outlined on white; an empty red chip is a missed pick); legend `.legend` with `.swatch`
+Chips `.chip-pos` / `.chip-neg` / `.chip-open` (plain text with a faint green or red underline; an empty red underline is a missed pick); legend `.legend` with `.swatch`
 (line) or `.swatch-sq`; `.avatar` (`.is-me` inverts it); `.podium` with `.pod-1/2/3`
 (display order 2, 1, 3; the blocks touch and share a 2px floor, the rank sits at the top of each step, names hang under the floor); `.mail-row` (on the home page the list is
 clipped to the standings' height, never mid-row; eight rows when stacked); `.side` (a pick side, `:checked + .side` selects it);

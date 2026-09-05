@@ -38,7 +38,11 @@
   .lock-mode input:checked + span { color: var(--ink); }
   .lock-mode label:has(input:checked) { background: var(--fill); }
   .issue { color: var(--neg); }
-  @media (max-width: 999px) { .pd-split { grid-template-columns: 1fr; } .pd-split .rail { padding-top: 20px; } }
+  @media (max-width: 999px) {
+    .pd-split { grid-template-columns: 1fr; }
+    .pd-split .rail { order: -1; border-top: 0; padding-top: 0; }
+    .pd-split .split-main { border-top: 1px solid var(--rule); padding-top: 20px; margin-top: 8px; }
+  }
   @media (max-width: 640px) { .pd-form-grid { grid-template-columns: 1fr; } }
 </style>
 {% endblock %}
@@ -69,22 +73,6 @@
   <button class="btn btn-secondary btn-sm" disabled title="Every game must be graded first">Next week</button>
   {% endif %}
 </div>
-<div class="stats pd-stats">
-  <div class="stat">
-    <p class="stat-label">publish</p>
-    <p class="stat-value">{% if settings.publish %}Live{% elif settings.auto_scrape_dt %}<span data-utc-daytime="{{ settings.auto_scrape_dt|date:'c' }}">{{ settings.auto_scrape_dt|date:"D g:i A" }}</span>{% else %}Not set{% endif %}</p>
-  </div>
-  <div class="stat">
-    <p class="stat-label">lock</p>
-    <p class="stat-value">{% if settings.lock_picks %}Locked{% elif settings.auto_lock_dt %}<span data-utc-daytime="{{ settings.auto_lock_dt|date:'c' }}">{{ settings.auto_lock_dt|date:"D g:i A" }}</span>{% elif settings.lock_mode == 'offset' and display_auto_lock_computed_dt %}<span data-utc-daytime="{{ display_auto_lock_computed_dt|date:'c' }}">{{ display_auto_lock_computed_dt|date:"D g:i A" }}</span>{% elif settings.lock_mode == 'offset' %}{{ settings.auto_lock_offset_minutes }}m before kickoff{% else %}Not set{% endif %}</p>
-  </div>
-  <div class="stat"><p class="stat-label">games</p><p class="stat-value" id="game-counter">{{ games|length }}</p></div>
-  <div class="stat"><p class="stat-label">graded</p><p class="stat-value">{{ graded_count }}/{{ games|length }}</p></div>
-  <div class="stat"><p class="stat-label">multiplier</p><p class="stat-value">{{ settings.multiplier }}×</p></div>
-  {% if settings.auto_last_issue %}
-  <div class="stat"><p class="stat-label">last issue</p><p class="stat-value issue" style="font-weight:400;font-size:12px;">{{ settings.auto_last_issue }}</p></div>
-  {% endif %}
-</div>
     <div id="game-list">
       {% for game in games %}{% include 'main/_game_row.html' %}{% endfor %}
       <p class="empty" id="no-games" {% if games %}hidden{% endif %} style="padding:12px 0;">No games yet.</p>
@@ -101,6 +89,19 @@
       <form method="post">{% csrf_token %}
         <button name="toggle_auto" class="btn btn-sm {% if settings.auto_enabled %}btn-primary{% else %}btn-secondary{% endif %}">Auto-pilot {% if settings.auto_enabled %}on{% else %}off{% endif %}</button>
       </form>
+    </div>
+    <div class="stats pd-stats">
+    <div class="stat">
+    <p class="stat-label">publishes</p>
+    <p class="stat-value">{% if settings.publish %}Live{% elif settings.auto_scrape_dt %}<span data-utc-daytime="{{ settings.auto_scrape_dt|date:'c' }}">{{ settings.auto_scrape_dt|date:"D g:i A" }}</span>{% else %}Not set{% endif %}</p>
+  </div>
+    <div class="stat">
+    <p class="stat-label">locks</p>
+    <p class="stat-value">{% if settings.lock_picks %}Locked{% elif settings.auto_lock_dt %}<span data-utc-daytime="{{ settings.auto_lock_dt|date:'c' }}">{{ settings.auto_lock_dt|date:"D g:i A" }}</span>{% elif settings.lock_mode == 'offset' and display_auto_lock_computed_dt %}<span data-utc-daytime="{{ display_auto_lock_computed_dt|date:'c' }}">{{ display_auto_lock_computed_dt|date:"D g:i A" }}</span>{% elif settings.lock_mode == 'offset' %}{{ settings.auto_lock_offset_minutes }}m before kickoff{% else %}Not set{% endif %}</p>
+  </div>
+    {% if settings.auto_last_issue %}
+    <div class="stat"><p class="stat-label">last issue</p><p class="stat-value issue" style="font-weight:400;font-size:12px;">{{ settings.auto_last_issue }}</p></div>
+    {% endif %}
     </div>
     <form method="post" class="pd-form">
       {% csrf_token %}
@@ -319,7 +320,7 @@
 
   // Delete.
   var count={{ games|length }};
-  function paintCount(){ document.getElementById('game-counter').textContent=count; document.getElementById('no-games').hidden=count>0; }
+  function paintCount(){ document.getElementById('no-games').hidden=count>0; }
   document.addEventListener('click',function(e){
     var btn=e.target.closest('[data-delete]'); if(!btn)return;
     btn.disabled=true;
