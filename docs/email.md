@@ -13,6 +13,12 @@ Resend's sandbox sender reaches nobody but the account owner. `SITE_URL` is
 the link in every mail; set it on the worker, which is what sends.
 `INBOUND_REQUIRE_AUTH` stays on in production.
 
+`EMAIL_PAUSED=true` is the kill switch: `outbound_suppressed()` is true for every
+transport, and `tick_all_leagues()` returns without polling the mailbox or
+ticking a league. Managers see a red line at the top of every page while it
+is set. It is for deploy windows and incidents, and it must be removed the
+same day: a scheduled publish that fires under the pause mails nobody.
+
 ## Addresses
 
 - `user@gmail.com` — a message to the league.

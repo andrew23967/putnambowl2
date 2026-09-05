@@ -1,8 +1,10 @@
+from django.conf import settings as django_settings
+
 from .access import current_league, is_manager
 
 
 def league(request):
-    """`league`, `is_manager` and `site_week` on every template.
+    """`league`, `is_manager`, `site_week` and `email_paused` on every template.
 
     `site_week` is the nav's "W7" badge. One small query per page, and only
     for signed-in members of a league.
@@ -17,4 +19,5 @@ def league(request):
         'league': lg,
         'is_manager': bool(user is not None and is_manager(user, lg)),
         'site_week': week,
+        'email_paused': bool(getattr(django_settings, 'EMAIL_PAUSED', False)),
     }

@@ -220,9 +220,11 @@ def outbound_suppressed():
     Django's mail framework, so the test runner's locmem backend gives no
     protection. The suite really did deliver mail to fixture addresses like
     boss@example.com once SMTP was configured — checked here so a single guard
-    covers every transport.
+    covers every transport. EMAIL_PAUSED is the same guard for production:
+    the deploy-window kill switch (docs/deploy.md).
     """
-    return bool(getattr(django_settings, 'TESTING', False))
+    return bool(getattr(django_settings, 'TESTING', False)
+                or getattr(django_settings, 'EMAIL_PAUSED', False))
 
 
 def smtp_ready():

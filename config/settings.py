@@ -169,6 +169,13 @@ SMTP_PASSWORD = env('SMTP_PASSWORD', default='') or IMAP_PASSWORD
 # SMTP was configured. See email_utils.outbound_suppressed().
 TESTING = 'test' in sys.argv
 
+# A hard pause for deploys and incidents. While it is set, every transport
+# refuses to send and the worker stands down: no mailbox poll, no league tick.
+# Set it on BOTH Railway services before a deploy that could mail the league,
+# and remove it the same day - a scheduled publish that fires under the pause
+# never reaches anyone.
+EMAIL_PAUSED = env.bool('EMAIL_PAUSED', default=False)
+
 # ── Logging ─────────────────────────────────────────────────────────────────
 # The pipeline used to print() its progress, which the worker's log captured but
 # which produced mojibake on a cp1252 console and could not be filtered. Plain

@@ -1,7 +1,7 @@
 # Deployment (Railway)
 
 Project `putnambowl`, environment `production`, three services: **web**,
-**worker** (`SERVICE_TYPE=worker`), **Postgres**. Pushing `main` deploys both
+**putnambowl2** (the worker: `SERVICE_TYPE=worker`), **Postgres**. Pushing `main` deploys both
 app services.
 
 `railway.toml` is the only process definition (the old `Procfile` disagreed
@@ -29,6 +29,9 @@ once browsers cache it.
 
 ## Before a deploy that carries migrations
 
+0. Set `EMAIL_PAUSED=true` on **web** and **putnambowl2** (the worker). Nothing is
+   sent and the worker stands down until it is removed. Remove it once the
+   deploy is verified - the same day.
 1. Take a Railway snapshot of Postgres.
 2. Rehearse: `railway run --service Postgres pg_dump ...` to a local Postgres,
    `migrate` against it, run `manage.py test`, open `/home/` as a member.

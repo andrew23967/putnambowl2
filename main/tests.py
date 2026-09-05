@@ -3992,3 +3992,38 @@ class RecapSlugTests(TestCase):
         self.assertIn('A recap', rows.get(league=a).body)
         self.assertIn('B recap', rows.get(league=b).body)
         self.assertIn('B', rows.get(league=b).body.split('──')[-1])
+
+
+class EmailPausedTests(TestCase):
+    """EMAIL_PAUSED is the deploy-window kill switch: every transport refuses
+    and the worker stands down, so a deploy cannot mail the league."""
+
+    def test_every_transport_refuses_while_paused(self):
+        from . import email_utils
+        with self.settings(TESTING=False, EMAIL_PAUSED=True):
+            self.assertTrue(email_utils.outbound_suppressed())
+            self.assertFalse(email_utils.smtp_ready())
+            ok, why = email_utils.send_via_mailbox('nobody@example.com', 's', 'b')
+            self.assertFalse(ok)
+
+    def test_worker_stands_down_while_paused(self):
+        from unittest import mock
+        from . import auto, inbound_email
+        with self.settings(EMAIL_PAUSED=True),                 mock.patch.object(inbound_email, 'fetch') as fetch,                 mock.patch.object(auto, 'auto_tick') as tick:
+            interval = auto.tick_all_leagues()
+        fetch.assert_not_called()
+        tick.assert_not_called()
+        self.assertGreaterEqual(interval, 60)
+
+    def test_manager_sees_the_pause(self):
+        from django.urls import reverse
+        mgr = make_member('mgr', role='manager')
+        self.client.force_login(mgr)
+        with self.settings(EMAIL_PAUSED=True):
+            resp = self.client.get(reverse('main:rules'))
+        self.assertContains(resp, 'Email is paused')
+        mem = make_member('mem')
+        self.client.force_login(mem)
+        with self.settings(EMAIL_PAUSED=True):
+            resp = self.client.get(reverse('main:rules'))
+        self.assertNotContains(resp, 'Email is paused')

@@ -54,7 +54,7 @@ docs/                      the why — see the index at the bottom
 - **Re-scraping updates, never duplicates** — `Game.match_existing(league, week, team1, team2, game_id)`.
 - **Every schema change is a migration.** Never squash. Write `RenameModel`/`RenameField` by hand: autodetect turns a rename into drop + create and loses the data (`0019`, `0028`).
 - **One mailbox routes by sender.** A sender in two leagues is refused, not guessed. (docs/email.md)
-- **Nothing is mailed under the test runner** — `settings.TESTING` feeds `outbound_suppressed()`.
+- **Nothing is mailed under the test runner or while `EMAIL_PAUSED` is set** — both feed `outbound_suppressed()`; the pause also stands the worker down. (docs/deploy.md)
 
 ## Style, in five lines
 

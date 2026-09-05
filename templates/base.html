@@ -99,6 +99,7 @@
 {% endif %}
 
 <main class="{% block main_class %}page{% endblock %}">
+  {% if is_manager and email_paused %}<p class="alert" style="margin-top:20px;">Email is paused. Nothing is sent and the worker is standing down until EMAIL_PAUSED is removed from both Railway services.</p>{% endif %}
   {% block content %}{% endblock %}
 </main>
 

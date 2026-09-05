@@ -629,8 +629,13 @@ def tick_all_leagues():
     interval any league asked for. One league raising must not stop the
     others, so each tick is fenced on its own.
     """
+    from django.conf import settings as django_settings
     from leagues.models import League
     from . import inbound_email
+
+    if getattr(django_settings, 'EMAIL_PAUSED', False):
+        log.warning('[run_auto] EMAIL_PAUSED is set: mailbox not polled, no league ticked, nothing sent')
+        return 300
 
     # One mailbox for every league, and deliberately outside auto_tick(): that
     # returns immediately when a league's autopilot is off, and mail should
