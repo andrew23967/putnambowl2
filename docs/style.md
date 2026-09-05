@@ -79,7 +79,7 @@ Forms: `.field`, `.label` (eyebrow-style), `.label-row` (label + note on one lin
 `.dialog-title`, `.dialog-body`, `.dialog-actions`. Flat backdrop, no blur. Open
 with `showModal()`, close on backdrop click, return focus to the opener.
 
-Chips `.chip-pos` / `.chip-neg` / `.chip-open` (plain text with a faint green or red underline; a missed pick reads 'none' under a red underline); legend `.legend` with `.swatch`
+Chips `.chip-pos` / `.chip-neg` / `.chip-open` (plain text with a faint green or red underline; a missed pick reads 'null' under a red underline); legend `.legend` with `.swatch`
 (line) or `.swatch-sq`; `.avatar` (`.is-me` inverts it); `.podium` with `.pod-1/2/3`
 (display order 2, 1, 3; the blocks touch and share a 2px floor, the rank sits at the top of each step, names hang under the floor); `.mail-row` (on the home page the list is
 clipped to the standings' height, never mid-row; eight rows when stacked); `.side` (a pick side, `:checked + .side` selects it);

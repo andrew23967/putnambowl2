@@ -311,7 +311,7 @@ dialog.dialog::backdrop { background: rgba(20,22,26,.28); }
 
 /* ── Chips / legend ───────────────────────────────────────────────────── */
 /* Plain text with a faint underline: green = right, red = wrong or no pick
-   ('none' under a red line), nothing = nothing to grade yet. */
+   ('null' under a red line), nothing = nothing to grade yet. */
 .chip { display: inline-flex; align-items: center; justify-content: center; vertical-align: middle; min-width: 28px; height: 24px; padding: 0 3px; font: 600 10.5px var(--mono); color: var(--ink); border-bottom: 2px solid transparent; }
 .chip-pos { border-bottom-color: var(--pos-line); }
 .chip-neg { border-bottom-color: var(--neg-line); }
