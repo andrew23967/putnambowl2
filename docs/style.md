@@ -59,7 +59,7 @@ Widths: `--w-page` 1060px, `--w-narrow` 880px (admin pages), `--w-read` 680px
   `.hover` adds a hover fill, `th[aria-sort]` marks the sorted column. `.bar`/`.bar-fill` is the season bar.
 - Breakpoints: 999px (rails stack), 800px (nav collapses to the burger), 640px (phone).
 - Page-only layout lives in that page's `{% block extra_head %}` and is prefixed by the page:
-  home's `.home-*` grid and its `.hide-phone` columns, picks' `.pk-*` list, analytics' `.an-*`.
+  home's `.home-*` grid and its `.hide-phone` columns, picks' `.pk-*` list.
 
 ## Components
 

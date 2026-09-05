@@ -7,7 +7,6 @@ from django.template.loader import render_to_string
 from django.urls import reverse
 from django.contrib.auth.models import User
 from django.contrib import messages
-from django.db.models import Prefetch
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 
@@ -264,63 +263,6 @@ def home(request):
         # Kept for the tests and the JSON refresh.
         'leaderboard': rows,
         'emails': feed,
-    })
-
-
-@league_required
-def analytics(request):
-    settings = current_settings(request)
-    league = settings.league
-
-    past_games = list(Game.objects.filter(league=league, week__lt=settings.week).prefetch_related(
-        Prefetch('picks', queryset=Pick.objects.select_related('user'))
-    ).order_by('week'))
-    games_by_past_week = defaultdict(list)
-    for pg in past_games:
-        games_by_past_week[pg.week].append(pg)
-
-    leaderboards = WeeklyLeaderboard.objects.filter(league=league).order_by('week')
-    chart_players = sorted({e['username'] for lb in leaderboards for e in lb.entries})
-
-    points_chart = [['Week'] + chart_players]
-    position_chart = [['Week'] + chart_players]
-    for lb in leaderboards:
-        score_map = {e['username']: e['score'] for e in lb.entries}
-        rank_map = competition_ranks(
-            (e['username'], e['score']) for e in lb.entries)
-        points_chart.append([str(lb.week)] + [score_map.get(u, 0) for u in chart_players])
-        position_chart.append([str(lb.week)] + [rank_map.get(u, len(chart_players)) for u in chart_players])
-
-    efficiency_chart = [['Week'] + chart_players]
-    for wk_num in sorted(games_by_past_week.keys()):
-        week_correct = {u: 0 for u in chart_players}
-        week_earned = {u: 0.0 for u in chart_players}
-        week_total = {u: 0 for u in chart_players}
-        week_potential = 0.0
-        for pg in games_by_past_week[wk_num]:
-            if not pg.graded:
-                continue
-            week_potential += pg.points1 if pg.winner == 'team1' else (pg.points2 if pg.winner == 'team2' else 0)
-            for pp in pg.picks.all():
-                if pp.user.username not in chart_players:
-                    continue
-                week_total[pp.user.username] += 1
-                if pp.is_correct:
-                    week_correct[pp.user.username] += 1
-                    week_earned[pp.user.username] += pp.points_earned
-        eff_row = [str(wk_num)]
-        for u in chart_players:
-            eff_row.append(round(week_earned[u] / week_potential * 100, 1) if week_potential else 0)
-        efficiency_chart.append(eff_row)
-
-    completed_weeks = sorted(games_by_past_week.keys())
-
-    return render(request, 'main/analytics.html', {
-        'settings': settings,
-        'completed_weeks': completed_weeks,
-        'points_chart': json.dumps(points_chart),
-        'position_chart': json.dumps(position_chart),
-        'efficiency_chart': json.dumps(efficiency_chart),
     })
 
 

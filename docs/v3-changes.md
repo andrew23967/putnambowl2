@@ -35,7 +35,9 @@ confirmed unreferenced or superseded before it went.
 - **`Procfile`**, which disagreed with `railway.toml` and never ran collectstatic.
 - **Tracked junk**: `backup.json`, `static/temp_check.js`.
 - **The "biggest upset" and pick-distribution figures** computed for the picks
-  page that no template read; `win_rate_chart` on analytics, likewise.
+  page that no template read.
+- **The analytics page** (`/analytics/`): three Chart.js line charts of the same
+  series the home page now draws inline. Nothing else loads Chart.js.
 - **Copy**: taglines, subtitles, reassurance hints, emoji, "→" links, italic
   empty states, gradients, glows, blur, entrance animations, the chrome logo SVG.
 
@@ -49,7 +51,7 @@ confirmed unreferenced or superseded before it went.
 - Home's JavaScript copy of the leaderboard row → the server-rendered
   `_standings.html`; the dashboard's JavaScript copy of the game row → `_game_row.html`.
 - The ⚙ popout that staged hidden inputs for the next Scrape → a dialog that posts.
-- Chart.js on every page → only on analytics; the home and season charts are inline SVG.
+- Chart.js on every page → none; the home and season charts are inline SVG.
 
 ## Fixed
 

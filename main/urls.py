@@ -21,7 +21,6 @@ urlpatterns = [
     path('dashboard/emails/', views.emaildash, name='emaildash'),
     path('dashboard/accounts/edit/<int:user_id>/', views.edit_player, name='edit_player'),
     path('dashboard/accounts/delete/<int:user_id>/', views.delete_player, name='delete_player'),
-    path('analytics/', views.analytics, name='analytics'),
     path('pick-history/', views.pick_history, name='pick_history'),
     path('dashboard/generate-recap/', views.generate_recap, name='generate_recap'),
     path('dashboard/send-test-email/', views.send_test_email, name='send_test_email'),

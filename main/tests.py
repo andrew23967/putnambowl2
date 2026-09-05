@@ -1287,8 +1287,7 @@ class NavPageRenderTests(TestCase):
     the nav for every signed-in user.
     """
 
-    PAGES = ['main:home', 'main:picks', 'main:rules', 'main:analytics',
-             'main:pick_history', 'main:preseason', 'main:members',
+    PAGES = ['main:home', 'main:picks', 'main:rules', 'main:pick_history', 'main:preseason', 'main:members',
              'main:pickdash', 'main:emaildash', 'main:accountdash',
              'main:seasons', 'main:rulesdash',
              'accounts:user_profile', 'accounts:password_change', 'leagues:index']

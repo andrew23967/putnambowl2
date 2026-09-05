@@ -24,7 +24,6 @@
       <a class="nav-link" href="{% url 'main:home' %}" {% if current == 'home' %}aria-current="page"{% endif %}>Home</a>
       <a class="nav-link" href="{% url 'main:picks' %}" {% if current == 'picks' %}aria-current="page"{% endif %}>Picks</a>
       <a class="nav-link" href="{% url 'main:pick_history' %}" {% if current == 'pick_history' %}aria-current="page"{% endif %}>Pick history</a>
-      <a class="nav-link" href="{% url 'main:analytics' %}" {% if current == 'analytics' %}aria-current="page"{% endif %}>Analytics</a>
       <a class="nav-link" href="{% url 'main:members' %}" {% if current == 'members' %}aria-current="page"{% endif %}>Members</a>
       <a class="nav-link" href="{% url 'main:seasons' %}" {% if current == 'seasons' or current == 'season' %}aria-current="page"{% endif %}>Seasons</a>
       <a class="nav-link" href="{% url 'main:rules' %}" {% if current == 'rules' %}aria-current="page"{% endif %}>Rules</a>
@@ -58,7 +57,6 @@
         <a href="{% url 'main:home' %}">Home</a>
         <a href="{% url 'main:picks' %}">Picks</a>
         <a href="{% url 'main:pick_history' %}">Pick history</a>
-        <a href="{% url 'main:analytics' %}">Analytics</a>
         <a href="{% url 'main:members' %}">Members</a>
         <a href="{% url 'main:seasons' %}">Seasons</a>
         <a href="{% url 'main:rules' %}">Rules</a>
