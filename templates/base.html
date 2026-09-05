@@ -4,647 +4,107 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}PutnamBowl{% endblock %}</title>
+  <title>{% block title %}{% endblock %} · {% if league %}{{ league.name }}{% else %}PutnamBowl{% endif %}</title>
   <link rel="icon" type="image/svg+xml" href="{% static 'main/favicon.svg' %}">
-  <script>(function(){var t=localStorage.getItem('pb-theme')||'dark';document.documentElement.dataset.theme=t;})();</script>
-  <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
-  <style>
-    :root {
-      --accent: {% if request.user.is_authenticated %}{{ request.user.profile.theme }}{% else %}#00897b{% endif %};
-      --bg:       #070b14;
-      --surface:  #0e1422;
-      --surface2: #141c2e;
-      --border:   rgba(255,255,255,0.07);
-      --border2:  rgba(255,255,255,0.12);
-      --text:     #f1f5f9;
-      --muted:    #64748b;
-      --muted2:   #94a3b8;
-
-      /* Ink-on-surface fills. Every component uses these instead of hardcoded
-         rgba(255,255,255,…) so light mode flips without per-component overrides. */
-      --fill-1: rgba(255,255,255,.035);
-      --fill-2: rgba(255,255,255,.06);
-      --fill-3: rgba(255,255,255,.10);
-      --on-accent: #fff;
-
-      /* Semantic status colours, tuned per theme for contrast. */
-      --good: #34d399;
-      --bad:  #f87171;
-      --warn: #fbbf24;
-      --info: #60a5fa;
-      --good-fill: rgba(16,185,129,.16);
-      --bad-fill:  rgba(239,68,68,.16);
-      --warn-fill: rgba(245,158,11,.16);
-
-      --radius: 10px;
-      --radius-sm: 7px;
-    }
-    [data-theme="light"] {
-      --bg:      #eef2f7;
-      --surface: #ffffff;
-      --surface2:#f5f8fc;
-      --border:  rgba(15,23,42,.10);
-      --border2: rgba(15,23,42,.17);
-      --text:    #0b1220;
-      --muted:   #64748b;
-      --muted2:  #475569;
-
-      --fill-1: rgba(15,23,42,.035);
-      --fill-2: rgba(15,23,42,.06);
-      --fill-3: rgba(15,23,42,.11);
-
-      /* Darker so they stay legible on white. */
-      --good: #0f9d63;
-      --bad:  #d93a3a;
-      --warn: #b45309;
-      --info: #2563eb;
-      --good-fill: rgba(16,185,129,.15);
-      --bad-fill:  rgba(217,58,58,.12);
-      --warn-fill: rgba(180,83,9,.12);
-    }
-
-    /* Keyboard focus is visible everywhere, mouse clicks stay clean. */
-    :where(a, button, input, select, textarea, [tabindex]):focus-visible {
-      outline: 2px solid var(--accent);
-      outline-offset: 2px;
-      border-radius: var(--radius-sm);
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      *, *::before, *::after {
-        animation-duration: .01ms !important;
-        animation-iteration-count: 1 !important;
-        transition-duration: .01ms !important;
-      }
-    }
-
-    *, *::before, *::after { box-sizing: border-box; }
-
-    body {
-      background: var(--bg);
-      color: var(--text);
-      font-family: 'Inter', sans-serif;
-      -webkit-font-smoothing: antialiased;
-      min-height: 100vh;
-    }
-
-    /* Scrollbar */
-    ::-webkit-scrollbar { width: 5px; height: 5px; }
-    ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,.12); border-radius: 4px; }
-    [data-theme="light"] ::-webkit-scrollbar-thumb { background: rgba(0,0,0,.15); }
-
-    /* Cards */
-    .card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-    }
-    .card-inner {
-      background: var(--surface2);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-    }
-
-    /* Accent */
-    .accent       { color: var(--accent); }
-    .accent-bg    { background: var(--accent); }
-    .accent-border{ border-color: var(--accent); }
-    .btn-accent {
-      background: var(--accent);
-      color: #fff;
-      font-weight: 600;
-      border-radius: 8px;
-      transition: filter .15s;
-    }
-    .btn-accent:hover { filter: brightness(1.15); }
-    .btn-ghost {
-      background: var(--fill-2);
-      color: var(--muted2);
-      border-radius: 8px;
-      transition: background .15s, color .15s;
-    }
-    .btn-ghost:hover { background: var(--fill-3); color: var(--text); }
-    .btn-ghost.active { background: var(--accent); color: var(--on-accent); }
-
-    /* Nav */
-    nav.topnav {
-      background: rgba(7,11,20,.95);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
-      border-bottom: 1px solid var(--border);
-      transition: background .2s;
-    }
-    [data-theme="light"] nav.topnav { background: rgba(248,250,252,.95); }
-    .nav-link {
-      color: var(--muted2);
-      font-size: .8125rem;
-      font-weight: 500;
-      padding: 6px 10px;
-      border-radius: 6px;
-      transition: background .12s, color .12s;
-      white-space: nowrap;
-    }
-    .nav-link:hover { background: var(--fill-2); color: var(--text); }
-    .nav-link[aria-current="page"] { color: var(--text); background: var(--fill-1); }
-    /* Theme toggle button */
-    .theme-btn {
-      background: none; border: 1px solid var(--border2); border-radius: 7px;
-      cursor: pointer; padding: 5px 9px; color: var(--muted2); font-size: .875rem;
-      display: flex; align-items: center; line-height: 1;
-      transition: background .12s, border-color .12s;
-    }
-    .theme-btn:hover { background: var(--fill-2); }
-
-    /* Dropdown */
-    .nav-group .dropdown { display: none; }
-    .nav-group:hover .dropdown { display: block; }
-    .dropdown {
-      position: absolute;
-      top: 100%;
-      min-width: 200px;
-      background: var(--surface);
-      border: 1px solid var(--border2);
-      border-radius: var(--radius);
-      padding: 6px;
-      padding-top: 14px;
-      margin-top: 0;
-      box-shadow: 0 20px 60px rgba(0,0,0,.5);
-      z-index: 100;
-    }
-    [data-theme="light"] .dropdown { box-shadow: 0 12px 40px rgba(15,23,42,.14); }
-    .dropdown a {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 8px 12px;
-      border-radius: 6px;
-      color: var(--muted2);
-      font-size: .8125rem;
-      font-weight: 500;
-      transition: background .1s, color .1s;
-    }
-    .dropdown a:hover { background: var(--fill-2); color: var(--text); }
-
-    /* Mobile menu */
-    #mobile-menu { display: none; }
-    #mobile-menu.open { display: block; }
-
-    /* Tag / badge */
-    .tag {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      padding: 2px 8px;
-      border-radius: 99px;
-      font-size: .6875rem;
-      font-weight: 600;
-      letter-spacing: .02em;
-    }
-    .tag-green  { background: rgba(16,185,129,.15); color: #34d399; }
-    .tag-red    { background: rgba(239,68,68,.15);  color: #f87171; }
-    .tag-amber  { background: rgba(245,158,11,.15); color: #fbbf24; }
-    .tag-accent { background: color-mix(in srgb, var(--accent) 20%, transparent); color: var(--accent); }
-    .tag-muted  { background: rgba(255,255,255,.07); color: var(--muted2); }
-
-    /* Glow */
-    .glow { box-shadow: 0 0 20px color-mix(in srgb, var(--accent) 35%, transparent); }
-
-    /* Score bar */
-    .score-bar { height: 3px; background: rgba(255,255,255,.08); overflow: hidden; }
-    [data-theme="light"] .score-bar { background: rgba(0,0,0,.08); }
-    .score-bar-fill { height: 100%; background: transparent; width: 0; transition: width 1.2s cubic-bezier(.2,.8,.2,1); }
-
-    /* Animations */
-    @keyframes fadeUp   { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:translateY(0); } }
-    @keyframes fadeIn   { from { opacity:0; } to { opacity:1; } }
-    @keyframes scaleIn  { from { opacity:0; transform:scale(.96); } to { opacity:1; transform:scale(1); } }
-    @keyframes pulse    { 0%,100% { opacity:1; } 50% { opacity:.4; } }
-
-    .anim-up   { animation: fadeUp  .4s ease both; }
-    .anim-in   { animation: fadeIn  .3s ease both; }
-    .anim-scale{ animation: scaleIn .35s ease both; }
-    .pulse     { animation: pulse 2s ease infinite; }
-
-    /* Stagger children */
-    .stagger > *:nth-child(1)  { animation-delay: .04s; }
-    .stagger > *:nth-child(2)  { animation-delay: .08s; }
-    .stagger > *:nth-child(3)  { animation-delay: .12s; }
-    .stagger > *:nth-child(4)  { animation-delay: .16s; }
-    .stagger > *:nth-child(5)  { animation-delay: .20s; }
-    .stagger > *:nth-child(6)  { animation-delay: .24s; }
-    .stagger > *:nth-child(7)  { animation-delay: .28s; }
-    .stagger > *:nth-child(8)  { animation-delay: .32s; }
-    .stagger > *:nth-child(9)  { animation-delay: .36s; }
-    .stagger > *:nth-child(10) { animation-delay: .40s; }
-
-    /* Divider */
-    hr.dim { border-color: var(--border); }
-
-    /* Flash messages */
-    .flash-success { background:rgba(16,185,129,.12); border:1px solid rgba(16,185,129,.25); color:#34d399; }
-    .flash-error   { background:rgba(239,68,68,.12);  border:1px solid rgba(239,68,68,.25);  color:#f87171; }
-    .flash-warning { background:rgba(245,158,11,.12); border:1px solid rgba(245,158,11,.25); color:#fbbf24; }
-    .flash-info    { background:rgba(99,102,241,.12); border:1px solid rgba(99,102,241,.25); color:#a5b4fc; }
-
-    /* Overrides for Tailwind-generated classes we still use */
-    .text-muted { color: var(--muted2); }
-    .text-dim   { color: var(--muted); }
-
-    /* ── Week countdown ──
-       Shared by home and picks via main/_countdown.html. Lives here rather than
-       in either page so the two can't drift apart. */
-    @keyframes cdPulse { 0%,100% { opacity:1; } 50% { opacity:.45; } }
-    .timer-wrap { margin-bottom:12px; }
-    .timer-label {
-      font-size:.5625rem;font-weight:700;color:var(--muted);
-      text-transform:uppercase;letter-spacing:.12em;margin:0 0 10px;
-    }
-    .hms-wrap { display:flex;align-items:center;gap:6px;width:100%; }
-    .hms-col { display:flex;flex-direction:column;align-items:center;gap:4px;flex:1; }
-    .hms-sep { color:var(--muted);font-weight:700;font-size:1.5rem;margin-bottom:16px;flex-shrink:0; }
-    .hms-unit { font-size:.5rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em; }
-    .cd-digit {
-      background:var(--surface2);border-radius:6px;padding:10px 14px;width:100%;
-      box-sizing:border-box;text-align:center;font-weight:800;font-size:2rem;
-      color:var(--text);font-variant-numeric:tabular-nums;line-height:1;
-      animation:cdPulse 2s ease-in-out infinite;
-    }
-    /* Home shows the clock beside the leaderboard, where full-size digits would
-       shout over the content they sit next to. */
-    .timer-compact .cd-digit { font-size:1.125rem;padding:7px 10px;border-radius:5px; }
-    .timer-compact .hms-sep { font-size:.9rem;margin-bottom:13px; }
-    .timer-compact .timer-label { margin-bottom:7px; }
-
-    /* Nav week picker — a number you can type and two arrows to step it. */
-    .nav-wk { display:flex;align-items:center;gap:4px; }
-    .nav-wk-btn {
-      display:flex;align-items:center;justify-content:center;
-      width:24px;height:24px;padding:0;cursor:pointer;
-      background:none;color:var(--muted);
-      border:1px solid var(--border2);border-radius:6px;
-      transition:color .14s ease,background .14s ease;
-    }
-    .nav-wk-btn:hover:not(:disabled) { color:var(--text);background:var(--fill-2); }
-    /* Kept in place at the ends rather than hidden, so the box does not shift
-       under the pointer between week 1 and the middle of the season. */
-    .nav-wk-btn:disabled { opacity:.3;cursor:default; }
-    .nav-wk-input {
-      width:44px;height:24px;text-align:center;
-      background:var(--surface2);color:var(--text);
-      border:1px solid var(--border2);border-radius:6px;
-      font-size:.75rem;font-weight:700;font-family:inherit;
-      font-variant-numeric:tabular-nums;
-    }
-    .nav-wk-input:focus { outline:none;border-color:var(--accent); }
-    /* The native spinners duplicate the arrows either side and leave a 44px box
-       with barely room for two digits. */
-    .nav-wk-input::-webkit-outer-spin-button,
-    .nav-wk-input::-webkit-inner-spin-button { -webkit-appearance:none;margin:0; }
-    .nav-wk-input { -moz-appearance:textfield;appearance:textfield; }
-    @media (max-width:640px) {
-      .nav-wk-btn { width:28px;height:28px; }
-      .nav-wk-input { width:46px;height:28px; }
-      /* The week number still shows; only the season type goes. A page putting a
-         control in #nav-week-extra shares this row, and at 390px the two together
-         overran it — the row is right-aligned, so the overflow went off the left
-         edge and took a button with it. */
-      .nav-wk-type { display:none; }
-    }
-  </style>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'main/app.css' %}">
   {% block extra_head %}{% endblock %}
 </head>
-<body>
+<body{% if request.user.is_authenticated and league %} data-site-state="{% url 'main:site_state' %}"{% endif %}>
+{% if request.user.is_authenticated %}
+{% with current=request.resolver_match.url_name %}
+<nav class="nav">
+  <div class="nav-in">
+    <a class="nav-brand" href="{% if league %}{% url 'main:home' %}{% else %}{% url 'leagues:index' %}{% endif %}">{% if league %}{{ league.name }}{% else %}Site admin{% endif %}</a>
 
-<!-- ── NAV ── -->
-<nav class="topnav sticky top-0 z-50">
-  <div style="max-width:1280px;margin:0 auto;padding:0 24px;">
-    <div style="display:flex;align-items:center;height:52px;gap:8px;">
-
-      <!-- Logo -->
-      <a href="{% url 'main:home' %}" style="display:flex;align-items:center;gap:8px;margin-right:16px;text-decoration:none;">
-        <svg width="24" height="27" viewBox="0 0 24 27" fill="none" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0;">
-          <!-- Bowl body -->
-          <path d="M3 7 C4 13 7 18 11 18 L13 18 C17 18 20 13 21 7 Z" fill="url(#pb-lg1)"/>
-          <!-- Left-side metallic sheen -->
-          <path d="M5 8.5 C5.5 13 7.5 16.8 11 17.8" stroke="rgba(255,255,255,0.28)" stroke-width="0.8" stroke-linecap="round" fill="none"/>
-          <!-- Rim -->
-          <ellipse cx="12" cy="7" rx="9" ry="2" fill="url(#pb-lg2)"/>
-          <!-- Inner bowl depth -->
-          <ellipse cx="12" cy="7" rx="6.5" ry="1.4" fill="rgba(0,0,0,0.38)"/>
-          <!-- Stem -->
-          <rect x="10.5" y="18" width="3" height="2.5" fill="url(#pb-lg3)"/>
-          <!-- Upper base step -->
-          <rect x="7" y="20.5" width="10" height="2.5" rx="0.5" fill="#1c1c1c"/>
-          <rect x="7.5" y="20.65" width="9" height="0.6" rx="0.3" fill="rgba(255,255,255,0.15)"/>
-          <!-- Lower base step (wider) -->
-          <rect x="2.5" y="23" width="19" height="3" rx="0.5" fill="#111111"/>
-          <rect x="3" y="23.15" width="18" height="0.6" rx="0.3" fill="rgba(255,255,255,0.12)"/>
-          <defs>
-            <linearGradient id="pb-lg1" x1="3" y1="12" x2="21" y2="12" gradientUnits="userSpaceOnUse">
-              <stop offset="0%" stop-color="#374151"/>
-              <stop offset="15%" stop-color="#9ca3af"/>
-              <stop offset="38%" stop-color="#e2e8f0"/>
-              <stop offset="50%" stop-color="#f8fafc"/>
-              <stop offset="62%" stop-color="#e2e8f0"/>
-              <stop offset="85%" stop-color="#9ca3af"/>
-              <stop offset="100%" stop-color="#374151"/>
-            </linearGradient>
-            <linearGradient id="pb-lg2" x1="3" y1="7" x2="21" y2="7" gradientUnits="userSpaceOnUse">
-              <stop offset="0%" stop-color="#6b7280"/>
-              <stop offset="28%" stop-color="#d1d5db"/>
-              <stop offset="50%" stop-color="#ffffff"/>
-              <stop offset="72%" stop-color="#d1d5db"/>
-              <stop offset="100%" stop-color="#6b7280"/>
-            </linearGradient>
-            <linearGradient id="pb-lg3" x1="12" y1="18" x2="12" y2="20.5" gradientUnits="userSpaceOnUse">
-              <stop offset="0%" stop-color="#9ca3af"/>
-              <stop offset="100%" stop-color="#6b7280"/>
-            </linearGradient>
-          </defs>
-        </svg>
-        <span style="color:var(--text);font-weight:800;font-size:.9375rem;letter-spacing:-.01em;">PutnamBowl</span>
-      </a>
-
-      {% if request.user.is_authenticated %}
-      <!-- Desktop links -->
-      <div class="hidden-mobile" style="display:flex;align-items:center;gap:2px;flex:1;">
-        <a href="{% url 'main:home' %}" class="nav-link">Home</a>
-        <a href="{% url 'main:picks' %}" class="nav-link">Picks</a>
-        <a href="{% url 'main:pick_history' %}" class="nav-link">Pick History</a>
-        <a href="{% url 'main:analytics' %}" class="nav-link">Analytics</a>
-        <a href="{% url 'main:members' %}" class="nav-link">Members</a>
-        <a href="{% url 'main:rules' %}" class="nav-link">Rules</a>
-        {% if request.user.is_staff %}
-        <div class="nav-group" style="position:relative;">
-          <button class="nav-link" style="display:flex;align-items:center;gap:4px;background:none;border:none;cursor:pointer;">
-            Admin
-            <svg width="10" height="10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>
-          </button>
-          <div class="dropdown" style="left:0;">
-            <a href="{% url 'main:pickdash' %}">Pick Dashboard</a>
-            <a href="{% url 'main:accountdash' %}">Accounts</a>
-            <a href="{% url 'main:emaildash' %}">Emails</a>
-          </div>
+    {% if league %}
+    <div class="nav-links">
+      <a class="nav-link" href="{% url 'main:home' %}" {% if current == 'home' %}aria-current="page"{% endif %}>Home</a>
+      <a class="nav-link" href="{% url 'main:picks' %}" {% if current == 'picks' %}aria-current="page"{% endif %}>Picks</a>
+      <a class="nav-link" href="{% url 'main:pick_history' %}" {% if current == 'pick_history' %}aria-current="page"{% endif %}>Pick history</a>
+      <a class="nav-link" href="{% url 'main:analytics' %}" {% if current == 'analytics' %}aria-current="page"{% endif %}>Analytics</a>
+      <a class="nav-link" href="{% url 'main:members' %}" {% if current == 'members' %}aria-current="page"{% endif %}>Members</a>
+      <a class="nav-link" href="{% url 'main:seasons' %}" {% if current == 'seasons' or current == 'season' %}aria-current="page"{% endif %}>Seasons</a>
+      <a class="nav-link" href="{% url 'main:rules' %}" {% if current == 'rules' %}aria-current="page"{% endif %}>Rules</a>
+    </div>
+    <div class="nav-right">
+      {% if site_week %}<span class="nav-week">W{{ site_week }}</span>{% endif %}
+      {% if is_manager %}
+      <details class="nav-menu">
+        <summary>Admin</summary>
+        <div class="nav-menu-list">
+          <a href="{% url 'main:pickdash' %}">Dashboard</a>
+          <a href="{% url 'main:accountdash' %}">Accounts</a>
+          <a href="{% url 'main:emaildash' %}">Emails</a>
+          <a href="{% url 'main:rulesdash' %}">Rules</a>
+          {% if request.user.is_superuser %}<hr><a href="{% url 'leagues:index' %}">Leagues</a>{% endif %}
         </div>
+      </details>
+      {% endif %}
+      <details class="nav-menu">
+        <summary>{{ request.user.username }}</summary>
+        <div class="nav-menu-list">
+          <a href="{% url 'accounts:user_profile' %}">My profile</a>
+          <hr>
+          <a href="{% url 'accounts:logout' %}">Log out</a>
+        </div>
+      </details>
+    </div>
+    <details class="nav-burger">
+      <summary aria-label="Menu"><span></span><span></span><span></span></summary>
+      <div class="nav-burger-list">
+        <a href="{% url 'main:home' %}">Home</a>
+        <a href="{% url 'main:picks' %}">Picks</a>
+        <a href="{% url 'main:pick_history' %}">Pick history</a>
+        <a href="{% url 'main:analytics' %}">Analytics</a>
+        <a href="{% url 'main:members' %}">Members</a>
+        <a href="{% url 'main:seasons' %}">Seasons</a>
+        <a href="{% url 'main:rules' %}">Rules</a>
+        {% if is_manager %}
+        <p class="eyebrow">Admin</p>
+        <a href="{% url 'main:pickdash' %}">Dashboard</a>
+        <a href="{% url 'main:accountdash' %}">Accounts</a>
+        <a href="{% url 'main:emaildash' %}">Emails</a>
+        <a href="{% url 'main:rulesdash' %}">Rules</a>
         {% endif %}
+        <p class="eyebrow">{{ request.user.username }}</p>
+        <a href="{% url 'accounts:user_profile' %}">My profile</a>
+        <a href="{% url 'accounts:logout' %}">Log out</a>
       </div>
-
-      <!-- Right: user -->
-      <div style="display:flex;align-items:center;gap:8px;margin-left:auto;">
-        <button class="theme-btn" onclick="toggleTheme()" title="Toggle light/dark mode">
-          <span class="theme-icon-el">☀️</span>
-        </button>
-        <div class="nav-group" style="position:relative;">
-          <button class="nav-link" style="display:flex;align-items:center;gap:8px;background:none;border:none;cursor:pointer;">
-            <div style="width:24px;height:24px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:800;">{{ request.user.username|first|upper }}</div>
-            <span style="font-size:.8125rem;font-weight:500;color:var(--muted2);">{{ request.user.username }}</span>
-          </button>
-          <div class="dropdown" style="right:0;">
-            <a href="{% url 'accounts:user_profile' %}">My Profile</a>
-            <div style="height:1px;background:var(--border);margin:4px 0;"></div>
-            <a href="{% url 'accounts:logout' %}" style="color:#f87171!important;">Logout</a>
-          </div>
+    </details>
+    {% else %}
+    <div class="nav-links">
+      <a class="nav-link" href="{% url 'leagues:index' %}" {% if current == 'index' %}aria-current="page"{% endif %}>Leagues</a>
+    </div>
+    <div class="nav-right">
+      <details class="nav-menu">
+        <summary>{{ request.user.username }}</summary>
+        <div class="nav-menu-list">
+          <a href="{% url 'accounts:logout' %}">Log out</a>
         </div>
-      </div>
-
-      <!-- Mobile hamburger -->
-      <button onclick="document.getElementById('mobile-menu').classList.toggle('open')"
-              style="display:none;background:none;border:none;cursor:pointer;padding:6px;color:var(--muted2);"
-              id="hamburger">
-        <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
-        </svg>
-      </button>
-      {% else %}
-      <div style="margin-left:auto;display:flex;align-items:center;gap:8px;">
-        <button class="theme-btn" onclick="toggleTheme()" title="Toggle light/dark mode">
-          <span class="theme-icon-el">☀️</span>
-        </button>
-        <a href="{% url 'accounts:login' %}" class="nav-link">Login</a>
-        <a href="{% url 'accounts:register' %}" class="btn-accent" style="padding:6px 14px;font-size:.8125rem;text-decoration:none;">Register</a>
-      </div>
-      {% endif %}
+      </details>
     </div>
+    {% endif %}
   </div>
-
-  <!-- Nav week picker -->
-  <div id="nav-week-row" style="display:none;border-top:1px solid var(--border);">
-    <div style="max-width:1280px;margin:0 auto;padding:0 24px;height:32px;display:flex;align-items:center;justify-content:flex-end;gap:14px;">
-      {% comment %}
-        A page can put its own control on this row beside the week picker — pick
-        history parks its game pager here, so the two sit together and both stay
-        pinned under the nav instead of one scrolling away with the page.
-      {% endcomment %}
-      <div id="nav-week-extra" style="display:flex;align-items:center;gap:8px;"></div>
-      <span id="nav-week-label" style="font-size:.625rem;font-weight:700;color:var(--accent);white-space:nowrap;">
-        <span id="nav-week-num">W18</span>
-        <span id="nav-week-type" class="nav-wk-type">Regular Season</span>
-      </span>
-      <div class="nav-wk">
-        <button type="button" id="nav-week-prev" class="nav-wk-btn" aria-label="Previous week">
-          <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path
-            stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"/></svg>
-        </button>
-        <input type="number" id="nav-week-input" class="nav-wk-input"
-               min="1" max="18" value="18" inputmode="numeric" aria-label="Week number">
-        <button type="button" id="nav-week-next" class="nav-wk-btn" aria-label="Next week">
-          <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path
-            stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/></svg>
-        </button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Mobile menu -->
-  {% if request.user.is_authenticated %}
-  <div id="mobile-menu" style="border-top:1px solid var(--border);padding:8px 16px 12px;">
-    <div style="display:flex;flex-direction:column;gap:2px;">
-      <a href="{% url 'main:home' %}" class="nav-link">Home</a>
-      <a href="{% url 'main:picks' %}" class="nav-link">Picks</a>
-      <a href="{% url 'main:pick_history' %}" class="nav-link">Pick History</a>
-      <a href="{% url 'main:analytics' %}" class="nav-link">Analytics</a>
-      <a href="{% url 'main:members' %}" class="nav-link">Members</a>
-      <a href="{% url 'main:rules' %}" class="nav-link">Rules</a>
-      {% if request.user.is_staff %}
-      <div style="height:1px;background:var(--border);margin:4px 0;"></div>
-      <a href="{% url 'main:pickdash' %}" class="nav-link">Pick Dashboard</a>
-      <a href="{% url 'main:accountdash' %}" class="nav-link">Accounts</a>
-      <a href="{% url 'main:emaildash' %}" class="nav-link">Emails</a>
-      {% endif %}
-      <div style="height:1px;background:var(--border);margin:4px 0;"></div>
-      <a href="{% url 'accounts:user_profile' %}" class="nav-link">My Profile</a>
-      <a href="{% url 'accounts:logout' %}" class="nav-link" style="color:#f87171;">Logout</a>
-      <div style="height:1px;background:var(--border);margin:4px 0;"></div>
-      <button onclick="toggleTheme()" style="background:none;border:none;cursor:pointer;padding:6px 10px;border-radius:6px;display:flex;align-items:center;gap:8px;color:var(--muted2);font-size:.8125rem;font-weight:500;width:100%;text-align:left;transition:background .12s;" onmouseover="this.style.background='rgba(255,255,255,.07)'" onmouseout="this.style.background='none'">
-        <span class="theme-icon-el">☀️</span> Toggle theme
-      </button>
-    </div>
-  </div>
-  {% endif %}
 </nav>
+{% endwith %}
+{% endif %}
 
-<!-- Mobile CSS -->
-<style>
-  @media (max-width: 1024px) {
-    .hidden-mobile { display: none !important; }
-    #hamburger { display: block !important; }
-  }
-</style>
-
-<!-- Flash messages -->
 {% if messages %}
-<div style="max-width:1280px;margin:0 auto;padding:12px 24px 0;">
+<div class="flash">
   {% for message in messages %}
-  <div class="anim-up {% if message.tags == 'success' %}flash-success{% elif message.tags == 'error' %}flash-error{% elif message.tags == 'warning' %}flash-warning{% else %}flash-info{% endif %}"
-       style="padding:10px 16px;border-radius:8px;font-size:.8125rem;font-weight:500;margin-bottom:8px;">
-    {{ message }}
-  </div>
+  <p class="{% if message.tags == 'error' %}is-error{% elif message.tags == 'success' %}is-success{% endif %}">{{ message }}</p>
   {% endfor %}
 </div>
 {% endif %}
 
-<!-- Page content -->
-<main style="max-width:1280px;margin:0 auto;padding:24px;">
+<main class="{% block main_class %}page{% endblock %}">
   {% block content %}{% endblock %}
 </main>
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
-<script>
-// Animated counter
-function animCount(el, target, dur=800) {
-  const start = performance.now();
-  const tick = now => {
-    const p = Math.min((now-start)/dur, 1);
-    const e = 1-Math.pow(1-p,3);
-    el.textContent = (target*e).toFixed(1);
-    if (p<1) requestAnimationFrame(tick);
-  };
-  requestAnimationFrame(tick);
-}
-window.addEventListener('load', () => {
-  document.querySelectorAll('[data-count]').forEach(el => animCount(el, parseFloat(el.dataset.count)));
-  document.querySelectorAll('.score-bar-fill[data-w]').forEach((el,i) => {
-    setTimeout(() => el.style.width = el.dataset.w+'%', 200+i*50);
-  });
-});
-if (window.Chart) {
-  Chart.defaults.font.family = 'Inter, sans-serif';
-  Chart.defaults.color = '#64748b';
-}
-function toggleTheme() {
-  const root = document.documentElement;
-  const next = root.dataset.theme === 'light' ? 'dark' : 'light';
-  root.dataset.theme = next;
-  localStorage.setItem('pb-theme', next);
-  _syncThemeIcons();
-}
-function _syncThemeIcons() {
-  const light = document.documentElement.dataset.theme === 'light';
-  document.querySelectorAll('.theme-icon-el').forEach(el => { el.textContent = light ? '🌙' : '☀️'; });
-}
-document.addEventListener('DOMContentLoaded', _syncThemeIcons);
-/* The week picker in the nav: type a number, or step it with the arrows.
-   Same {min, max, value, onChange} contract the slider had, so callers are
-   unchanged. Replaces a range input, which could only be dragged — imprecise for
-   picking one week out of twenty-two, and impossible to aim on a phone. */
-function initWeekPicker(config) {
-  const row  = document.getElementById('nav-week-row');
-  const box  = document.getElementById('nav-week-input');
-  const prev = document.getElementById('nav-week-prev');
-  const next = document.getElementById('nav-week-next');
-  const label= document.getElementById('nav-week-label');
-  if(!row||!box||!prev||!next||!label)return;
-
-  const min = +config.min, max = +config.max;
-  box.min = min; box.max = max;
-
-  function clamp(w){ return Math.min(max, Math.max(min, w)); }
-  function wkType(w){ return w<=18?'Regular Season':w>=22?'Super Bowl':'Playoffs'; }
-
-  let value = clamp(+config.value);
-
-  const num  = document.getElementById('nav-week-num');
-  const type = document.getElementById('nav-week-type');
-
-  function paint(){
-    box.value = value;                       // also snaps back a rejected entry
-    // Two spans, so a narrow screen can drop the season type and keep the number.
-    if (num && type) { num.textContent = 'W'+value; type.textContent = wkType(value); }
-    else { label.textContent = 'W'+value+' '+wkType(value); }
-    prev.disabled = value <= min;
-    next.disabled = value >= max;
-  }
-
-  function set(w, fire){
-    const wanted = clamp(w);
-    if (wanted === value) { paint(); return; }
-    value = wanted;
-    paint();
-    if (fire && config.onChange) config.onChange(value);
-  }
-
-  prev.addEventListener('click', () => set(value-1, true));
-  next.addEventListener('click', () => set(value+1, true));
-
-  // 'change', not 'input': a number box fires input on every keystroke, so typing
-  // "12" would load week 1 on the way past and throw away the request.
-  box.addEventListener('change', () => {
-    const typed = parseInt(box.value, 10);
-    if (Number.isNaN(typed)) { paint(); return; }   // emptied — put the week back
-    set(typed, true);
-  });
-  // Enter commits rather than submitting anything around it.
-  box.addEventListener('keydown', e => {
-    if (e.key === 'Enter') { e.preventDefault(); box.blur(); }
-  });
-
-  paint();
-  row.style.display='';
-  document.documentElement.classList.add('nav-has-weekpicker');
-}
-</script>
-<script>
-(function() {
-  var dateOpts = {month:'short', day:'numeric'};
-  var timeOpts = {hour:'numeric', minute:'2-digit', timeZoneName:'short'};
-  var fullOpts = {month:'short', day:'numeric', hour:'numeric', minute:'2-digit', timeZoneName:'short'};
-  // Weekday alone was ambiguous on a status card - "Sunday" gives no clue
-  // whether it means this Sunday or one three weeks out.
-  var dayOpts  = {weekday:'short', month:'short', day:'numeric'};
-  function conv(el, opts) {
-    try { el.textContent = new Date(el.dataset.utc).toLocaleString(undefined, opts); } catch(e) {}
-  }
-  function run(root) {
-    (root||document).querySelectorAll('[data-utc-date]').forEach(function(el){ el.dataset.utc=el.dataset.utcDate; conv(el,dateOpts); });
-    (root||document).querySelectorAll('[data-utc-time]').forEach(function(el){ el.dataset.utc=el.dataset.utcTime; conv(el,timeOpts); });
-    (root||document).querySelectorAll('[data-utc-full]').forEach(function(el){ el.dataset.utc=el.dataset.utcFull; conv(el,fullOpts); });
-    (root||document).querySelectorAll('[data-utc-day]').forEach(function(el){ el.dataset.utc=el.dataset.utcDay; conv(el,dayOpts); });
-  }
-  run();
-  window.initUtcDates = run;
-})();
-</script>
+<script src="{% static 'main/app.js' %}"></script>
 {% block extra_js %}{% endblock %}
-{% if request.user.is_authenticated %}
-<script>
-(function(){
-  var url='{% url "main:site_state" %}';
-  var state=null;
-  function poll(){
-    fetch(url,{credentials:'same-origin'}).then(function(r){return r.json();}).then(function(s){
-      if(!state){state=s;return;}
-      if(s.week!==state.week||s.publish!==state.publish||s.lock_picks!==state.lock_picks){
-        window.location.reload();
-      }
-    }).catch(function(){});
-  }
-  poll();
-  setInterval(poll,15000);
-})();
-</script>
-{% endif %}
 </body>
 </html>

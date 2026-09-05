@@ -1,172 +1,157 @@
 {% extends 'base.html' %}
-{% block title %}My Profile — PutnamBowl{% endblock %}
+{% block title %}My profile{% endblock %}
 
 {% block extra_head %}
 <style>
-  /* Design tokens, not Tailwind's palette. This page was bg-white / text-slate-900
-     / border-slate-200 — fixed light colours — so in the dark theme the cards
-     stayed white with near-black text while the page around them went dark.
-
-     Fields are also written out one by one now. The old version looped the form
-     and sniffed each widget to decide how to render it, which is how
-     `field.field.widget.__class__.__name__` got in — illegal in a Django
-     template, variables may not begin with an underscore, so the page raised on
-     every load and nobody could open it. Five known fields do not need
-     introspection. */
-  .pf-wrap { max-width:840px;margin:0 auto; }
-  .pf-head { margin-bottom:18px; }
-  .pf-title { font-size:1.05rem;font-weight:800;color:var(--text);margin:0;letter-spacing:-.02em; }
-  .pf-sub { font-size:.78rem;color:var(--muted);margin:5px 0 0; }
-
-  .pf-grid { display:grid;grid-template-columns:1fr 260px;gap:16px;align-items:start; }
-  .pf-card {
-    background:var(--surface);border:1px solid var(--border);
-    border-radius:var(--radius);padding:18px 20px;
-  }
-
-  .pf-field { margin-bottom:15px; }
-  .pf-field:last-of-type { margin-bottom:0; }
-  .pf-label { display:block;font-size:.75rem;font-weight:600;color:var(--muted2);margin-bottom:5px; }
-  .pf-hint { font-size:.7rem;color:var(--muted);margin:4px 0 0;line-height:1.5; }
-  .pf-input, .pf-select, .pf-textarea {
-    width:100%;box-sizing:border-box;background:var(--surface2);
-    border:1px solid var(--border2);border-radius:var(--radius-sm);
-    color:var(--text);font-size:.8125rem;padding:8px 11px;
-    font-family:inherit;transition:border-color .15s;
-  }
-  .pf-input:focus, .pf-select:focus, .pf-textarea:focus {
-    outline:none;border-color:var(--accent);
-  }
-  .pf-textarea { min-height:82px;resize:vertical;line-height:1.55; }
-  .pf-err { border-color:var(--bad) !important; }
-  .pf-err-text { font-size:.7rem;color:var(--bad);margin:4px 0 0; }
-
-  /* The colour input: a swatch you click, with the value beside it. A bare
-     <input type=color> renders as a small grey button in most browsers and
-     reads as broken next to real form fields. */
-  .pf-colour { display:flex;align-items:center;gap:11px; }
-  .pf-colour input[type=color] {
-    width:42px;height:42px;padding:0;border:1px solid var(--border2);
-    border-radius:var(--radius-sm);background:none;cursor:pointer;flex-shrink:0;
-  }
-  .pf-colour input[type=color]::-webkit-color-swatch-wrapper { padding:3px; }
-  .pf-colour input[type=color]::-webkit-color-swatch { border:none;border-radius:5px; }
-
-  .pf-save {
-    background:var(--accent);color:var(--on-accent);border:none;cursor:pointer;
-    font-size:.8125rem;font-weight:700;padding:9px 18px;
-    border-radius:var(--radius-sm);margin-top:18px;transition:filter .15s;
-  }
-  .pf-save:hover { filter:brightness(1.12); }
-
-  /* Sidebar */
-  .pf-avatar {
-    width:52px;height:52px;border-radius:50%;background:var(--accent);
-    color:var(--on-accent);display:flex;align-items:center;justify-content:center;
-    font-size:1.3rem;font-weight:800;margin-bottom:11px;
-  }
-  .pf-name { font-size:.9rem;font-weight:700;color:var(--text);margin:0; }
-  .pf-email { font-size:.75rem;color:var(--muted);margin:2px 0 0;word-break:break-all; }
-  .pf-stat-head {
-    font-size:.625rem;font-weight:700;color:var(--muted);text-transform:uppercase;
-    letter-spacing:.09em;margin:0 0 9px;
-  }
-  .pf-stat { display:flex;justify-content:space-between;gap:10px;font-size:.78rem;padding:4px 0; }
-  .pf-stat dt { color:var(--muted); }
-  .pf-stat dd { color:var(--text);font-weight:700;margin:0;font-variant-numeric:tabular-nums; }
-  .pf-link { color:var(--info);text-decoration:none;font-size:.75rem;font-weight:600; }
-  .pf-link:hover { text-decoration:underline; }
-
-  @media (max-width:760px) {
-    .pf-grid { grid-template-columns:1fr; }
-  }
+  .pf-form { display: flex; flex-direction: column; gap: 18px; }
+  .pf-preview { border: 1px solid var(--rule-3); border-radius: var(--r); background: #fff; padding: 13px 14px; }
+  .pf-links { margin-top: 22px; border-top: 1px solid var(--rule-3); padding-top: 14px; display: flex; flex-direction: column; gap: 9px; align-items: flex-start; font-size: 12.5px; }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="pf-wrap anim-up">
-
-  <div class="pf-head">
-    <h1 class="pf-title">My Profile</h1>
-    <p class="pf-sub">How you appear to the rest of the league.</p>
+<form method="post" id="pf">
+  {% csrf_token %}
+  <div class="page-head">
+    <div class="page-head-title">
+      <p class="eyebrow">My profile</p>
+      <p class="meta">how you appear on the members page</p>
+    </div>
+    <div class="page-head-end">
+      <span class="n" id="pf-status" style="font-size:11px;color:var(--muted-3);"></span>
+      <button type="submit" class="btn btn-primary btn-sm">Save changes</button>
+    </div>
   </div>
 
-  <form method="post" class="pf-grid">
-    {% csrf_token %}
+  <div class="split">
+    <div class="split-main pf-form">
+      {% if form.non_field_errors %}<p class="alert">{{ form.non_field_errors|join:" " }}</p>{% endif %}
 
-    <div class="pf-card">
-      <div class="pf-field">
-        <label class="pf-label" for="id_real_name">{{ form.real_name.label }}</label>
-        <input class="pf-input {% if form.real_name.errors %}pf-err{% endif %}"
-               type="text" name="{{ form.real_name.html_name }}" id="id_real_name"
-               maxlength="50" value="{{ form.real_name.value|default:'' }}"
-               placeholder="Shown on the leaderboard instead of your username">
-        {% for e in form.real_name.errors %}<p class="pf-err-text">{{ e }}</p>{% endfor %}
+      <div>
+        <label class="label" for="id_real_name">Display name</label>
+        <input class="input" type="text" name="real_name" id="id_real_name" maxlength="50"
+               value="{{ form.real_name.value|default:'' }}" placeholder="Shown instead of your username"
+               {% if form.real_name.errors %}aria-invalid="true"{% endif %}>
+        {% for e in form.real_name.errors %}<p class="error">{{ e }}</p>{% endfor %}
       </div>
 
-      <div class="pf-field">
-        <label class="pf-label" for="id_email">{{ form.email.label }}</label>
-        <input class="pf-input {% if form.email.errors %}pf-err{% endif %}"
-               type="email" name="{{ form.email.html_name }}" id="id_email"
-               maxlength="200" value="{{ form.email.value|default:'' }}" required>
-        <p class="pf-hint">Where the weekly email goes, and the address you reply
-          from to submit picks by email.</p>
-        {% for e in form.email.errors %}<p class="pf-err-text">{{ e }}</p>{% endfor %}
+      <div>
+        <label class="label" for="id_email">Email</label>
+        <input class="input" type="email" name="email" id="id_email" maxlength="200"
+               value="{{ form.email.value|default:'' }}" required
+               {% if form.email.errors %}aria-invalid="true"{% endif %}>
+        <p class="hint">Where the weekly ballot goes, and the address you reply from to submit picks by email.</p>
+        {% for e in form.email.errors %}<p class="error">{{ e }}</p>{% endfor %}
       </div>
 
-      <div class="pf-field">
-        <label class="pf-label" for="id_favorite_team">{{ form.favorite_team.label }}</label>
-        <select class="pf-select" name="{{ form.favorite_team.html_name }}" id="id_favorite_team">
+      <div>
+        <label class="label" for="id_favorite_team">Favorite team</label>
+        <select class="select" name="favorite_team" id="id_favorite_team">
           {% for val, label in form.favorite_team.field.choices %}
           <option value="{{ val }}" {% if val == form.favorite_team.value %}selected{% endif %}>{{ label }}</option>
           {% endfor %}
         </select>
-        {% for e in form.favorite_team.errors %}<p class="pf-err-text">{{ e }}</p>{% endfor %}
       </div>
 
-      <div class="pf-field">
-        <label class="pf-label" for="id_bio">{{ form.bio.label }}</label>
-        <textarea class="pf-textarea" name="{{ form.bio.html_name }}" id="id_bio"
-                  maxlength="300" rows="3"
-                  placeholder="A line or two about you — shown on the Members page.">{{ form.bio.value|default:'' }}</textarea>
-        <p class="pf-hint">Up to 300 characters.</p>
-        {% for e in form.bio.errors %}<p class="pf-err-text">{{ e }}</p>{% endfor %}
-      </div>
-
-      <div class="pf-field">
-        <label class="pf-label" for="id_theme">{{ form.theme.label }}</label>
-        <div class="pf-colour">
-          <input type="color" name="{{ form.theme.html_name }}" id="id_theme"
-                 value="{{ form.theme.value|default:'#00897b' }}">
-          <span class="pf-hint" style="margin:0;">Your accent colour across the
-            site — buttons, links and your avatar.</span>
+      <div>
+        <div class="label-row">
+          <label class="label" for="id_bio">Bio</label>
+          <span class="n" id="bio-count" style="font-size:11px;color:var(--muted-3);"></span>
         </div>
-        {% for e in form.theme.errors %}<p class="pf-err-text">{{ e }}</p>{% endfor %}
+        <textarea class="textarea" name="bio" id="id_bio" maxlength="300" rows="4" placeholder="A line or two about you.">{{ form.bio.value|default:'' }}</textarea>
+        {% for e in form.bio.errors %}<p class="error">{{ e }}</p>{% endfor %}
       </div>
 
-      <button type="submit" class="pf-save">Save changes</button>
-    </div>
-
-    <div>
-      <div class="pf-card" style="margin-bottom:12px;">
-        <div class="pf-avatar">{{ request.user.username|first|upper }}</div>
-        <p class="pf-name">{{ request.user.profile.real_name|default:request.user.username }}</p>
-        <p class="pf-email">{{ request.user.email|default:"No email set" }}</p>
-      </div>
-
-      <div class="pf-card">
-        <p class="pf-stat-head">Season</p>
-        <dl style="margin:0;">
-          <div class="pf-stat"><dt>Score</dt><dd>{{ request.user.profile.score_display }}</dd></div>
-          <div class="pf-stat"><dt>Joined</dt><dd>{{ request.user.date_joined|date:"M Y" }}</dd></div>
-          <div class="pf-stat"><dt>Team</dt><dd>{{ request.user.profile.favorite_team_abbrev|default:"—" }}</dd></div>
-        </dl>
-        <p style="margin:11px 0 0;">
-          <a class="pf-link" href="{% url 'main:members' %}">All members →</a>
-        </p>
+      <div style="border-top:1px solid var(--rule-3);padding-top:16px;">
+        <p class="eyebrow" style="margin-bottom:10px;letter-spacing:.12em;">Email from the league</p>
+        <label class="toggle">
+          <input type="checkbox" name="email_weekly" {% if form.email_weekly.value %}checked{% endif %}>
+          <span class="toggle-track"><span class="toggle-knob"></span></span>
+          <span class="toggle-text"><b>Weekly email</b><small>When the week's picks open, with the ballot and last week's recap</small></span>
+        </label>
+        <label class="toggle">
+          <input type="checkbox" name="email_reminder" {% if form.email_reminder.value %}checked{% endif %}>
+          <span class="toggle-track"><span class="toggle-knob"></span></span>
+          <span class="toggle-text"><b>Lock reminder</b><small>Before picks lock, if yours are not all in</small></span>
+        </label>
       </div>
     </div>
-  </form>
 
-</div>
+    <aside class="rail">
+      <p class="eyebrow" style="margin-bottom:10px;letter-spacing:.12em;">Members page preview</p>
+      <div class="pf-preview">
+        <div style="display:flex;align-items:baseline;gap:8px;">
+          <span id="pv-name" style="font-size:14px;font-weight:600;letter-spacing:-.01em;">{{ request.user.profile.display_name }}</span>
+          <span id="pv-handle" class="n" style="font-size:11px;color:var(--muted-3);">{% if request.user.profile.real_name %}{{ request.user.username }}{% endif %}</span>
+        </div>
+        <p id="pv-bio" style="margin-top:5px;font-size:12.5px;line-height:1.6;color:{% if request.user.profile.bio %}var(--ink-3){% else %}var(--dim){% endif %};">{{ request.user.profile.bio|default:"No bio yet." }}</p>
+        <div style="display:flex;gap:10px;margin-top:7px;" class="n">
+          <span id="pv-team" style="font-size:11px;color:var(--muted-3);">{{ request.user.profile.favorite_team }}</span>
+          <span style="font-size:11px;color:var(--placeholder);">·</span>
+          <span style="font-size:11px;color:var(--muted-3);">joined {{ request.user.date_joined|date:"M Y" }}</span>
+        </div>
+      </div>
+
+      <p class="eyebrow" style="margin:22px 0 0;letter-spacing:.12em;">Season</p>
+      <div class="rows" style="margin-top:8px;">
+        <div class="row"><span class="row-k">points</span><span class="row-v strong">{{ season.points }}</span></div>
+        <div class="row"><span class="row-k">rank</span><span class="row-v strong">{{ season.rank }}</span></div>
+        <div class="row"><span class="row-k">record</span><span class="row-v strong">{{ season.record }}</span></div>
+        {% if season.best_week %}<div class="row"><span class="row-k">best week</span><span class="row-v strong">{{ season.best_week }}</span></div>{% endif %}
+        <div class="row"><span class="row-k">joined</span><span class="row-v strong">{{ request.user.date_joined|date:"M Y" }}</span></div>
+      </div>
+
+      {% if finishes %}
+      <p class="eyebrow" style="margin:20px 0 0;letter-spacing:.12em;">Past seasons</p>
+      <div class="rows" style="margin-top:8px;">
+        {% for f in finishes %}
+        <div class="row"><a class="row-k" href="{% url 'main:season' f.year %}">{{ f.year }}</a><span class="row-v strong">{{ f.rank_label }} of {{ f.players }}</span></div>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      <p class="eyebrow" style="margin:20px 0 0;letter-spacing:.12em;">Preseason picks</p>
+      <div class="rows" style="margin-top:8px;">
+        {% if request.user.profile.preseason_submitted %}
+        <div class="row"><span class="row-k">big loser</span><span class="row-v">{{ request.user.profile.big_loser }}</span></div>
+        <div class="row"><span class="row-k">NFC</span><span class="row-v">{{ request.user.profile.nfc_champ }}</span></div>
+        <div class="row"><span class="row-k">AFC</span><span class="row-v">{{ request.user.profile.afc_champ }}</span></div>
+        <div class="row"><span class="row-k">Super Bowl</span><span class="row-v strong">{{ request.user.profile.superbowl_winner }}</span></div>
+        {% else %}
+        <div class="row"><span class="row-k">preseason</span><span class="row-v dim">Not in</span></div>
+        {% endif %}
+      </div>
+      <p class="hint" style="margin-top:10px;">{% if preseason_open %}<a href="{% url 'main:preseason' %}">{% if request.user.profile.preseason_submitted %}Edit{% else %}Make your picks{% endif %}</a> until week 1 locks.{% else %}Locked until next preseason.{% endif %}</p>
+
+      <div class="pf-links">
+        <a href="{% url 'accounts:password_change' %}">Change password</a>
+        <a href="{% url 'main:members' %}">All members</a>
+      </div>
+    </aside>
+  </div>
+</form>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function(){
+  var f=document.getElementById('pf'), status=document.getElementById('pf-status');
+  var name=document.getElementById('id_real_name'), bio=document.getElementById('id_bio'), team=document.getElementById('id_favorite_team');
+  var count=document.getElementById('bio-count');
+  var pvName=document.getElementById('pv-name'), pvHandle=document.getElementById('pv-handle'), pvBio=document.getElementById('pv-bio'), pvTeam=document.getElementById('pv-team');
+  var me='{{ request.user.username|escapejs }}';
+  function paint(){
+    count.textContent=bio.value.length+'/300';
+    count.style.color=bio.value.length>280?'var(--neg)':'var(--muted-3)';
+    pvName.textContent=name.value.trim()||me;
+    pvHandle.textContent=name.value.trim()?me:'';
+    pvBio.textContent=bio.value.trim()||'No bio yet.';
+    pvBio.style.color=bio.value.trim()?'var(--ink-3)':'var(--dim)';
+    pvTeam.textContent=team.value;
+  }
+  paint();
+  f.addEventListener('input',function(){paint();status.textContent='unsaved changes';});
+  f.addEventListener('change',function(){status.textContent='unsaved changes';});
+})();
+</script>
 {% endblock %}

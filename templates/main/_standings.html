@@ -1,0 +1,64 @@
+{% comment %}
+The standings block: podium, points chart, and the full table. Rendered by
+`home` and again by `ajax_leaderboard` while the week is being graded, so the
+page and the live refresh cannot drift apart - there is one copy of this
+markup. Expects `rows`, `podium` and `chart` (see views.standings_rows and
+charts.points_chart).
+{% endcomment %}
+<div class="home-top">
+  {% if podium %}
+  <div class="podium">
+    {% for p in podium %}
+    <div class="pod pod-{{ p.pos }}">
+      <span class="pod-score">{{ p.score }}</span>
+      <span class="pod-block">{{ p.rank }}</span>
+      <span class="pod-name">{{ p.username }}</span>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% if chart %}
+  <div class="chart">
+    <div class="section-head" style="margin-bottom:6px;">
+      <p class="eyebrow">Points · {{ chart.label }}</p>
+      <div class="legend">
+        <span><i class="swatch" style="background:var(--ink);"></i>you</span>
+        <span><i class="swatch" style="background:var(--accent);"></i>leader</span>
+        <span><i class="swatch" style="background:var(--track);"></i>average</span>
+      </div>
+    </div>
+    <svg width="100%" height="92" viewBox="0 0 430 92" preserveAspectRatio="none" style="display:block;overflow:visible;" aria-label="Points by week">
+      <polyline points="{{ chart.avg }}" fill="none" stroke="#d6d4cf" stroke-width="1.5" vector-effect="non-scaling-stroke"></polyline>
+      <polyline points="{{ chart.leader }}" fill="none" stroke="#0f7a6c" stroke-width="1.5" vector-effect="non-scaling-stroke"></polyline>
+      <polyline points="{{ chart.me }}" fill="none" stroke="#14161a" stroke-width="2" vector-effect="non-scaling-stroke"></polyline>
+    </svg>
+  </div>
+  {% endif %}
+</div>
+
+<table class="table standings" style="margin-top:18px;">
+  <thead>
+    <tr>
+      <th style="width:32px;">#</th>
+      <th>Player</th>
+      <th class="r" style="width:64px;">Pts</th>
+      <th class="r" style="width:56px;">Wk</th>
+      <th class="r hide-phone" style="width:52px;">Move</th>
+      <th class="r hide-phone" style="width:110px;">Season</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for r in rows %}
+    <tr{% if r.me %} class="is-me"{% endif %}>
+      <td class="n muted-3" style="font-size:12px;">{{ r.rank }}</td>
+      <td{% if r.me %} style="font-weight:600;"{% endif %}>{{ r.username }}</td>
+      <td class="n r" style="font-weight:600;">{{ r.score }}</td>
+      <td class="n r muted" style="font-size:12.5px;">{% if r.week_gained is not None %}+{{ r.week_gained }}{% else %}—{% endif %}</td>
+      <td class="n r hide-phone {% if r.rank_change > 0 %}pos{% elif r.rank_change < 0 %}neg{% else %}dim{% endif %}" style="font-size:11.5px;">{% if r.rank_change > 0 %}↑{{ r.rank_change }}{% elif r.rank_change < 0 %}↓{{ r.rank_change_abs }}{% else %}—{% endif %}</td>
+      <td class="hide-phone" style="padding-left:14px;"><span class="bar"><span class="bar-fill" style="width:{{ r.pct }}%;"></span></span></td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="6" class="empty">No members yet.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>

@@ -1,130 +1,58 @@
 {% extends 'base.html' %}
-{% block title %}Preseason Picks — PutnamBowl{% endblock %}
-{% block extra_head %}
-<style>
-  .pre-card { max-width:480px;margin:0 auto; }
-  .pre-header { margin-bottom:20px; }
-  .pre-header h1 { font-size:1.25rem;font-weight:700;color:var(--text);margin:0 0 6px; }
-  .pre-header p { font-size:.8125rem;color:var(--muted);margin:4px 0 0; }
-  .pre-header .warning { color:#f87171; }
-  .pre-form-wrap { background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px; }
-  .pre-field { margin-bottom:18px; }
-  .pre-field:last-of-type { margin-bottom:0; }
-  .pre-label { display:block;font-size:.8125rem;font-weight:600;color:var(--text);margin-bottom:6px; }
-  .pre-select {
-    width:100%;padding:9px 12px;font-size:.875rem;
-    background:var(--surface2);color:var(--text);
-    border:1px solid var(--border2);border-radius:8px;
-    appearance:none;-webkit-appearance:none;
-    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2364748b' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
-    background-repeat:no-repeat;background-position:right 10px center;
-    cursor:pointer;
-  }
-  .pre-select:focus { outline:none;border-color:var(--accent); }
-  .pre-error { font-size:.75rem;color:#f87171;margin:4px 0 0; }
-  .pre-nfe { padding:10px 14px;background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.2);border-radius:8px;font-size:.8125rem;color:#f87171;margin-bottom:16px; }
-  .pre-submit {
-    width:100%;margin-top:22px;padding:11px;
-    background:var(--accent);color:#fff;
-    border:none;border-radius:10px;
-    font-size:.875rem;font-weight:600;
-    cursor:pointer;transition:opacity .15s;
-  }
-  .pre-submit:hover { opacity:.88; }
-  .pre-defer {
-    width:100%;margin-top:10px;padding:10px;
-    background:none;color:var(--muted2);
-    border:1px solid var(--border2);border-radius:10px;
-    font-size:.8125rem;font-weight:600;font-family:inherit;
-    cursor:pointer;transition:background .14s ease,color .14s ease;
-  }
-  .pre-defer:hover { background:var(--fill-2);color:var(--text); }
-  .pre-defer-note { font-size:.6875rem;color:var(--muted);margin:10px 0 0;text-align:center;line-height:1.55; }
-</style>
-{% endblock %}
+{% block title %}Preseason picks{% endblock %}
+{% block main_class %}page page-read{% endblock %}
+
 {% block content %}
-<div class="pre-card">
-  <div class="pre-header">
-    <h1>Preseason Picks</h1>
-    <p>Your Super Bowl pick is whichever of your two conference champions you
-      think takes it.</p>
-    {% if preseason_open %}
-    <p>Change these as often as you like — they lock when week 1's picks do.</p>
-    {% else %}
-    <p class="warning">Week 1 picks are locked, so these are set for the season.</p>
-    {% endif %}
-  </div>
-  <div class="pre-form-wrap">
-    <form method="post">
-      {% csrf_token %}
-      {% if form.non_field_errors %}
-      <div class="pre-nfe">{{ form.non_field_errors }}</div>
-      {% endif %}
-      {% for field in form %}
-      <div class="pre-field">
-        <label class="pre-label">{{ field.label }}</label>
-        <select name="{{ field.html_name }}" class="pre-select"
-                {% if not preseason_open %}disabled{% endif %}>
-          {% for val, label in field.field.choices %}
-          <option value="{{ val }}" {% if val == field.value %}selected{% endif %}>{{ label }}</option>
-          {% endfor %}
-        </select>
-        {% for e in field.errors %}<p class="pre-error">{{ e }}</p>{% endfor %}
-      </div>
-      {% endfor %}
-      {% if preseason_open %}
-      <button type="submit" class="pre-submit">
-        {% if preseason_done %}Update preseason picks{% else %}Save preseason picks{% endif %}
-      </button>
-      {% endif %}
-    </form>
-    {% if can_defer %}
-    <form method="post" style="margin:0;">
-      {% csrf_token %}
-      <button type="submit" name="defer" value="1" class="pre-defer">I'll do this later</button>
-    </form>
-    <p class="pre-defer-note">You can make these any time before week 1's picks lock. We'll keep reminding you on the home page until you do.</p>
-    {% endif %}
+<div class="page-head">
+  <div class="page-head-title">
+    <p class="eyebrow">Preseason picks</p>
+    <p class="meta">{% if preseason_open %}editable until week 1's picks lock{% else %}locked with week 1{% endif %}</p>
   </div>
 </div>
+
+<form method="post" style="margin-top:20px;">
+  {% csrf_token %}
+  {% if form.non_field_errors %}<p class="alert" style="margin-bottom:16px;">{{ form.non_field_errors|join:" " }}</p>{% endif %}
+  {% for field in form %}
+  <div class="field">
+    <label class="label" for="id_{{ field.html_name }}">{{ field.label }}</label>
+    <select class="select" name="{{ field.html_name }}" id="id_{{ field.html_name }}" {% if not preseason_open %}disabled{% endif %}>
+      {% for val, label in field.field.choices %}
+      <option value="{{ val }}" {% if val == field.value %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+    {% for e in field.errors %}<p class="error">{{ e }}</p>{% endfor %}
+  </div>
+  {% endfor %}
+  {% if preseason_open %}
+  <div style="display:flex;gap:10px;margin-top:6px;">
+    <button type="submit" class="btn btn-primary">{% if preseason_done %}Save{% else %}Save picks{% endif %}</button>
+    {% if can_defer %}<button type="submit" name="defer" value="1" class="btn btn-secondary">Later</button>{% endif %}
+  </div>
+  {% endif %}
+</form>
 
 <script>
 (function(){
   const nfc = document.querySelector('[name="nfc_champ"]');
   const afc = document.querySelector('[name="afc_champ"]');
   const sb  = document.querySelector('[name="superbowl_winner"]');
-  if (!nfc || !afc || !sb) return;
-
+  if (!nfc || !afc || !sb || sb.disabled) return;
   /* The Super Bowl is played by the two conference champions, so this field
-     offers exactly those two and nothing else, rebuilt whenever either changes.
-
-     Left alone when the form is locked: a pick made before the conference lists
-     were split could be a team that is no longer in either dropdown, and
-     rewriting a locked field would show something the member never chose.
-
-     PreseasonForm.clean() enforces the same rule server-side, so a stale page or
-     a browser with no JS still cannot save an impossible bracket. */
-  if (sb.disabled) return;
-
+     offers exactly those two, rebuilt whenever either changes. Left alone when
+     locked. PreseasonForm.clean() enforces the same rule server-side. */
   function sync(){
-    const chosen = sb.value;
-    const seen = new Set();
+    const chosen = sb.value, seen = new Set();
     sb.innerHTML = '';
     [[nfc.value, 'NFC'], [afc.value, 'AFC']].forEach(([team, conf]) => {
-      // Both champions can only differ, but guard anyway rather than render the
-      // same team twice if the two lists ever overlap.
       if (!team || seen.has(team)) return;
       seen.add(team);
       const o = document.createElement('option');
-      o.value = team;
-      o.textContent = team + ' (' + conf + ' champion)';
+      o.value = team; o.textContent = team + ' (' + conf + ' champion)';
       sb.appendChild(o);
     });
-    // Keep their answer if it survived the change; otherwise fall to the NFC one
-    // rather than leaving the field on a team that is no longer on offer.
     sb.value = seen.has(chosen) ? chosen : (nfc.value || afc.value);
   }
-
   nfc.addEventListener('change', sync);
   afc.addEventListener('change', sync);
   sync();

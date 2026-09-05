@@ -1,27 +1,25 @@
 {% extends 'accounts/auth_base.html' %}
 {% block title %}Site admin{% endblock %}
-{% block auth_sub %}Site admin{% endblock %}
+{% block auth_mark %}PutnamBowl{% endblock %}
+{% block auth_eyebrow %}Site admin{% endblock %}
 
 {% block auth_body %}
 {% if form.non_field_errors %}
-<div class="auth-alert" role="alert">
-  {% for e in form.non_field_errors %}{{ e }}{% endfor %}
-</div>
+<p class="alert" role="alert" style="margin-top:18px;">{% for e in form.non_field_errors %}{{ e }}{% endfor %}</p>
 {% endif %}
-
 <form method="post" novalidate>
   {% csrf_token %}
-  <div class="auth-field">
-    <label class="auth-label" for="id_username">Username</label>
-    <input class="auth-input" id="id_username" name="username" type="text"
+  <div class="field">
+    <label class="label" for="id_username">Username</label>
+    <input class="input" id="id_username" name="username" type="text"
            value="{{ form.username.value|default:'' }}"
            autocomplete="username" autocapitalize="none" spellcheck="false" required autofocus>
   </div>
-  <div class="auth-field">
-    <label class="auth-label" for="id_password">Password</label>
-    <input class="auth-input" id="id_password" name="password" type="password"
-           autocomplete="current-password" required>
+  <div class="field">
+    <label class="label" for="id_password">Password</label>
+    <input class="input" id="id_password" name="password" type="password" autocomplete="current-password" required>
   </div>
-  <button type="submit" class="auth-submit">Sign in</button>
+  <button type="submit" class="btn btn-primary btn-block">Sign in</button>
 </form>
+<p class="auth-alt"><a href="{% url 'accounts:login' %}">League sign in</a></p>
 {% endblock %}

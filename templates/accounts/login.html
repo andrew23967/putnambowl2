@@ -1,36 +1,44 @@
 {% extends 'accounts/auth_base.html' %}
-{% block title %}Sign in — PutnamBowl{% endblock %}
-{% block auth_sub %}Sign in to make your picks.{% endblock %}
+{% block title %}Sign in{% endblock %}
+{% block auth_eyebrow %}Sign in{% endblock %}
 
 {% block auth_body %}
 {% if form.non_field_errors %}
-<div class="auth-alert" role="alert">
-  {% for e in form.non_field_errors %}{{ e }}{% endfor %}
-</div>
+<p class="alert" role="alert" style="margin-top:18px;">That username and password don't match.</p>
 {% endif %}
 
 <form method="post" novalidate>
   {% csrf_token %}
-  <div class="auth-field">
-    <label class="auth-label" for="id_username">Username</label>
-    <input class="auth-input" id="id_username" name="username" type="text"
+  {% if request.GET.next %}<input type="hidden" name="next" value="{{ request.GET.next }}">{% endif %}
+  <div class="field">
+    <label class="label" for="id_username">Username</label>
+    <input class="input" id="id_username" name="username" type="text"
            value="{{ form.username.value|default:'' }}"
            autocomplete="username" autocapitalize="none" autocorrect="off"
-           spellcheck="false" required autofocus
-           {% if form.username.errors %}aria-invalid="true"{% endif %}>
-    {% for e in form.username.errors %}<p class="auth-err">{{ e }}</p>{% endfor %}
+           spellcheck="false" required autofocus>
   </div>
-
-  <div class="auth-field">
-    <label class="auth-label" for="id_password">Password</label>
-    <input class="auth-input" id="id_password" name="password" type="password"
-           autocomplete="current-password" required
-           {% if form.password.errors %}aria-invalid="true"{% endif %}>
-    {% for e in form.password.errors %}<p class="auth-err">{{ e }}</p>{% endfor %}
+  <div class="field">
+    <div class="label-row">
+      <label class="label" for="id_password">Password</label>
+      <button type="button" class="btn-link n" id="pw-toggle" style="font-size:10.5px;color:var(--muted-3);letter-spacing:.04em;">show</button>
+    </div>
+    <input class="input" id="id_password" name="password" type="password"
+           autocomplete="current-password" required>
   </div>
-
-  <button type="submit" class="auth-submit">Sign in</button>
+  <button type="submit" class="btn btn-primary btn-block">Sign in</button>
 </form>
 
 <p class="auth-alt">No account? <a href="{% url 'accounts:register' %}">Create one</a></p>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function(){
+  var b=document.getElementById('pw-toggle'), p=document.getElementById('id_password');
+  if(!b||!p)return;
+  b.addEventListener('click',function(){
+    var show=p.type==='password'; p.type=show?'text':'password'; b.textContent=show?'hide':'show';
+  });
+})();
+</script>
 {% endblock %}

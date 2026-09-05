@@ -1,0 +1,13 @@
+{% extends 'base.html' %}
+{% block title %}Not allowed{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div class="page-head-title">
+    <p class="eyebrow">403</p>
+    <p class="meta">{% if exception %}{{ exception }}{% else %}You are not allowed to see this page.{% endif %}</p>
+  </div>
+</div>
+<p style="margin-top:20px;font-size:13px;">
+  {% if request.user.is_authenticated %}<a href="{% url 'main:home' %}">Home</a>{% else %}<a href="{% url 'accounts:login' %}">Sign in</a>{% endif %}
+</p>
+{% endblock %}

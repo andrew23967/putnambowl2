@@ -1,407 +1,254 @@
 {% extends 'base.html' %}
 {% load main_tags %}
-{% block title %}Week {{ settings.week }} Picks — PutnamBowl{% endblock %}
+{% block title %}Picks{% endblock %}
 
 {% block extra_head %}
 <style>
-  /* ── Page head ── */
-  .pk-head { display:flex;align-items:flex-start;gap:24px;flex-wrap:wrap;margin-bottom:18px;flex-shrink:0; }
-  .pk-head-text { flex:1;min-width:220px; }
-  .pk-title { font-size:1.05rem;font-weight:800;color:var(--text);margin:0;letter-spacing:-.02em; }
-  .pk-sub { font-size:.75rem;color:var(--muted);margin:4px 0 0;line-height:1.6; }
-  .pk-timer { width:300px;max-width:100%;flex-shrink:0; }
-
-  /* ── Game rows ── */
-  /* No panel around each game: the pick control already draws its own box, and a
-     card around a box is one frame too many. */
-  /* An outline, not a panel: each game needs an edge to read as one thing, but a
-     fill would put a surface behind text that is already on the page. */
-  .game-row {
-    display:flex;align-items:center;gap:12px;transition:opacity .12s,background .14s ease;
-    break-inside:avoid;
-    border:1px solid var(--border);border-radius:var(--radius);
-    padding:9px 12px;margin-bottom:8px;
+  .pk-head { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 28px; padding: 16px 0; border-bottom: 1px solid var(--ink); }
+  .pk-head .stats { flex-wrap: nowrap; }
+  .pk-head .stat { padding: 0 20px; }
+  .pk-head .stat:last-child { flex: 1; min-width: 0; }
+  .pk-save { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+  .pk-save .bar { width: 150px; }
+  .pk-list { display: grid; grid-template-columns: 1fr 1fr; gap: 0 26px; }
+  .game { display: flex; align-items: center; gap: 14px; padding: 10px 0; border-top: 1px solid var(--rule-2); }
+  .game-time { font: 400 10.5px var(--mono); color: var(--muted-3); width: 64px; flex-shrink: 0; }
+  .game-sides { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; flex: 1; min-width: 0; position: relative; }
+  .game-at { font: 400 10.5px var(--mono); color: var(--placeholder); width: 34px; text-align: right; flex-shrink: 0; }
+  .pick-radio { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
+  .pick-radio:checked + .side { background: var(--fill); border-color: var(--ink); }
+  .pick-radio:checked + .side .side-team { color: var(--ink); }
+  .pick-radio:checked + .side .side-pts { color: var(--muted); }
+  .pick-radio:focus-visible + .side { outline: 2px solid var(--ink); outline-offset: 2px; }
+  .res-time { font: 400 10.5px var(--mono); color: var(--muted-3); width: 58px; flex-shrink: 0; }
+  .res-teams { display: flex; align-items: baseline; gap: 7px; flex: 1; min-width: 0; flex-wrap: wrap; }
+  .res-team { font-size: 13.5px; color: var(--muted); }
+  .res-team.won { color: var(--ink); font-weight: 600; }
+  .res-pts { font: 400 10.5px var(--mono); color: var(--dim); }
+  .res-at { font: 400 10.5px var(--mono); color: var(--placeholder); }
+  .res-took { font: 400 10.5px var(--mono); color: var(--muted-3); flex-shrink: 0; white-space: nowrap; }
+  .res-took b { color: var(--ink); font-weight: 600; }
+  .res-result { font: 600 11px var(--mono); width: 34px; text-align: right; flex-shrink: 0; }
+  .last-week .res { opacity: .72; }
+  #pick-error { position: fixed; left: 50%; transform: translateX(-50%); bottom: 20px; z-index: 200; }
+  @media (max-width: 900px) {
+    .pk-head { grid-template-columns: 1fr; gap: 14px; }
+    .pk-head .stats { flex-wrap: wrap; }
+    .pk-head .stat:first-child { padding-left: 0; border-left: 0; }
+    .pk-save { align-items: flex-start; }
+    .pk-list { grid-template-columns: 1fr; }
   }
-  .game-row:hover { opacity:.85; }
-  /* Graded, and you had a pick on it. Faint enough to read as a tint on the card
-     rather than a block of colour — the row still has to be legible through it. */
-  .game-row-correct {
-    background:color-mix(in srgb,var(--good) 9%,transparent);
-    border-color:color-mix(in srgb,var(--good) 28%,transparent);
-  }
-  .game-row-wrong {
-    background:color-mix(in srgb,var(--bad) 9%,transparent);
-    border-color:color-mix(in srgb,var(--bad) 28%,transparent);
-  }
-  /* Kickoff and venue. Was .5rem at 60% opacity, which was decoration rather than
-     something you could read; this is the size and weight of real information. */
-  .game-sep-text { font-size:.6875rem;color:var(--muted2);white-space:nowrap;font-weight:500; }
-  .team-name { font-weight:700;font-size:1rem;color:var(--text); }
-  .vs-sep { color:var(--muted);font-size:.8rem;font-weight:800;flex-shrink:0; }
-
-  /* The countdown itself is styled in base.html — it is shared with home. */
-  .pk-timer .timer-wrap { margin-bottom:0; }
-
-  /* Status indicator */
-  .stat-indicator { margin-bottom:14px;display:flex;align-items:center;gap:6px; }
-  .stat-dot { width:7px;height:7px;border-radius:50%;flex-shrink:0; }
-  .stat-check { font-size:.8rem;line-height:1;flex-shrink:0; }
-  .stat-val { font-size:.75rem;font-weight:600; }
-
-  /* Locked / graded card content */
-  .game-teams-row { display:flex;align-items:center;justify-content:space-between;gap:4px; }
-  .game-team-side { display:flex;align-items:center;gap:4px; }
-  .game-pts { font-size:.75rem;color:var(--muted); }
-  .game-bottom-row { display:flex;align-items:center;justify-content:space-between;margin-top:6px; }
-  /* What you took on this game. The league's split used to sit here as two
-     percentages either side of a donut; this is the one fact the person reading
-     their own picks actually wants back. */
-  .game-picked { display:flex;align-items:baseline;gap:5px;font-size:.6875rem;
-                 color:var(--muted);white-space:nowrap; }
-  .game-picked strong { font-weight:700;color:var(--text); }
-  .game-picked-none { font-style:italic;opacity:.7; }
-
-  /* ── Pick control ──
-     Two tappable halves backed by real radio inputs. Selection is expressed
-     entirely through :checked, so there is no JS-positioned knob to fall out of
-     sync with the saved value — the previous slider's whole class of bugs. It
-     is also keyboard- and screen-reader-navigable for free. */
-  .pick-2up { display:grid;grid-template-columns:1fr 1fr;gap:6px;flex:1;min-width:0; }
-  .pick-radio { position:absolute;width:1px;height:1px;opacity:0;pointer-events:none; }
-  .pick-side {
-    display:flex;align-items:baseline;justify-content:center;gap:6px;
-    padding:9px 8px;border-radius:var(--radius-sm);
-    border:1px solid var(--border);background:var(--fill-1);
-    cursor:pointer;user-select:none;min-width:0;
-    transition:background .14s ease,border-color .14s ease;
-  }
-  .pick-side:hover { background:var(--fill-2);border-color:var(--border2); }
-  .pick-abbr { font-size:.8125rem;font-weight:700;color:var(--muted2);letter-spacing:-.01em;line-height:1; }
-  .pick-val  { font-size:.625rem;font-weight:600;color:var(--muted);font-variant-numeric:tabular-nums;line-height:1; }
-  .pick-radio:checked + .pick-side {
-    background:color-mix(in srgb,var(--accent) 16%,transparent);
-    border-color:var(--accent);
-  }
-  .pick-radio:checked + .pick-side .pick-abbr { color:var(--text); }
-  .pick-radio:checked + .pick-side .pick-val  { color:var(--muted2); }
-  .pick-radio:focus-visible + .pick-side { outline:2px solid var(--accent);outline-offset:2px; }
-  /* Briefly acknowledge the save without moving anything on the page. */
-  @keyframes pickSaved { from { box-shadow:0 0 0 0 color-mix(in srgb,var(--accent) 55%,transparent); }
-                           to { box-shadow:0 0 0 7px transparent; } }
-  .pick-side.saved { animation:pickSaved .5s ease-out; }
-
-  /* Games grid. The slate has the page to itself here, so it gets a third
-     column on wide screens instead of the two it had beside the leaderboard. */
-  .games-columns { column-count:2;column-gap:16px; }
-  @media (min-width:1100px) { .games-columns { column-count:3; } }
-
-  /* Empty / waiting states */
-  .pk-empty { max-width:520px; }
-  .pk-empty-title { font-size:.9375rem;font-weight:700;color:var(--text);margin:0 0 6px; }
-  .pk-empty-body { font-size:.8125rem;color:var(--muted);line-height:1.65;margin:0; }
-  .pk-empty-link { display:inline-block;margin-top:18px;font-size:.75rem;font-weight:700;color:var(--accent);text-decoration:none; }
-  .pk-empty-link:hover { text-decoration:underline; }
-
-  /* Games custom scrollbar */
-  .games-scroll { scrollbar-width:none; }
-  .games-scroll::-webkit-scrollbar { display:none; }
-  #games-track { position:absolute;right:0;top:0;bottom:0;width:4px;background:rgba(255,255,255,.06);border-radius:2px;z-index:2; }
-  #games-thumb { position:absolute;left:0;width:100%;height:36px;border-radius:2px;background:var(--accent);opacity:.55;transition:opacity .15s;cursor:pointer; }
-  #games-thumb:hover { opacity:.85; }
-
-  /* ── Light mode overrides ──
-     The pick control needs none of these; it is built on the --fill and --border
-     tokens, which already flip with the theme. */
-  [data-theme="light"] .vs-sep { color: var(--muted); }
-  [data-theme="light"] #games-track { background: rgba(0,0,0,.07); }
-
-  /* ── Viewport-fill layout (tablet + desktop) ──
-     The slate scrolls inside its own box so the page head stays put. */
-  @media (min-width:641px) {
-    main {
-      height: calc(100vh - 53px) !important;
-      display: flex !important;
-      flex-direction: column !important;
-      overflow: hidden !important;
-      box-sizing: border-box !important;
-    }
-    html.nav-has-weekpicker main { height: calc(100vh - 86px) !important; }
-  }
-  @media (max-width:1024px) and (min-width:641px) {
-    main { padding:clamp(12px,2.4vw,24px) !important; }
-    .game-row { padding:clamp(7px,1vw,10px) clamp(9px,1.1vw,12px); }
-    .hms-wrap .cd-digit { font-size:clamp(1.25rem,3.2vw,2rem) !important;padding:clamp(6px,1vw,10px) clamp(8px,1.4vw,14px) !important; }
-    .hms-sep { font-size:clamp(.9rem,1.5vw,1.5rem); }
-  }
-  @media (max-width:640px) {
-    /* Full-page scroll, single column */
-    main { height:auto !important;display:block !important;overflow:visible !important;padding:16px !important; }
-    .pk-head { flex-direction:column !important;gap:14px !important; }
-    .pk-timer { width:100% !important; }
-    /* One column, or the cards overflow the viewport and text collides. */
-    .games-columns { column-count:1 !important; }
-    /* Kickoff time and pick split need their own lines at this width. */
-    .game-bottom-row { flex-wrap:wrap !important;gap:4px 10px !important; }
-    #games-track, #games-thumb { display:none !important; }
-    #games-scroll { position:static !important;overflow:visible !important; }
-    .game-row { padding:9px 11px !important; }
-    /* Bigger tap targets on phones. */
-    .pick-side { padding:12px 10px !important; }
-    .pick-abbr { font-size:.875rem !important; }
-    .pick-val  { font-size:.6875rem !important; }
+  @media (max-width: 640px) {
+    .game-time { width: 52px; }
+    .game-at { display: none; }
+    .res-took { display: none; }
   }
 </style>
 {% endblock %}
 
 {% block content %}
-
 {% if not settings.publish %}
-<!-- ── STATE: Not published ── -->
-<div class="pk-empty anim-up">
-  <p class="pk-empty-title">Picks aren't open yet</p>
-  <p class="pk-empty-body">The commissioner is still setting up this week's games. Sit tight — this page will
-    fill in the moment they go live.</p>
-  <div style="margin-top:22px;max-width:300px;">
-    {% include 'main/_countdown.html' %}
+<div class="pk-head">
+  <div>
+    <p class="eyebrow">Week {{ settings.week }} picks</p>
+    <p class="status is-notout" style="margin-top:4px;">Not open</p>
   </div>
-  <a href="{% url 'main:home' %}" class="pk-empty-link">← Back to the leaderboard</a>
-</div>
-
-{% else %}
-<!-- ── STATE: Published ── -->
-<div class="pk-head anim-up">
-  <div class="pk-head-text">
-    <h1 class="pk-title">Week {{ settings.week }} Picks</h1>
-    {% if settings.lock_picks %}
-    <p class="pk-sub">Picks are locked. Results fill in here as games are graded —
-      a green card is one you got right, a red one is a game you got wrong.</p>
-    {% else %}
-    <p class="pk-sub">Tap a team to back it — each pick saves on its own, so there's nothing to submit.
-      The number beside each team is what you score for getting it right, set in proportion
-      to the odds Vegas implies for that team winning: the lower their chance, the more
-      they are worth.</p>
-    {% endif %}
-
-    {% if settings.lock_picks %}
-    <div class="stat-indicator" style="margin-top:14px;margin-bottom:0;">
-      {% if graded_count == games|length and games|length > 0 %}
-      <span class="stat-check" style="color:#34d399;">&#10003;</span>
-      <span class="stat-val" style="color:#34d399;">{{ graded_count }} / {{ games|length }} games</span>
-      {% elif graded_count > 0 %}
-      <span class="stat-dot pulse" style="background:#fbbf24;"></span>
-      <span class="stat-val" style="color:#fbbf24;">{{ graded_count }} / {{ games|length }} games</span>
-      {% else %}
-      <span class="stat-dot" style="background:var(--muted);opacity:.4;"></span>
-      <span class="stat-val" style="color:var(--muted);">0 / {{ games|length }} games</span>
-      {% endif %}
+  <div class="stats">
+    {% if settings.auto_enabled and settings.auto_scrape_dt %}
+    <div class="stat">
+      <p class="stat-label">picks open in</p>
+      <p class="stat-value"><span data-countdown-to="{{ settings.auto_scrape_dt|date:'c' }}" data-countdown-done="any moment">…</span></p>
+    </div>
+    <div class="stat">
+      <p class="stat-label">expected</p>
+      <p class="stat-value"><span data-utc-daytime="{{ settings.auto_scrape_dt|date:'c' }}">{{ settings.auto_scrape_dt|date:"D g:i A" }}</span></p>
     </div>
     {% else %}
-    <div id="pick-status" class="stat-indicator" style="margin-top:14px;margin-bottom:0;"></div>
+    <div class="stat">
+      <p class="stat-label">opens</p>
+      <p class="stat-value">When the manager publishes the week</p>
+    </div>
     {% endif %}
   </div>
-
-  <div class="pk-timer">
-    {% include 'main/_countdown.html' %}
-  </div>
+  <div></div>
 </div>
 
-<!-- Games list -->
-<div id="current-week-games-wrap" class="anim-up" style="flex:1;min-height:0;position:relative;">
-<div id="games-track"><div id="games-thumb"></div></div>
-<div id="games-scroll" class="games-scroll" style="position:absolute;left:0;right:8px;top:0;bottom:0;overflow-y:scroll;">
-{% if not games %}
-<p style="color:var(--muted);font-size:.8125rem;padding:16px 0;">No games this week.</p>
-{% else %}
-<div class="games-columns">
-{% for game in games %}
-{% with pick=picks_map|get_item:game.id game_id_str=game.id|stringformat:"s" %}
-{% comment %}
-  The result tint only once picks are locked. A week can have graded games while
-  the form is still open — the commissioner can unlock one — and colouring the
-  form would both give the outcome away and paint a control you can still change.
-{% endcomment %}
-<div class="game-row{% if settings.lock_picks and game.winner and pick %}{% if pick.choice == game.winner %} game-row-correct{% else %} game-row-wrong{% endif %}{% endif %}">
-  <div style="flex:1;min-width:0;">
-    {% if not settings.lock_picks %}
-    <div class="pick-2up" role="radiogroup" aria-label="{{ game.team1_abbrev }} versus {{ game.team2_abbrev }}">
-      <input class="pick-radio" type="radio" name="game-{{ game.id }}" id="g{{ game.id }}-t1"
-             value="team1" data-game="{{ game.id }}"{% if pick and pick.choice == 'team1' %} checked{% endif %}>
-      <label class="pick-side" for="g{{ game.id }}-t1">
-        <span class="pick-abbr">{{ game.team1_abbrev }}</span>
-        <span class="pick-val">{{ game.points1 }}</span>
-      </label>
-      <input class="pick-radio" type="radio" name="game-{{ game.id }}" id="g{{ game.id }}-t2"
-             value="team2" data-game="{{ game.id }}"{% if pick and pick.choice == 'team2' %} checked{% endif %}>
-      <label class="pick-side" for="g{{ game.id }}-t2">
-        <span class="pick-abbr">{{ game.team2_abbrev }}</span>
-        <span class="pick-val">{{ game.points2 }}</span>
-      </label>
-    </div>
-    <span id="pick-had-{{ game.id }}" hidden>{% if pick %}1{% else %}0{% endif %}</span>
-    {% else %}
-    <!-- Locked / graded display -->
-    <div class="game-teams-row">
-      <div class="game-team-side">
-        <span class="team-name" style="{% if game.winner == 'team1' %}color:#34d399;{% elif game.winner == 'team2' %}color:#f87171;{% endif %}">{{ game.team1_abbrev }}</span>
-        <span class="game-pts">{{ game.points1 }}</span>
+{% if last_week %}
+<div class="last-week" style="padding:20px 0 26px;">
+  <div class="section-head">
+    <p class="eyebrow">Week {{ last_week.week }} · {% if last_week.final %}final{% else %}{{ last_week.graded }} of {{ last_week.total }} graded{% endif %}</p>
+    <a href="{% url 'main:pick_history' %}?week={{ last_week.week }}" style="font-size:11.5px;">Full pick history</a>
+  </div>
+  <div class="stats" style="border-top:1px solid var(--rule-2);border-bottom:1px solid var(--rule-2);">
+    <div class="stat" style="padding:14px 20px 14px 0;"><p class="stat-label">your points</p><p class="stat-value big">{{ last_week.points }}</p></div>
+    <div class="stat" style="padding:14px 20px;"><p class="stat-label">your record</p><p class="stat-value big">{{ last_week.record }}</p></div>
+    <div class="stat" style="padding:14px 20px;"><p class="stat-label">league average</p><p class="stat-value big">{{ last_week.average }}</p></div>
+    <div class="stat" style="padding:14px 20px;"><p class="stat-label">your rank</p><p class="stat-value big">{{ last_week.rank }}</p></div>
+  </div>
+  <div class="pk-list" style="margin-top:6px;">
+    {% for g in last_week.games %}
+    <div class="res">
+      <span class="res-mark {{ g.mark }}"></span>
+      <div class="res-teams">
+        <span class="res-team{% if g.winner == 'team1' %} won{% endif %}">{{ g.t1 }}</span>
+        <span class="res-at">at</span>
+        <span class="res-team{% if g.winner == 'team2' %} won{% endif %}">{{ g.t2 }}</span>
       </div>
-      <span class="vs-sep">{% if game.winner == 'team1' %}◀{% elif game.winner == 'team2' %}▶{% elif game.winner %}T{% else %}vs{% endif %}</span>
-      <div class="game-team-side">
-        <span class="game-pts">{{ game.points2 }}</span>
-        <span class="team-name" style="{% if game.winner == 'team2' %}color:#34d399;{% elif game.winner == 'team1' %}color:#f87171;{% endif %}">{{ game.team2_abbrev }}</span>
-      </div>
+      <span class="res-took">{% if g.took %}took <b>{{ g.took }}</b>{% else %}no pick{% endif %}</span>
+      <span class="res-result {{ g.mark }}">{{ g.result }}</span>
     </div>
-    {% endif %}
-    {% if settings.lock_picks %}
-    {% comment %}
-      One order, whichever side is at home: the split on the left, the kickoff and
-      venue on the right. It used to mirror itself on team1_is_home, so the date
-      wandered from column to column down the page and there was nothing to read
-      along. Only which team the venue names still depends on it.
-    {% endcomment %}
-    <div class="game-bottom-row">
-      {% if pick %}
-      <span class="game-picked">You picked:
-        <strong>{% if pick.choice == 'team1' %}{{ game.team1_abbrev }}{% else %}{{ game.team2_abbrev }}{% endif %}</strong></span>
-      {% else %}
-      <span class="game-picked game-picked-none">No pick</span>
-      {% endif %}
-      <span class="game-sep-text">{% if game.game_dt_iso %}<span data-utc-full="{{ game.game_dt_iso }}">{{ game.game_dt_iso }}</span> · {% endif %}@ {% if game.team1_is_home %}{{ game.team1_abbrev }}{% else %}{{ game.team2_abbrev }}{% endif %}</span>
-    </div>
-    {% else %}
-    {% if game.game_dt_iso %}
-    <div style="display:flex;justify-content:flex-end;margin-top:6px;">
-      <span class="game-sep-text"><span data-utc-full="{{ game.game_dt_iso }}">{{ game.game_dt_iso }}</span> · @ {% if game.team1_is_home %}{{ game.team1_abbrev }}{% else %}{{ game.team2_abbrev }}{% endif %}</span>
-    </div>
-    {% endif %}
-    {% endif %}
+    {% endfor %}
   </div>
 </div>
-{% endwith %}
-{% endfor %}
-</div>{# end games columns wrapper #}
 {% endif %}
-</div>{# end games-scroll #}
-</div>{# end games relative wrapper #}
 
-{% endif %}{# end published #}
+{% elif not settings.lock_picks %}
+<div class="pk-head">
+  <div>
+    <p class="eyebrow">Week {{ settings.week }} picks</p>
+    <p class="status is-open" style="margin-top:4px;">Open</p>
+  </div>
+  <div class="stats">
+    <div class="stat">
+      <p class="stat-label">picks in</p>
+      <p class="stat-value" id="pk-frac">{{ picks_map|length }}/{{ games|length }}</p>
+    </div>
+    {% include 'main/_countdown.html' %}
+  </div>
+  <div class="pk-save">
+    <span class="n" id="pk-note" style="font-size:10.5px;color:var(--muted-3);">saves as you go</span>
+    <span class="bar"><span class="bar-fill" id="pk-bar" style="width:{{ pct_made }}%;"></span></span>
+  </div>
+</div>
 
+<div style="padding:18px 0 26px;">
+  <div class="section-head">
+    <p class="eyebrow">{{ games|length }} game{{ games|length|pluralize }}</p>
+    <p class="n" style="font-size:10.5px;color:var(--muted-3);">number beside a team is what it scores</p>
+  </div>
+  {% if not games %}
+  <p class="empty">No games this week.</p>
+  {% else %}
+  <div class="pk-list">
+    {% for game in games %}
+    {% with pick=picks_map|get_item:game.id %}
+    <div class="game">
+      <span class="game-time">{% if game.game_dt_iso %}<span data-utc-daytime="{{ game.game_dt_iso }}">{{ game.game_dt|date:"D g:i" }}</span>{% endif %}</span>
+      <div class="game-sides" role="radiogroup" aria-label="{{ game.team1_abbrev }} versus {{ game.team2_abbrev }}">
+        <input class="pick-radio" type="radio" name="game-{{ game.id }}" id="g{{ game.id }}-t1"
+               value="team1" data-game="{{ game.id }}"{% if pick and pick.choice == 'team1' %} checked{% endif %}>
+        <label class="side" for="g{{ game.id }}-t1">
+          <span class="side-team">{{ game.team1_abbrev }}</span>
+          <span class="side-pts">{{ game.points1 }}</span>
+        </label>
+        <input class="pick-radio" type="radio" name="game-{{ game.id }}" id="g{{ game.id }}-t2"
+               value="team2" data-game="{{ game.id }}"{% if pick and pick.choice == 'team2' %} checked{% endif %}>
+        <label class="side" for="g{{ game.id }}-t2">
+          <span class="side-team">{{ game.team2_abbrev }}</span>
+          <span class="side-pts">{{ game.points2 }}</span>
+        </label>
+      </div>
+      <span class="game-at">@{% if game.team1_is_home %}{{ game.team1_abbrev }}{% else %}{{ game.team2_abbrev }}{% endif %}</span>
+      <span id="pick-had-{{ game.id }}" hidden>{% if pick %}1{% else %}0{% endif %}</span>
+    </div>
+    {% endwith %}
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+
+{% else %}
+<div class="pk-head">
+  <div>
+    <p class="eyebrow">Week {{ settings.week }} picks</p>
+    <p class="status is-locked" style="margin-top:4px;">{% if all_graded %}Final{% else %}Locked{% endif %}</p>
+  </div>
+  <div class="stats">
+    <div class="stat"><p class="stat-label">right{% if not all_graded %} so far{% endif %}</p><p class="stat-value">{{ my_correct }}/{{ my_graded }}</p></div>
+    <div class="stat"><p class="stat-label">graded</p><p class="stat-value">{{ graded_count }}/{{ games|length }}</p></div>
+    {% include 'main/_countdown.html' %}
+  </div>
+  <div class="pk-save">
+    <span class="n" style="font-size:10.5px;color:var(--muted-3);">points this week</span>
+    <span class="n" style="font-size:20px;font-weight:600;letter-spacing:-.02em;line-height:1;">{{ week_points }}</span>
+  </div>
+</div>
+
+<div style="padding:18px 0 26px;">
+  <div class="section-head">
+    <p class="eyebrow">{{ games|length }} game{{ games|length|pluralize }}</p>
+    <div class="legend">
+      <span><i class="swatch-sq" style="background:var(--pos);"></i>right</span>
+      <span><i class="swatch-sq" style="background:var(--neg);"></i>wrong</span>
+      <span><i class="swatch-sq" style="background:var(--track);"></i>not graded</span>
+    </div>
+  </div>
+  {% if not games %}
+  <p class="empty">No games this week.</p>
+  {% else %}
+  <div class="pk-list">
+    {% for game in games %}
+    {% with pick=picks_map|get_item:game.id %}
+    <div class="res">
+      <span class="res-mark {% if game.graded and pick %}{% if pick.choice == game.winner %}pos{% else %}neg{% endif %}{% endif %}"></span>
+      <span class="res-time">{% if game.game_dt_iso %}<span data-utc-daytime="{{ game.game_dt_iso }}">{{ game.game_dt|date:"D g:i" }}</span>{% endif %}</span>
+      <div class="res-teams">
+        <span class="res-team{% if game.winner == 'team1' %} won{% endif %}">{{ game.team1_abbrev }}</span>
+        <span class="res-pts">{{ game.points1 }}</span>
+        <span class="res-at">at</span>
+        <span class="res-team{% if game.winner == 'team2' %} won{% endif %}">{{ game.team2_abbrev }}</span>
+        <span class="res-pts">{{ game.points2 }}</span>
+      </div>
+      <span class="res-took">{% if pick %}took <b>{% if pick.choice == 'team1' %}{{ game.team1_abbrev }}{% else %}{{ game.team2_abbrev }}{% endif %}</b>{% else %}no pick{% endif %}</span>
+      <span class="res-result {% if game.graded and pick %}{% if pick.choice == game.winner %}pos{% else %}neg{% endif %}{% else %}dim{% endif %}">{% if not game.graded or not pick %}—{% elif pick.choice == game.winner %}+{{ pick.points_earned }}{% else %}0{% endif %}</span>
+    </div>
+    {% endwith %}
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+{% endif %}
 {% endblock %}
 
 {% block extra_js %}
+{% if settings.publish and not settings.lock_picks %}
 <script>
-// Custom games scrollbar
 (function(){
-  const scroll = document.getElementById('games-scroll');
-  const thumb  = document.getElementById('games-thumb');
-  const track  = document.getElementById('games-track');
-  if (!scroll || !thumb || !track) return;
-  const THUMB_H = 36;
-  function updateThumb() {
-    const trackH    = track.clientHeight;
-    const scrollable = scroll.scrollHeight - scroll.clientHeight;
-    track.style.display = scrollable > 0 ? '' : 'none';
-    const pct       = scrollable > 0 ? scroll.scrollTop / scrollable : 0;
-    thumb.style.top = Math.min(pct * (trackH - THUMB_H), trackH - THUMB_H) + 'px';
+  var SAVE_URL='{% url "main:ajax_save_pick" %}', CSRF='{{ csrf_token }}';
+  var made={{ picks_map|length }}, total={{ games|length }};
+  var frac=document.getElementById('pk-frac'), bar=document.getElementById('pk-bar'), note=document.getElementById('pk-note');
+  var noteTimer=null;
+  function paint(){
+    frac.textContent=made+'/'+total;
+    bar.style.width=(total?Math.round(made/total*100):0)+'%';
   }
-  scroll.addEventListener('scroll', updateThumb);
-  window.addEventListener('resize', updateThumb);
-  updateThumb();
-  thumb.addEventListener('mousedown', e => {
-    e.preventDefault();
-    const startY   = e.clientY;
-    const startTop = scroll.scrollTop;
-    const trackH   = track.clientHeight;
-    function onMove(e) {
-      const dy = e.clientY - startY;
-      const scrollable = scroll.scrollHeight - scroll.clientHeight;
-      scroll.scrollTop = startTop + (dy / (trackH - THUMB_H)) * scrollable;
-    }
-    function onUp() {
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
-    }
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
+  function say(t,ms){
+    note.textContent=t; clearTimeout(noteTimer);
+    if(ms) noteTimer=setTimeout(function(){note.textContent=(made>=total&&total)?'all picks in':'saves as you go';},ms);
+  }
+  // One delegated listener. The radio has already re-rendered itself by the
+  // time this fires; all that is left is to persist the choice. Games stay
+  // where they are - reordering moved the next game out from under a tap.
+  document.addEventListener('change',function(e){
+    var radio=e.target.closest('.pick-radio'); if(!radio)return;
+    var gameId=radio.dataset.game, label=radio.nextElementSibling;
+    if(label){label.classList.remove('pk-saved');void label.offsetWidth;label.classList.add('pk-saved');}
+    var had=document.getElementById('pick-had-'+gameId);
+    var fd=new FormData(); fd.append('game_id',gameId); fd.append('choice',radio.value); fd.append('csrfmiddlewaretoken',CSRF);
+    fetch(SAVE_URL,{method:'POST',body:fd}).then(function(r){return r.json();}).then(function(d){
+      if(!d.ok){fail(d.error||'Could not save that pick.');return;}
+      if(had&&had.textContent==='0'){had.textContent='1';made++;paint();}
+      say('saved',2600);
+    }).catch(function(){fail('Could not save that pick. Check your connection.');});
   });
-  track.addEventListener('click', e => {
-    if (e.target === thumb) return;
-    const rect = track.getBoundingClientRect();
-    const pct  = (e.clientY - rect.top) / rect.height;
-    scroll.scrollTop = pct * scroll.scrollHeight;
-  });
+  // A silently dropped pick is worse than a visible failure - say so.
+  function fail(msg){
+    var bar=document.getElementById('pick-error');
+    if(!bar){bar=document.createElement('p');bar.id='pick-error';bar.className='alert';bar.setAttribute('role','status');document.body.appendChild(bar);}
+    bar.textContent=msg; bar.hidden=false; clearTimeout(bar._t); bar._t=setTimeout(function(){bar.hidden=true;},4000);
+  }
+  if(made>=total&&total) say('all picks in');
 })();
-
-// Inline pick autosave
-const SAVE_URL = '{% url "main:ajax_save_pick" %}';
-const CSRF = '{{ csrf_token }}';
-let picksMade = {{ picks_map|length }};
-const totalGames = {{ games|length }};
-
-function updatePickStatus() {
-  const el = document.getElementById('pick-status');
-  if (!el) return;
-  if (picksMade >= totalGames && totalGames > 0) {
-    el.innerHTML = '<span class="stat-check" style="color:#34d399;">&#10003;</span><span class="stat-val" style="color:#34d399;">'+picksMade+' / '+totalGames+' picks</span>';
-  } else if (picksMade > 0) {
-    el.innerHTML = '<span class="stat-dot pulse" style="background:#fbbf24;"></span><span class="stat-val" style="color:#fbbf24;">'+picksMade+' / '+totalGames+' picks</span>';
-  } else {
-    el.innerHTML = '<span class="stat-dot" style="background:var(--muted);opacity:.4;"></span><span class="stat-val" style="color:var(--muted);">0 / '+totalGames+' picks</span>';
-  }
-}
-updatePickStatus();
-
-// One delegated listener for every pick. The radio has already re-rendered
-// itself by the time this fires; all that is left is to persist the choice.
-// Games deliberately stay where they are — the old build reordered the list on
-// each pick, which moved the next game out from under you mid-tap.
-document.addEventListener('change', function (e) {
-  const radio = e.target.closest('.pick-radio');
-  if (!radio) return;
-
-  const gameId = radio.dataset.game;
-  const label = radio.nextElementSibling;
-  if (label) {
-    label.classList.remove('saved');
-    void label.offsetWidth;   // restart the animation on a repeat pick
-    label.classList.add('saved');
-  }
-
-  const hadEl = document.getElementById('pick-had-' + gameId);
-  const fd = new FormData();
-  fd.append('game_id', gameId);
-  fd.append('choice', radio.value);
-  fd.append('csrfmiddlewaretoken', CSRF);
-
-  fetch(SAVE_URL, { method: 'POST', body: fd })
-    .then(r => r.json())
-    .then(data => {
-      if (!data.ok) { showPickError(data.error || 'Could not save that pick.'); return; }
-      if (hadEl && hadEl.textContent === '0') {
-        hadEl.textContent = '1';
-        picksMade++;
-        updatePickStatus();
-      }
-    })
-    .catch(() => showPickError('Could not save that pick. Check your connection.'));
-});
-
-// A silently dropped pick is worse than a visible failure — say so.
-function showPickError(msg) {
-  let bar = document.getElementById('pick-error');
-  if (!bar) {
-    bar = document.createElement('div');
-    bar.id = 'pick-error';
-    bar.setAttribute('role', 'status');
-    bar.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);bottom:20px;z-index:200;' +
-      'background:var(--bad-fill);border:1px solid var(--bad);color:var(--bad);' +
-      'padding:9px 14px;border-radius:var(--radius-sm);font-size:.8125rem;font-weight:600;';
-    document.body.appendChild(bar);
-  }
-  bar.textContent = msg;
-  bar.style.display = '';
-  clearTimeout(bar._t);
-  bar._t = setTimeout(() => { bar.style.display = 'none'; }, 4000);
-}
 </script>
+{% endif %}
 {% endblock %}

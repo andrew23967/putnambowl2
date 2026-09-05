@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+{% block title %}Seasons{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div class="page-head-title">
+    <p class="eyebrow">Seasons</p>
+    <p class="meta">{{ rows|length }} finished</p>
+  </div>
+</div>
+
+{% if rows %}
+<table class="table hover" style="margin-top:8px;">
+  <thead>
+    <tr>
+      <th style="width:80px;">Year</th>
+      <th>Winner</th>
+      <th class="r" style="width:90px;">Players</th>
+      <th class="r" style="width:80px;">Weeks</th>
+      <th class="r" style="width:100px;">Top score</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for r in rows %}
+    <tr>
+      <td class="n" style="font-weight:600;"><a href="{% url 'main:season' r.year %}">{{ r.year }}</a></td>
+      <td>{{ r.winner }}</td>
+      <td class="n r">{{ r.players }}</td>
+      <td class="n r">{{ r.weeks }}</td>
+      <td class="n r" style="font-weight:600;">{{ r.top }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="empty" style="margin-top:20px;">No seasons finished yet.</p>
+{% endif %}
+{% endblock %}

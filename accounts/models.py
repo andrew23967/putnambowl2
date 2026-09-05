@@ -22,7 +22,6 @@ class Profile(models.Model):
     score = models.FloatField(default=0)
     bio = models.TextField(max_length=300, blank=True, default='')
     real_name = models.CharField(max_length=50, blank=True, default='')
-    theme = models.CharField(max_length=20, default='#00897b')
     favorite_team = models.CharField(max_length=50, choices=TEAMS, default='Arizona Cardinals')
     big_loser = models.CharField(max_length=50, choices=TEAMS, default='Arizona Cardinals')
     nfc_champ = models.CharField(max_length=50, choices=TEAMS, default='Arizona Cardinals')

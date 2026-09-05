@@ -1,284 +1,120 @@
 {% extends 'base.html' %}
-{% block title %}Pick History — PutnamBowl{% endblock %}
+{% block title %}Pick history{% endblock %}
 
 {% block extra_head %}
 <style>
-  /* The whole table renders and the page scrolls it — no box of its own to scroll
-     inside, in either direction. Sideways it does not need one, because the games
-     are paged; downwards, an inner scrollbar meant two things to scroll on one
-     screen and a table that could never be read in one go.
-
-     The header and footer hold their places through `position:sticky` against the
-     page instead. That is why nothing in their ancestry may set `overflow`: any
-     value but `visible` makes that element the scroll container, and the two would
-     stick to a box that never moves rather than to the viewport.
-  */
-
-  /* ── Game pager ──
-     Moved onto the nav row beside the week picker, so the two controls sit
-     together and neither scrolls away: stepping weeks and stepping games are the
-     same kind of move, and the pager was unreachable once you had scrolled. Styled
-     to match .nav-wk rather than the page. */
-  .ph-pager { display:flex;align-items:center;gap:6px; }
-  .ph-pg-label { font-size:.625rem;font-weight:700;color:var(--muted);letter-spacing:.03em;
-                 white-space:nowrap;min-width:104px;text-align:center; }
-  .ph-pg-btn {
-    display:flex;align-items:center;justify-content:center;
-    width:24px;height:24px;padding:0;cursor:pointer;
-    background:none;color:var(--muted);
-    border:1px solid var(--border2);border-radius:6px;
-    transition:color .14s ease,background .14s ease;
-  }
-  .ph-pg-btn:hover:not(:disabled) { color:var(--text);background:var(--fill-2); }
-  /* Kept in place rather than hidden at the ends, so the controls do not shift
-     under the pointer between the first page and the middle ones. */
-  .ph-pg-btn:disabled { opacity:.32;cursor:default; }
-
-  /* ── Table ──
-     Fixed layout so the paged game columns divide what is left evenly and a long
-     team name cannot re-proportion the grid between one page and the next. */
-  /* The column header is the bottom of the block at the top of the screen, not a
-     separate thing floating under it: no page padding above the frame, no top
-     border of its own, square top corners. It meets the nav row's border, and
-     when the page scrolls it pins to exactly the edge it already rests on — so
-     the week picker, the game pager and the column names read as one piece and
-     nothing appears to jump as you scroll past. */
-  main { max-width:none !important;padding:0 !important; }
-  /* The nav's own bottom rule, dropped on this page only: the week picker row and
-     the column header are meant to read as one block, and a line across them is
-     the seam it was drawing attention to. syncHeaderOffsets() measures the nav
-     rather than assuming its height, so the header re-pins itself a pixel higher
-     without anything else needing to know. */
-  nav.topnav { border-bottom:none !important; }
-  /* The nav row is normally held to the same 1280px measure as page content. Here
-     the table runs edge to edge, so the controls follow it out — otherwise the
-     week picker floats 80px short of the column it sits above. Scoped to this
-     page's stylesheet, so every other page keeps the measure.
-
-     Only the measure is changed — the row keeps base.html's right alignment and
-     its DOM order, so the controls sit together at the right edge, level with the
-     table's last column. */
-  #nav-week-row > div { max-width:none !important;padding:0 16px !important; }
-  /* No frame at all: no border, no fill, no radius. The rows sit on the page
-     rather than in a panel on it. */
-  .ph-frame { border:none;border-radius:0;background:none;margin:0; }
-  .ph-table { width:100%;table-layout:fixed;border-collapse:separate;border-spacing:0;
-              font-variant-numeric:tabular-nums; }
-  /* Edge columns keep their distance from the screen edge now that there is no
-     frame to do it for them. */
-  .ph-table th:first-child, .ph-table td:first-child { padding-left:16px; }
-  .ph-table th:last-child,  .ph-table td:last-child  { padding-right:16px; }
-
-  /* Rules only under each row. Nothing vertical: the pick chips already draw the
-     game columns, and the gap where the figures end is legible without a line
-     down it. The old build drew a border on every cell edge, which turned the
-     whole thing into graph paper. */
-  .ph-table tbody td { border-bottom:1px solid var(--border); }
-  .ph-table tbody tr:last-child td { border-bottom:none; }
-
-  /* Sticky on the cells, not on the thead.
-     A sticky <thead> stretches at the end of the scroll — it stays part of the
-     table's row layout, so as the last rows come up it grows downward trying to
-     stay in contact with the body. Sticking the cells avoids that entirely.
-
-     It was on the thead because the header had two rows and each stuck to its own
-     rounded pixel, leaving a half-pixel slot the table showed through. The league
-     split is a body row now, so there is one header row and no inside to leak.
-
-     --ph-top is measured from the nav's real height and pulled up a pixel, so the
-     header tucks under the nav rather than meeting it exactly and leaving a
-     hairline there instead. See syncHeaderOffsets(). */
-  .ph-table thead th {
-    position:sticky;top:var(--ph-top,85px);z-index:2;
-    background:var(--surface2);
-    padding:8px 6px;text-align:center;vertical-align:bottom;white-space:nowrap;
-    font-size:.5625rem;font-weight:700;text-transform:uppercase;
-    letter-spacing:.07em;color:var(--muted);
-  }
-  .ph-table thead th { border-bottom:1px solid var(--border2); }
-
-  /* Sortable columns. The whole cell is the target, so it is a button filling the
-     th rather than a click handler on the th — tabbable, and fires on Enter and
-     Space without any of that being written by hand. */
-  .ph-sortable { padding:0 !important; }
-  .ph-sort-btn {
-    display:flex;align-items:center;justify-content:center;gap:3px;
-    width:100%;padding:8px 6px;cursor:pointer;
-    background:none;border:0;color:inherit;
-    font:inherit;letter-spacing:inherit;text-transform:inherit;
-    transition:color .14s ease,background .14s ease;
-  }
-  .ph-sort-btn:hover { color:var(--text);background:var(--fill-1); }
-  .ph-sort-btn:focus-visible { outline:2px solid var(--accent);outline-offset:-2px; }
-  .ph-sorted { color:var(--text); }
-  .ph-caret { flex-shrink:0;margin-bottom:1px; }
-
-  /* ── The league, as a row ──
-     It reads as another competitor rather than a caption: the same columns mean
-     the same things, so you can see at a glance whether you are above or below it.
-     Muted and ruled off so it is not mistaken for a person. */
-  .ph-table tbody tr.ph-league td {
-    color:var(--muted);border-bottom:1px solid var(--border2);
-  }
-  .ph-league .ph-username { color:var(--muted);font-weight:700; }
-  /* Carries .ph-pick too, so the box is the same shape and sits on the same
-     grid as the picks beneath it — only the fill differs, being a count rather
-     than somebody's answer. */
-  .ph-league-split { background:var(--fill-2);color:var(--muted);font-size:.625rem; }
-
-  /* Column widths. The stats are the fixed part of the table — they stay put
-     while the games page — so they get exact widths and the games share the rest. */
-  .ph-col-player { width:20%;min-width:0; }
-  .ph-col-rank   { width:66px; }
-  .ph-col-score  { width:64px; }
-  .ph-col-week   { width:64px; }
-  .ph-col-rec    { width:58px; }
-
-  /* ── Player ── */
-  .ph-player { text-align:left !important;padding:0 12px;height:34px; }
-  .ph-player-in { display:flex;align-items:center;gap:8px;min-width:0; }
-  .ph-avatar {
-    width:20px;height:20px;border-radius:50%;flex-shrink:0;
-    display:flex;align-items:center;justify-content:center;
-    font-size:.5625rem;font-weight:800;color:var(--muted2);background:var(--fill-2);
-  }
-  /* --on-accent only reads against --accent. On the plain fill it is white on
-     near-white in the light theme, which erased every initial but your own. */
-  .ph-avatar-me { background:var(--accent);color:var(--on-accent); }
-  .ph-username { font-size:.75rem;font-weight:600;color:var(--text);
-                 white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
-
-  /* ── Standing figures ── */
-  .ph-stat { text-align:center;font-size:.75rem;font-weight:700;color:var(--text);
-             padding:0 6px;white-space:nowrap; }
-  .ph-rank-n { font-weight:800; }
-  .ph-delta { font-size:.5625rem;font-weight:700;margin-left:3px; }
-  .ph-up { color:var(--good); }
-  .ph-down { color:var(--bad); }
-  .ph-flat { color:var(--muted);opacity:.6; }
-  .ph-muted { color:var(--muted);font-weight:600; }
-
-  /* ── Pick cells ──
-     A chip inset from the cell, not a full-bleed block. Colour then reads as this
-     player's answer to this game rather than as a stripe across the row. */
-  .ph-cell { padding:3px 4px;text-align:center;height:34px; }
-  .ph-pick {
-    display:flex;align-items:center;justify-content:center;height:100%;
-    border-radius:var(--radius-sm);font-size:.6875rem;font-weight:700;letter-spacing:-.01em;
-  }
-  .ph-correct { background:var(--good-fill);color:var(--good); }
-  .ph-wrong   { background:var(--bad-fill);color:var(--bad); }
-  .ph-pending { background:var(--fill-2);color:var(--muted2); }
-  .ph-none    { color:var(--muted);opacity:.4;font-weight:600; }
-
-  /* ── Game headers ── */
-  .ph-matchup { display:block;font-size:.6875rem;font-weight:800;letter-spacing:-.01em;
-                line-height:1.35;text-transform:none; }
-  .ph-pts { display:block;font-size:.5625rem;font-weight:600;color:var(--muted);
-            line-height:1.3;margin-top:1px;letter-spacing:0; }
-  .ph-win { color:var(--good); }
-  .ph-lose { color:var(--muted); }
-  .ph-open { color:var(--muted2); }
-  .ph-sep { color:var(--muted);font-weight:500; }
-  /* Narrow columns cannot hold "SEA · NE" on one line — it overran the cell and
-     was clipped, since there is no sideways scroll to escape into. Stacked, the
-     pair needs only as much width as the longer code. */
-  .ph-matchup-stack span { display:block;line-height:1.25; }
-
-  /* Whole row, one wash — the row is one player, so it highlights as one thing. */
-  .ph-row-me td { background:color-mix(in srgb,var(--accent) 10%,var(--bg)); }
-  .ph-table tbody tr:not(.ph-row-me):hover td { background:var(--fill-1); }
-
-  .ph-empty { display:flex;align-items:center;justify-content:center;
-              padding:60px 20px;color:var(--muted);font-size:.875rem;text-align:center; }
-
-  @media (max-width:640px) {
-    .ph-pg-label { min-width:0; }
-    /* Three games and one fewer figure at this width — see perPage()/isNarrow().
-       Six columns here left about 8px each, and the codes were simply clipped. */
-    .ph-col-player { width:30%; }
-    .ph-col-rank, .ph-col-week, .ph-col-rec { width:46px; }
-    .ph-username { font-size:.6875rem; }
-    .ph-table th:first-child, .ph-table td:first-child { padding-left:10px; }
-    .ph-table th:last-child,  .ph-table td:last-child  { padding-right:10px; }
-    .ph-stat { font-size:.6875rem;padding:0 3px; }
-    .ph-table thead th { padding:6px 2px; }
-    .ph-sort-btn { padding:6px 2px;gap:2px; }
-    .ph-avatar { display:none; }
+  .ph-head { display: flex; align-items: center; gap: 20px; padding: 13px 0; border-bottom: 1px solid var(--ink); }
+  .ph-ctl { display: flex; align-items: center; gap: 6px; }
+  .ph-ctl + .ph-ctl { padding-left: 20px; border-left: 1px solid var(--rule-3); }
+  .ph-ctl .input { width: 58px; text-align: center; padding: 4px 6px; font-size: 12.5px; font-weight: 600; }
+  .ph-pg-label { min-width: 112px; text-align: center; font: 400 11px var(--mono); color: var(--muted-3); }
+  .ph-table { width: 100%; table-layout: fixed; border-collapse: separate; border-spacing: 0; }
+  .ph-table th { padding: 9px 6px; border-bottom: 1px solid var(--rule-strong); text-align: center; vertical-align: bottom; }
+  .ph-table th.ph-player { text-align: left; padding-left: 0; }
+  .ph-table td { height: 34px; border-bottom: 1px solid var(--rule-2); text-align: center; padding: 0 4px; }
+  .ph-table td.ph-player { text-align: left; padding: 0 12px 0 0; }
+  .ph-table tr.ph-league td { border-bottom: 1px solid var(--rule-strong); }
+  .ph-table tbody tr:hover td { background: var(--fill-hover); }
+  .ph-table tr.is-me td { background: var(--fill-me); }
+  .ph-table tr.is-me:hover td { background: var(--fill-me); }
+  .ph-player-in { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .ph-username { font-size: 12.5px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .is-me .ph-username { font-weight: 600; }
+  .ph-league .ph-username { color: var(--muted-2); font-family: var(--mono); font-size: 12px; font-weight: 600; }
+  .ph-stat { font: 600 12.5px var(--mono); }
+  .ph-league .ph-stat { color: var(--muted-2); font-weight: 400; font-size: 12px; }
+  .ph-rec { color: var(--muted); font-weight: 400; }
+  .ph-delta { font-size: 9.5px; margin-left: 3px; }
+  .ph-sort { font: 600 10px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted-3); }
+  .ph-sort button { border: 0; background: none; padding: 9px 6px; width: 100%; cursor: pointer; font: inherit; letter-spacing: inherit; text-transform: inherit; color: inherit; display: flex; align-items: center; justify-content: center; gap: 4px; }
+  .ph-sort button:hover { background: var(--fill-hover); }
+  .ph-sort.is-on { color: var(--ink); }
+  .ph-matchup { display: block; font-size: 11px; font-weight: 700; letter-spacing: -.01em; line-height: 1.3; }
+  .ph-matchup .ph-sep { color: var(--placeholder); font-weight: 400; }
+  .ph-matchup-stack span { display: block; }
+  .ph-pts { display: block; font: 400 9.5px var(--mono); color: var(--muted-3); margin-top: 1px; }
+  .ph-win { color: var(--pos); }
+  .ph-lose { color: var(--muted-3); }
+  .ph-open { color: var(--muted); }
+  .ph-cell .chip { width: 100%; }
+  .ph-foot { display: flex; align-items: center; gap: 16px; padding: 12px 0 16px; border-top: 1px solid var(--rule-strong); }
+  .ph-empty { padding: 20px 0; }
+  .ph-col-player { width: 19%; }
+  .ph-col-rank { width: 66px; }
+  .ph-col-score { width: 64px; }
+  .ph-col-week { width: 64px; }
+  .ph-col-rec { width: 58px; }
+  @media (max-width: 640px) {
+    .ph-head { flex-wrap: wrap; gap: 12px; }
+    .ph-ctl + .ph-ctl { padding-left: 12px; }
+    .ph-col-player { width: 30%; }
+    .ph-col-rank, .ph-col-week, .ph-col-rec { width: 52px; }
+    .ph-foot { flex-wrap: wrap; gap: 10px; }
   }
 </style>
 {% endblock %}
 
 {% block content %}
-{% if completed_weeks %}
-{% comment %}
-  Rendered here and moved onto the nav row at init — see the appendChild below.
-  Written in the page rather than in base.html because it is this page's control;
-  base only lends it the space.
-{% endcomment %}
-<div class="ph-pager" id="ph-pager" style="display:none;">
-  <button type="button" class="ph-pg-btn" id="ph-prev" aria-label="Previous games">
-    <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path
-      stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"/></svg>
-  </button>
-  <span class="ph-pg-label" id="ph-pg-label"></span>
-  <button type="button" class="ph-pg-btn" id="ph-next" aria-label="Next games">
-    <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path
-      stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/></svg>
-  </button>
+<div class="ph-head">
+  <div>
+    <p class="eyebrow">Pick history</p>
+    <p class="meta" id="ph-meta" style="margin-top:3px;">{% if completed_weeks %}&nbsp;{% else %}no graded weeks yet{% endif %}</p>
+  </div>
+  {% if completed_weeks %}
+  <div class="ph-ctl" style="margin-left:auto;">
+    <button type="button" class="icon-btn" id="wk-prev" aria-label="Previous week">‹</button>
+    <input class="input n" id="wk-input" type="number" min="1" max="{{ completed_weeks|last }}" value="{{ initial_week }}" inputmode="numeric" aria-label="Week">
+    <button type="button" class="icon-btn" id="wk-next" aria-label="Next week">›</button>
+  </div>
+  <div class="ph-ctl" id="ph-pager" style="display:none;">
+    <button type="button" class="icon-btn" id="ph-prev" aria-label="Previous games">‹</button>
+    <span class="ph-pg-label" id="ph-pg-label"></span>
+    <button type="button" class="icon-btn" id="ph-next" aria-label="Next games">›</button>
+  </div>
+  {% endif %}
 </div>
 
-<div class="ph-frame" id="picks-content"></div>
+{% if completed_weeks %}
+<div id="picks-content"></div>
+<div class="ph-foot">
+  <div class="legend">
+    <span><i class="swatch-sq" style="background:var(--pos-fill);"></i>right</span>
+    <span><i class="swatch-sq" style="background:var(--neg-fill);"></i>wrong</span>
+    <span><i class="swatch-sq" style="background:var(--fill);"></i>not graded</span>
+  </div>
+  <span class="n" style="margin-left:auto;font-size:10.5px;color:var(--muted-3);">league row shows the split, left team first</span>
+</div>
 {% else %}
-<div class="ph-empty">Nothing here yet. Pick history appears once week 1 is graded.</div>
+<p class="empty ph-empty">No graded weeks yet.</p>
 {% endif %}
 {% endblock %}
 
 {% block extra_js %}
+{% if completed_weeks %}
 <script>
 const HIST_URL = '{% url "main:ajax_history" %}';
 const ME = '{{ request.user.username|escapejs }}';
-var currentWeek = {{ completed_weeks|last|default:1 }};
+const MAX_WEEK = {{ completed_weeks|last }};
+var currentWeek = {{ initial_week }};
 
-/* Games are paged rather than scrolled sideways. Six is what fits beside the
-   standing figures without the columns getting too narrow to read a team code in.
-   The figures do not page — they are the answer to "how did this week go", so
-   they stay on screen whichever games you are looking at.
-
-   On a phone there is not room for six games and four figures: the table overran
-   its box and, with no sideways scroll to fall back on, the codes were clipped
-   outright. So the narrow layout drops to three games and leaves out Score — the
-   running season total, the one figure that is not about this week. */
+/* Games are paged rather than scrolled sideways. Six fit beside the standing
+   figures; a phone gets three and drops Score, the one figure that is not about
+   this week. The figures never page - they are the answer to "how did this
+   week go". */
 var gamePage = 0;
-var weekData = null;   // paging re-renders from this, it does not refetch
-
-/* Stepping weeks with the arrows is fast enough to have several requests in the
-   air at once, and they do not necessarily come back in order — the table would
-   then settle on whichever landed last rather than the week you chose. Each load
-   takes a ticket and only the newest one is allowed to paint. (The old slider
-   could not hit this: it only fired on release.) */
-var loadToken = 0;
+var weekData = null;
+var loadToken = 0;   // only the newest request may paint
 
 function isNarrow() { return window.matchMedia('(max-width:640px)').matches; }
 function perPage()  { return isNarrow() ? 3 : 6; }
-
 function esc(s) {
-  return String(s).replace(/[&<>"']/g, c => (
-    {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]
-  ));
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
-/* ── Sorting ──
-   Which figure the table is ordered by, kept out here so it survives paging the
-   games and changing week — having it reset to the default every time you stepped
-   a week would make comparing two weeks by the same measure impossible.
-
-   The default is the week's gain: the old build shuffled players randomly on
-   every load, which made the table impossible to read twice, and the week's
-   result is what the page is about. */
+/* Sort state lives outside the render so it survives paging and changing week.
+   Default is the week's gain - the week's result is what the page is about. */
 var sortKey = 'week';
 var sortDir = 'desc';
-
 const SORTS = {
   rank:   {label: 'Rank',   dir: 'asc',  value: p => p.rank},
   score:  {label: 'Score',  dir: 'desc', value: p => p.week_total},
@@ -287,35 +123,22 @@ const SORTS = {
 };
 
 function sortPlayers(list) {
-  const get  = SORTS[sortKey].value;
-  const sign = sortDir === 'asc' ? 1 : -1;
+  const get = SORTS[sortKey].value, sign = sortDir === 'asc' ? 1 : -1;
   return [...list].sort((a, b) => {
     const av = get(a), bv = get(b);
-    // Nobody with a figure missing outranks somebody who has one, whichever way
-    // the column is pointing — an unranked player sorting to the top of a
-    // descending Rank column would just look broken.
     const aMissing = av == null, bMissing = bv == null;
     if (aMissing !== bMissing) return aMissing ? 1 : -1;
     if (!aMissing && av !== bv) return (av - bv) * sign;
-    // Same figure: the week's gain, then the name, so ties never reshuffle
-    // between renders.
-    return (b.week_gained ?? 0) - (a.week_gained ?? 0) ||
-           a.username.localeCompare(b.username);
+    return (b.week_gained ?? 0) - (a.week_gained ?? 0) || a.username.localeCompare(b.username);
   });
 }
 
 function sortHeaderCell(key) {
   const active = sortKey === key;
-  const caret = sortDir === 'asc' ? 'M18 15l-6-6-6 6' : 'M6 9l6 6 6-6';
-  return '<th class="ph-sortable' + (active ? ' ph-sorted' : '') + '"' +
-         ' aria-sort="' + (active ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none') + '">' +
-         '<button type="button" class="ph-sort-btn" data-sort="' + key + '">' +
-         SORTS[key].label +
-         (active
-           ? '<svg class="ph-caret" width="9" height="9" fill="none" stroke="currentColor"' +
-             ' viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round"' +
-             ' stroke-width="3" d="' + caret + '"/></svg>'
-           : '') +
+  return '<th class="ph-sort' + (active ? ' is-on' : '') + '" aria-sort="' +
+         (active ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none') + '">' +
+         '<button type="button" data-sort="' + key + '">' + SORTS[key].label +
+         (active ? '<span style="font-size:8px;">' + (sortDir === 'asc' ? '▲' : '▼') + '</span>' : '') +
          '</button></th>';
 }
 
@@ -327,278 +150,167 @@ function pageCount() {
 function renderTable() {
   const box = document.getElementById('picks-content');
   if (!box || !weekData) return;
-
-  const games = weekData.games;
-  const players = sortPlayers(weekData.players);
-
-  const per = perPage();
-  const compact = isNarrow();
-  const pages = pageCount();
+  const games = weekData.games, players = sortPlayers(weekData.players);
+  const per = perPage(), compact = isNarrow(), pages = pageCount();
   gamePage = Math.min(Math.max(0, gamePage), pages - 1);
-  const start = gamePage * per;
-  const shown = games.slice(start, start + per);
+  const start = gamePage * per, shown = games.slice(start, start + per);
 
-  // Pager: only worth showing when there is somewhere to go.
   const pager = document.getElementById('ph-pager');
-  if (pager) {
-    pager.style.display = pages > 1 ? '' : 'none';
-    // Shorter on a phone: this label shares the nav row with the week picker, and
-    // the long form pushed the pager's own back-arrow off the left edge.
-    const from = start + 1, to = start + shown.length;
-    document.getElementById('ph-pg-label').textContent = compact
-      ? from + '–' + to + ' / ' + games.length
-      : 'Games ' + from + '–' + to + ' of ' + games.length;
-    document.getElementById('ph-prev').disabled = gamePage === 0;
-    document.getElementById('ph-next').disabled = gamePage >= pages - 1;
-  }
+  pager.style.display = pages > 1 ? '' : 'none';
+  const from = start + 1, to = start + shown.length;
+  document.getElementById('ph-pg-label').textContent = compact
+    ? from + '–' + to + ' / ' + games.length : 'Games ' + from + '–' + to + ' of ' + games.length;
+  document.getElementById('ph-prev').disabled = gamePage === 0;
+  document.getElementById('ph-next').disabled = gamePage >= pages - 1;
 
-  // Column widths are declared once, so header, body and footer cannot disagree
-  // about them — which is what table-layout:fixed needs to behave.
-  // Built from one `compact` flag so the colgroup, header, body and footer cannot
-  // disagree about how many columns there are — which is what table-layout:fixed
-  // needs to lay anything out correctly.
-  let h = '<table class="ph-table"><colgroup>';
-  h += '<col class="ph-col-player"><col class="ph-col-rank">';
+  const graded = games.filter(g => g.winner).length;
+  document.getElementById('ph-meta').textContent = graded === games.length
+    ? games.length + ' games · final' : graded + ' of ' + games.length + ' graded';
+
+  let h = '<table class="ph-table"><colgroup><col class="ph-col-player"><col class="ph-col-rank">';
   if (!compact) h += '<col class="ph-col-score">';
   h += '<col class="ph-col-week"><col class="ph-col-rec">';
   for (let i = 0; i < shown.length; i++) h += '<col>';
-  h += '</colgroup>';
-
-  h += '<thead><tr>';
-  h += '<th class="ph-player">Player</th>';
+  h += '</colgroup><thead><tr><th class="ph-player"><span class="ph-sort">Player</span></th>';
   h += sortHeaderCell('rank');
   if (!compact) h += sortHeaderCell('score');
-  h += sortHeaderCell('week');
-  h += sortHeaderCell('record');
-  shown.forEach((g, i) => {
-    const t1w = g.winner === 'team1', t2w = g.winner === 'team2';
-    const isGraded = t1w || t2w;
+  h += sortHeaderCell('week') + sortHeaderCell('record');
+  shown.forEach(g => {
+    const t1w = g.winner === 'team1', t2w = g.winner === 'team2', isGraded = t1w || t2w;
     const c1 = isGraded ? (t1w ? 'ph-win' : 'ph-lose') : 'ph-open';
     const c2 = isGraded ? (t2w ? 'ph-win' : 'ph-lose') : 'ph-open';
     h += '<th>';
     if (compact) {
-      // Stacked, and without the point values — at this width they are wider
-      // than the column and would be clipped rather than read.
-      h += '<span class="ph-matchup ph-matchup-stack">' +
-           '<span class="' + c1 + '">' + esc(g.team1_abbrev) + '</span>' +
-           '<span class="' + c2 + '">' + esc(g.team2_abbrev) + '</span></span>';
+      h += '<span class="ph-matchup ph-matchup-stack"><span class="' + c1 + '">' + esc(g.team1_abbrev) +
+           '</span><span class="' + c2 + '">' + esc(g.team2_abbrev) + '</span></span>';
     } else {
-      h += '<span class="ph-matchup">' +
-           '<span class="' + c1 + '">' + esc(g.team1_abbrev) + '</span>' +
-           '<span class="ph-sep"> · </span>' +
-           '<span class="' + c2 + '">' + esc(g.team2_abbrev) + '</span></span>' +
-           '<span class="ph-pts">' + (g.points1 ?? 0).toFixed(1) + ' · ' +
-           (g.points2 ?? 0).toFixed(1) + '</span>';
+      h += '<span class="ph-matchup"><span class="' + c1 + '">' + esc(g.team1_abbrev) +
+           '</span><span class="ph-sep"> · </span><span class="' + c2 + '">' + esc(g.team2_abbrev) + '</span></span>' +
+           '<span class="ph-pts">' + (g.points1 ?? 0).toFixed(1) + ' · ' + (g.points2 ?? 0).toFixed(1) + '</span>';
     }
     h += '</th>';
   });
   h += '</tr></thead><tbody>';
 
-  // ── The league, first row of the body ──
-  // Averages, not totals: a player's row reads "9/16" and "142.4", so the league's
-  // has to be on that scale to be worth comparing against.
+  // The league, first row of the body: averages, on the same scale as a player.
   const n = players.length;
   const mean = pick => n ? players.reduce((a, p) => a + (pick(p) ?? 0), 0) / n : 0;
-  const avgScore   = mean(p => p.week_total);
-  const avgGained  = mean(p => p.week_gained);
-  const avgCorrect = mean(p => p.correct);
-
-  // Averaged over the players who have a rank at all — someone with no score yet
-  // has none, and counting them as zero would drag the middle of the table down.
   const ranked = players.filter(p => p.rank);
-  const avgRank = ranked.length
-    ? ranked.reduce((a, p) => a + p.rank, 0) / ranked.length : null;
-
-  h += '<tr class="ph-league">';
-  h += '<td class="ph-player"><span class="ph-player-in">' +
-       '<span class="ph-avatar">Σ</span>' +
-       '<span class="ph-username">League</span></span></td>';
-  // The flat dash rides along even though the middle of the table cannot move —
-  // without it the number sits a few pixels off from every rank below it.
-  h += '<td class="ph-stat">' +
-       (avgRank != null ? '<span class="ph-rank-n">' + avgRank.toFixed(1) + '</span>'
-                        : '<span class="ph-muted">–</span>') +
-       '<span class="ph-delta ph-flat">–</span></td>';
-  if (!compact) h += '<td class="ph-stat">' + avgScore.toFixed(1) + '</td>';
-  h += '<td class="ph-stat ' + (avgGained > 0 ? 'ph-up' : avgGained < 0 ? 'ph-down' : 'ph-flat') +
-       '">' + (avgGained >= 0 ? '+' : '') + avgGained.toFixed(1) + '</td>';
-  h += '<td class="ph-stat">' + avgCorrect.toFixed(1) + '/' + games.length + '</td>';
-
-  // The game cells keep what the old footer showed: how the league split on each.
-  shown.forEach((g, i) => {
+  const avgRank = ranked.length ? ranked.reduce((a, p) => a + p.rank, 0) / ranked.length : null;
+  h += '<tr class="ph-league"><td class="ph-player"><span class="ph-player-in"><span class="avatar">Σ</span><span class="ph-username">League</span></span></td>';
+  h += '<td class="ph-stat">' + (avgRank != null ? avgRank.toFixed(1) : '–') + '</td>';
+  if (!compact) h += '<td class="ph-stat">' + mean(p => p.week_total).toFixed(1) + '</td>';
+  const ag = mean(p => p.week_gained);
+  h += '<td class="ph-stat">' + (ag >= 0 ? '+' : '') + ag.toFixed(1) + '</td>';
+  h += '<td class="ph-stat">' + mean(p => p.correct).toFixed(1) + '/' + games.length + '</td>';
+  shown.forEach(g => {
     let t1 = 0, t2 = 0;
-    for (const p of players) {
-      const pk = p.picks[String(g.id)];
-      if (!pk) continue;
-      pk.choice === 'team1' ? t1++ : t2++;
-    }
+    for (const p of players) { const pk = p.picks[String(g.id)]; if (!pk) continue; pk.choice === 'team1' ? t1++ : t2++; }
     const tot = t1 + t2;
-    h += '<td class="ph-cell">' +
-         '<span class="ph-pick ph-league-split">' +
-         (tot ? Math.round(t1 / tot * 100) + '/' + Math.round(t2 / tot * 100) : '–') +
-         '</span></td>';
+    h += '<td class="ph-cell"><span class="chip chip-open">' + (tot ? Math.round(t1 / tot * 100) + '/' + Math.round(t2 / tot * 100) : '–') + '</span></td>';
   });
   h += '</tr>';
 
   for (const p of players) {
     const isMe = p.username === ME;
-    h += '<tr' + (isMe ? ' class="ph-row-me"' : '') + '>';
-
-    h += '<td class="ph-player"><span class="ph-player-in">' +
-         '<span class="ph-avatar' + (isMe ? ' ph-avatar-me' : '') + '">' +
-         esc(p.username.charAt(0).toUpperCase()) + '</span>' +
-         '<span class="ph-username">' + esc(p.username) + '</span></span></td>';
-
+    h += '<tr' + (isMe ? ' class="is-me"' : '') + '>';
+    h += '<td class="ph-player"><span class="ph-player-in"><span class="avatar' + (isMe ? ' is-me' : '') + '">' +
+         esc(p.username.charAt(0).toUpperCase()) + '</span><span class="ph-username">' + esc(p.username) + '</span></span></td>';
     const rc = p.rank_change;
     const rcTxt = rc > 0 ? '▲' + rc : rc < 0 ? '▼' + Math.abs(rc) : '–';
-    const rcCls = rc > 0 ? 'ph-up' : rc < 0 ? 'ph-down' : 'ph-flat';
-    h += '<td class="ph-stat">' +
-         (p.rank ? '<span class="ph-rank-n">' + p.rank + '</span>'
-                 : '<span class="ph-muted">–</span>') +
+    const rcCls = rc > 0 ? 'pos' : rc < 0 ? 'neg' : 'dim';
+    h += '<td class="ph-stat">' + (p.rank ? p.rank : '<span class="dim">–</span>') +
          '<span class="ph-delta ' + rcCls + '">' + rcTxt + '</span></td>';
-
-    if (!compact) {
-      h += '<td class="ph-stat">' +
-           (p.week_total != null ? p.week_total.toFixed(1)
-                                : '<span class="ph-muted">–</span>') + '</td>';
-    }
-
+    if (!compact) h += '<td class="ph-stat">' + (p.week_total != null ? p.week_total.toFixed(1) : '<span class="dim">–</span>') + '</td>';
     const wg = p.week_gained;
-    const wgCls = wg > 0 ? 'ph-up' : wg < 0 ? 'ph-down' : 'ph-flat';
-    h += '<td class="ph-stat ' + wgCls + '">' +
-         (wg != null ? (wg >= 0 ? '+' : '') + wg.toFixed(1) : '–') + '</td>';
-
-    h += '<td class="ph-stat' + (p.total ? '' : ' ph-muted') + '">' +
-         (p.total ? p.correct + '/' + p.total : '–') + '</td>';
-
-    shown.forEach((g, i) => {
+    h += '<td class="ph-stat ' + (wg > 0 ? 'pos' : 'dim') + '">' + (wg != null ? (wg >= 0 ? '+' : '') + wg.toFixed(1) : '–') + '</td>';
+    h += '<td class="ph-stat ph-rec">' + (p.total ? p.correct + '/' + p.total : '–') + '</td>';
+    shown.forEach(g => {
       const pick = p.picks[String(g.id)];
-      if (!pick || !weekData.picks_locked) {
-        h += '<td class="ph-cell"><span class="ph-pick ph-none">–</span></td>';
-        return;
-      }
+      if (!pick || !weekData.picks_locked) { h += '<td class="ph-cell"><span class="chip chip-open">–</span></td>'; return; }
       const abbrev = pick.choice === 'team1' ? g.team1_abbrev : g.team2_abbrev;
-      let cls = 'ph-pending';
-      if (pick.correct === true) cls = 'ph-correct';
-      else if (pick.correct === false) cls = 'ph-wrong';
-      h += '<td class="ph-cell"><span class="ph-pick ' + cls + '">' +
-           esc(abbrev) + '</span></td>';
+      const cls = pick.correct === true ? 'chip-pos' : pick.correct === false ? 'chip-neg' : 'chip-open';
+      h += '<td class="ph-cell"><span class="chip ' + cls + '">' + esc(abbrev) + '</span></td>';
     });
-
     h += '</tr>';
   }
-
   h += '</tbody></table>';
-
   box.innerHTML = h;
-  syncHeaderOffsets();
 }
-
-/* Where the header pins: exactly where it already sits.
-   The table starts immediately below the nav, so the header's resting top IS the
-   nav's height. Pin it anywhere else and the header jumps the moment you scroll —
-   round up and a hairline opens for the rows to show through; round down and the
-   header slides under the nav, losing a strip off its top. Because the text is
-   bottom-aligned, that lost strip reads as the space above the text changing,
-   which is the "stretching" — the box never resized, it moved.
-
-   So: the exact measured height, fraction and all, which makes the stuck position
-   identical to the resting one. Nothing to see because nothing moves. */
-function syncHeaderOffsets() {
-  const nav = document.querySelector('nav.topnav');
-  if (!nav) return;
-  document.documentElement.style.setProperty(
-    '--ph-top', nav.getBoundingClientRect().height + 'px');
-}
-window.addEventListener('resize', syncHeaderOffsets);
 
 function loadPicks(week) {
   const box = document.getElementById('picks-content');
-  if (!box) return;
-  box.innerHTML = '<div class="ph-empty">Loading…</div>';
-  const pager = document.getElementById('ph-pager');
-  if (pager) pager.style.display = 'none';
-
+  box.innerHTML = '<p class="empty ph-empty">Loading…</p>';
+  document.getElementById('ph-pager').style.display = 'none';
   const ticket = ++loadToken;
-
   fetch(HIST_URL + '?week=' + week)
     .then(r => r.json())
     .then(data => {
-      if (ticket !== loadToken) return;   // a newer week was asked for meanwhile
+      if (ticket !== loadToken) return;
       if (data.error || !data.games || !data.games.length) {
         weekData = null;
-        box.innerHTML = '<div class="ph-empty">No games recorded for week ' + week + '.</div>';
+        document.getElementById('ph-meta').textContent = 'week ' + week;
+        box.innerHTML = '<p class="empty ph-empty">No games recorded for week ' + week + '.</p>';
         return;
       }
-
-      weekData = data;
-      gamePage = 0;   // a new week starts at its first games
-
-      renderTable();
+      weekData = data; gamePage = 0; renderTable();
     })
     .catch(() => {
       if (ticket !== loadToken) return;
       weekData = null;
-      box.innerHTML = '<div class="ph-empty">Could not load week ' + week + '. Try again.</div>';
+      box.innerHTML = '<p class="empty ph-empty">Could not load week ' + week + '.</p>';
     });
 }
 
-{% if completed_weeks %}
 function step(by) {
   if (!weekData) return;
   const next = gamePage + by;
   if (next < 0 || next >= pageCount()) return;
-  gamePage = next;
-  renderTable();
+  gamePage = next; renderTable();
 }
-/* Sorting. Delegated to the container rather than the buttons: renderTable()
-   replaces the table's markup wholesale, so any listener bound to a header cell
-   would be thrown away with it on the first click. */
 document.getElementById('picks-content').addEventListener('click', e => {
-  const btn = e.target.closest('.ph-sort-btn');
+  const btn = e.target.closest('[data-sort]');
   if (!btn || !weekData) return;
   const key = btn.dataset.sort;
-  // Same column again reverses it; a new column starts at whichever way round
-  // reads as "best first" for that figure — lowest rank, but highest score.
   if (key === sortKey) sortDir = sortDir === 'asc' ? 'desc' : 'asc';
   else { sortKey = key; sortDir = SORTS[key].dir; }
   renderTable();
 });
-
-// Onto the nav row, beside the week picker. Falls back to leaving it in the page
-// if base.html has no slot, so the control cannot simply vanish.
-const navSlot = document.getElementById('nav-week-extra');
-if (navSlot) navSlot.appendChild(document.getElementById('ph-pager'));
-
-
 document.getElementById('ph-prev').addEventListener('click', () => step(-1));
 document.getElementById('ph-next').addEventListener('click', () => step(1));
-
-// Rotating a phone crosses the breakpoint, which changes both the page size and
-// the column set, so the table is rebuilt rather than left mismatched. Keeps the
-// game you were looking at on screen by recomputing the page it now falls on.
 window.matchMedia('(max-width:640px)').addEventListener('change', () => {
   if (!weekData) return;
-  const firstShown = gamePage * (isNarrow() ? 6 : 3);   // page size before the flip
+  const firstShown = gamePage * (isNarrow() ? 6 : 3);
   gamePage = Math.floor(firstShown / perPage());
   renderTable();
 });
-
-// Arrow keys page the games too, unless the week box has focus — left and right
-// move the caret in there, and stealing them would make it uneditable.
 document.addEventListener('keydown', e => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
   if (e.key === 'ArrowLeft') step(-1);
   else if (e.key === 'ArrowRight') step(1);
 });
 
-initWeekPicker({
-  min: 1,
-  max: {{ completed_weeks|last }},
-  value: {{ completed_weeks|last }},
-  onChange: function (w) { currentWeek = w; loadPicks(w); }
+/* The week box commits on change, not input: typing "12" would otherwise load
+   week 1 on the way past. */
+const wkInput = document.getElementById('wk-input');
+const wkPrev = document.getElementById('wk-prev'), wkNext = document.getElementById('wk-next');
+function setWeek(w, fire) {
+  w = Math.min(MAX_WEEK, Math.max(1, w));
+  wkInput.value = w;
+  wkPrev.disabled = w <= 1; wkNext.disabled = w >= MAX_WEEK;
+  if (fire && w !== currentWeek) { currentWeek = w; loadPicks(w); }
+  else if (fire) loadPicks(w);
+}
+wkPrev.addEventListener('click', () => setWeek(currentWeek - 1, true));
+wkNext.addEventListener('click', () => setWeek(currentWeek + 1, true));
+wkInput.addEventListener('change', () => {
+  const typed = parseInt(wkInput.value, 10);
+  if (Number.isNaN(typed)) { setWeek(currentWeek, false); return; }
+  setWeek(typed, true);
 });
+wkInput.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); wkInput.blur(); } });
+setWeek(currentWeek, false);
 loadPicks(currentWeek);
-{% endif %}
 </script>
+{% endif %}
 {% endblock %}

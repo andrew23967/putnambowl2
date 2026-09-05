@@ -1,0 +1,80 @@
+{% extends 'base.html' %}
+{% block title %}{{ record.year }} season{% endblock %}
+
+{% block extra_head %}
+<style>
+  .season-head { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 28px; padding: 16px 0; border-bottom: 1px solid var(--ink); }
+  @media (max-width: 640px) { .season-head { grid-template-columns: 1fr; gap: 14px; } .stats { gap: 12px 0; } }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="season-head">
+  <div>
+    <p class="eyebrow"><a href="{% url 'main:seasons' %}" style="color:inherit;">Seasons</a> · {{ record.year }}</p>
+    <p class="meta" style="margin-top:4px;">Winner · <span style="color:var(--ink);font-weight:600;">{{ record.winner_username }}</span></p>
+  </div>
+  <div class="stats">
+    <div class="stat"><p class="stat-label">players</p><p class="stat-value">{{ players }}</p></div>
+    <div class="stat"><p class="stat-label">weeks</p><p class="stat-value">{{ record.weeks }}</p></div>
+    <div class="stat"><p class="stat-label">top score</p><p class="stat-value">{{ top }}</p></div>
+    <div class="stat"><p class="stat-label">league average</p><p class="stat-value">{{ average }}</p></div>
+  </div>
+</div>
+
+<div class="split">
+  <div class="split-main">
+    <table class="table">
+      <thead>
+        <tr>
+          <th style="width:32px;">#</th>
+          <th>Player</th>
+          <th class="r" style="width:70px;">Pts</th>
+          {% if has_records %}<th class="r" style="width:80px;">Record</th>{% endif %}
+          {% if has_preseason %}<th class="hide-phone" style="padding-left:18px;">Preseason</th>{% endif %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in standings %}
+        <tr{% if r.me %} class="is-me"{% endif %}>
+          <td class="n muted-3" style="font-size:12px;">{{ r.rank }}</td>
+          <td{% if r.me %} style="font-weight:600;"{% endif %}>{{ r.name }}{% if r.is_bot %} <span class="n muted-3" style="font-size:10px;">bot</span>{% endif %}</td>
+          <td class="n r" style="font-weight:600;">{{ r.score }}</td>
+          {% if has_records %}<td class="n r muted" style="font-size:12.5px;">{{ r.record }}</td>{% endif %}
+          {% if has_preseason %}
+          <td class="hide-phone" style="padding-left:18px;">
+            {% if r.preseason %}
+            <span class="n" style="font-size:11px;color:var(--ink-3);">{{ r.preseason.big_loser_abbrev }} · {{ r.preseason.nfc_abbrev }} · {{ r.preseason.afc_abbrev }} · <b>{{ r.preseason.superbowl_abbrev }}</b></span>
+            {% else %}<span class="n dim" style="font-size:11px;">—</span>{% endif %}
+          </td>
+          {% endif %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% if has_preseason %}<p class="meta" style="margin-top:10px;font-size:10.5px;color:var(--muted-3);">preseason · big loser · NFC · AFC · Super Bowl</p>{% endif %}
+  </div>
+
+  <aside class="rail">
+    {% if chart %}
+    <div class="section-head" style="margin-bottom:6px;">
+      <p class="eyebrow">Points · {{ chart.label }}</p>
+    </div>
+    <svg width="100%" height="104" viewBox="0 0 430 92" preserveAspectRatio="none" style="display:block;overflow:visible;" aria-label="Points by week">
+      <polyline points="{{ chart.avg }}" fill="none" stroke="#d6d4cf" stroke-width="1.5" vector-effect="non-scaling-stroke"></polyline>
+      <polyline points="{{ chart.leader }}" fill="none" stroke="#0f7a6c" stroke-width="1.5" vector-effect="non-scaling-stroke"></polyline>
+      {% if chart.in_it %}<polyline points="{{ chart.me }}" fill="none" stroke="#14161a" stroke-width="2" vector-effect="non-scaling-stroke"></polyline>{% endif %}
+    </svg>
+    <div class="legend" style="margin-top:8px;">
+      {% if chart.in_it %}<span><i class="swatch" style="background:var(--ink);"></i>you</span>{% endif %}
+      <span><i class="swatch" style="background:var(--accent);"></i>leader</span>
+      <span><i class="swatch" style="background:var(--track);"></i>average</span>
+    </div>
+    {% endif %}
+    {% if record.notes %}
+    <p class="eyebrow" style="margin:{% if chart %}22px{% else %}0{% endif %} 0 8px;">Notes</p>
+    <div class="prose" style="font-size:13px;">{{ record.notes|linebreaks }}</div>
+    {% endif %}
+  </aside>
+</div>
+{% endblock %}

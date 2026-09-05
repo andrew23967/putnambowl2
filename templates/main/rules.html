@@ -1,148 +1,20 @@
 {% extends 'base.html' %}
-{% block title %}Rules — PutnamBowl{% endblock %}
-
-{% block extra_head %}
-<style>
-  /* Design tokens, not Tailwind's palette. This page was written in bg-white /
-     text-slate-900 / border-slate-200 — fixed light colours — so in the dark
-     theme the cards stayed white with near-black text while the page around them
-     went dark. Everything here comes from base.html and flips with the theme.
-
-     The words are the commissioner's, lifted verbatim from the original site
-     (legacy/original-site-code.zip, main/templates/main/rules.html). Restyled,
-     not rewritten — only the two picks links were repointed at this site. */
-  .rl-wrap {
-    max-width:720px;margin:0 auto;
-    background:var(--surface);border:1px solid var(--border);
-    border-radius:var(--radius);padding:32px 36px;
-  }
-  .rl-wrap p { font-size:.875rem;color:var(--muted2);line-height:1.7;margin:0; }
-  .rl-wrap br { line-height:1.7; }
-  .rl-wrap strong { color:var(--text);font-weight:700; }
-  .rl-wrap u { color:var(--text); }
-  .rl-wrap a { color:var(--info);text-decoration:none;word-break:break-word; }
-  .rl-wrap a:hover { text-decoration:underline; }
-  .rl-wrap ul, .rl-wrap ol { margin:0;padding-left:22px; }
-  .rl-wrap li { font-size:.875rem;color:var(--muted2);line-height:1.7;margin-bottom:8px; }
-  .rl-wrap .indent2 { padding-left:22px; }
-
-  @media (max-width:640px) {
-    .rl-wrap { padding:22px 18px; }
-  }
-</style>
-{% endblock %}
+{% block title %}Rules{% endblock %}
 
 {% block content %}
-<div class="rl-wrap">
-  <p style="text-align: center;"><strong><u>PUTNAM BOWL 2021</u></strong></p>
-  <br /><br />
-  <p>Welcome to Putnam Bowl 2021!&nbsp; Please read these rules carefully and direct any questions to The Office of
-  The Commissioner for clarification.</p>
-  <br>
-  <p><u>Franchise Fees</u></p>
-  <br>
-  <p>Prior to Week 1, please ensure that you submit your $20 Franchise Fee to The Office of The Commissioner:</p>
-  <br>
-  <p>Paypal: <a href="mailto:mark.r.hutchinson@gmail.com">mark.r.hutchinson@gmail.com</a></p>
-  <br>
-  <p>Snail Mail: Mark Hutchinson</p>
-  <p class="indent2">765 Greenwich Street</p>
-  <p class="indent2">Apartment 4</p>
-  <p class="indent2">NYC&nbsp; 10014</p>
-  <br>
-  <p>IF YOUR FRANCHISE FEE IS NOT RECEIVED BY WEEK 2, YOUR FRANCHISE WILL BE DISQUALIFIED.</p>
-  <br>
-  <p>In addition to the coveted Putnam Bowl, the winner will receive 70% of the pot.&nbsp; The second place team will
-  receive 20% of the pot and the third place will receive 10%.</p>
-  <br>
-  <p><u>Scoring</u></p>
-  <br>
-  <p>We will be basing Putnam Points on the Vegas money line. &nbsp; You can view the money line we will be using at
-  Vegas Insider:&nbsp;&nbsp;</p>
-  <br>
-  <p>
-  <a href="https://www.vegasinsider.com/nfl/odds/las-vegas/">https://www.vegasinsider.com/nfl/odds/las-vegas/</a>
-  </p>
-  <br>
-  <p>The <a href="{% url 'main:picks' %}">picks section</a> of this website will let you know how many points each team is worth every week.&nbsp; As always,
-  favorites will always be worth 1 PB point should they win.&nbsp; The number of points for the underdog will be
-  calculated using the money line.&nbsp;</p>
-  <br>
-  <p>If you are interested, here&rsquo;s how the money line works.&nbsp; Take a hypothetical game between Miami and
-  Tampa Bay, where the money line for Miami is +150 and -170 for Tampa Bay (as with the spread, + indicates
-  underdogs and &ndash; indicates favorites).&nbsp; This means that you would have to bet $170 on Tampa Bay to win
-  $100 and you would win $150 if you bet $100 on Miami and they won.&nbsp;&nbsp;</p>
-  <br>
-  <p>We will take the money line and convert it to PB Points.&nbsp; In the example above, Tampa Bay (and any favorite)
-  will be worth 1 PB Point and Miami would be worth 1.58 PB Points.&nbsp; Converting this involves some math,
-  which you don&rsquo;t need to know.&nbsp; If you are interested, however, we can send you the formula and a
-  spreadsheet to calculate it yourself.</p>
-  <p><br><br><br></p>
-  <p><u>Additional Points</u></p>
-  <br>
-  <p><strong>&ldquo;Perfect Game&rdquo; Bonus:</strong> Correctly picking every game in a given week (regular season
-  only) is worth 10 points in addition to all other points earned that week.</p>
-  <br>
-  <p>In the <u><strong>playoffs</strong></u> all points for favorites and underdogs are <strong>doubled</strong>
-  (i.e., picking the favored team is worth 2 points if they win).&nbsp;</p>
-  <br>
-  <p>In the <u><strong>Superbowl</strong></u> points are <strong>quadrupled</strong> (i.e., picking the favored team
-  is worth 4 points if they win).</p>
-  <br>
-  <p><u>Picking Games</u></p>
-  <br>
-  <p>You can submit you picks for the upcoming week's games with their respective PB Points calculated as described
-  above via this <a href="{% url 'main:picks' %}">picks</a> section of this website.&nbsp; <strong>Note:&nbsp; we will NOT pick Wednesday or Thursday night games, but you must pick a winner
-  for every other game over the weekend and for the Monday night game(s), every week.</strong></p>
-  <br>
-  <ul>
-  <li aria-level="1"><strong>Picks for the weekend slate of games are due one hour before kick-off of the first
-  game to be played (even if on a Saturday).&nbsp;</strong></li>
-  </ul>
-  <br>
-  <ul>
-  <li aria-level="1"><strong>If we do not receive all of your picks on time for the weekend slate of games, then
-  NONE of your picks will count, regardless of whether they are sent before their respective games. In
-  other words, don&rsquo;t just send a pick for a Saturday game in anticipation of sending the rest of
-  your picks later in the weekend. You will not receive credit for any picks that week.</strong>&nbsp;
-  </li>
-  </ul>
-  <br>
-  <ul>
-  <li aria-level="1"><strong>If we do not receive your weekend slate picks ON TIME in any given week, you will
-  receive a score for that week of 3 points less than the lowest score received by any other person that
-  week. (So if the low scorer for the week gets 2 PB Points, you get minus 1).&nbsp; You will also be
-  ridiculed in the &ldquo;Standings&rdquo; e-mail, which goes out each Tuesday.</strong>&nbsp;</li>
-  </ul>
-  <p><br><u>Pre-Season Picks</u></p>
-  <br>
-  <p>In addition to your picks for the first games of the season, <u>which will be due at <strong>NOON (EST) on
-  SUNDAY, SEPTEMBER 13</strong></u>, you must send your predictions for the following:&nbsp;</p>
-  <br>
-  <ol>
-  <li><u>Big Loser</u> - You must pick the team you think will end the regular season with the worst record in the
-  NFL.&nbsp; A correct pick is worth <strong>10 points</strong> at the end of the regular season; if there is
-  a tie among 2+ teams for worst record, the point value for correctly picking on of them is divided by the
-  number of teams that shared the dubious distinction.&nbsp; For example, if 2 teams finish 2-14 and you
-  picked one as your big loser, you get 5 points.</li>
-  </ol>
-  <br>
-  <ol start="2">
-  <li><u>Playoffs</u> &ndash; You must also pick the teams you think will play in the Superbowl (the NFC and AFC
-  champions) and the Superbowl winner (which must be one of your conference champion picks).&nbsp; A correct
-  pick for conference champ is worth <strong>5 points</strong>; a correct pick for Superbowl champ is worth
-  <strong>10 points.</strong></li>
-  </ol>
-  <br>
-  <ol start="3">
-  <li><u>Penalties</u> - If the team you picked as your Big Loser makes the playoffs, you
-  <strong><u>lose</u></strong><strong> 5 points</strong>.&nbsp; If a team you picked as a Conference Champion
-  fails to make the playoffs, you <strong><u>lose</u></strong><strong> 5 points</strong> (minus 10 if both
-  your conference champion picks do not make it).&nbsp;</li>
-  </ol>
-  <p>&nbsp;<br><br></p>
-  <p>Good luck!</p>
-  <p>The Office of The Commissioner</p>
-  <p><br><br><br></p>
+<div class="page-head">
+  <div class="page-head-title">
+    <p class="eyebrow">Rules</p>
+    <p class="meta">{{ league.name }}</p>
+  </div>
+  {% if is_manager %}
+  <div class="page-head-end"><a class="btn btn-secondary btn-sm" href="{% url 'main:rulesdash' %}">Edit</a></div>
+  {% endif %}
 </div>
+
+{% if league.rules %}
+<div class="prose" style="margin-top:24px;">{{ league.rules|linebreaks }}</div>
+{% else %}
+<p class="empty" style="margin-top:20px;">No rules posted.</p>
+{% endif %}
 {% endblock %}

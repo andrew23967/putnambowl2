@@ -1290,6 +1290,7 @@ class NavPageRenderTests(TestCase):
     PAGES = ['main:home', 'main:picks', 'main:rules', 'main:analytics',
              'main:pick_history', 'main:preseason', 'main:members',
              'main:pickdash', 'main:emaildash', 'main:accountdash',
+             'main:seasons', 'main:rulesdash',
              'accounts:user_profile', 'accounts:password_change', 'leagues:index']
 
     def setUp(self):
@@ -2490,11 +2491,10 @@ class ProfilePageTests(TestCase):
 
     def test_every_field_renders(self):
         html = self.client.get('/userprofile/').content.decode()
-        for name in ('real_name', 'email', 'favorite_team', 'bio', 'theme'):
+        for name in ('real_name', 'email', 'favorite_team', 'bio', 'email_weekly', 'email_reminder'):
             with self.subTest(field=name):
                 self.assertIn(f'name="{name}"', html)
         self.assertIn('<textarea', html)
-        self.assertIn('type="color"', html)
 
     def test_saving_round_trips(self):
         resp = self.client.post('/userprofile/', {
@@ -2502,7 +2502,7 @@ class ProfilePageTests(TestCase):
             'email': 'new@x.com',
             'favorite_team': 'Chicago Bears',
             'bio': 'A short bio.',
-            'theme': '#123456',
+            'email_weekly': 'on',
         })
         self.assertEqual(resp.status_code, 302)
         self.user.refresh_from_db()
@@ -2510,7 +2510,8 @@ class ProfilePageTests(TestCase):
         self.assertEqual(self.user.profile.real_name, 'Real Name')
         self.assertEqual(self.user.profile.favorite_team, 'Chicago Bears')
         self.assertEqual(self.user.profile.bio, 'A short bio.')
-        self.assertEqual(self.user.profile.theme, '#123456')
+        self.assertTrue(self.user.profile.email_weekly)
+        self.assertFalse(self.user.profile.email_reminder, 'an unticked box is an opt-out')
 
     def test_the_selected_team_is_marked_selected(self):
         self.user.profile.favorite_team = 'Green Bay Packers'
@@ -2554,17 +2555,17 @@ class MembersPageTests(TestCase):
         self.assertNotIn('No bio yet.', html)
         self.assertIn('viewer', html)
 
-    def test_bots_are_marked_and_sorted_last(self):
+    def test_bots_are_folded_into_one_line(self):
         html = self.client.get('/members/').content.decode()
-        self.assertIn('>Bot<', html)
-        self.assertGreater(html.index('abot'), html.index('mate'),
-                           'bots belong at the bottom of the roster')
+        self.assertNotIn('abot', html, 'a bot is not a member row')
+        self.assertIn('1 bot also play', html)
+        self.assertGreater(html.index('also play'), html.index('mate'),
+                           'the bot line sits under the roster')
 
     def test_bots_do_not_show_a_favourite_team(self):
         """The field has a default, so every bot claimed to support Arizona."""
-        html = self.client.get('/members/').content.decode()
-        bot_block = html[html.index('abot'):html.index('abot') + 400]
-        self.assertNotIn('ARI', bot_block)
+        resp = self.client.get('/members/')
+        self.assertEqual([m['username'] for m in resp.context['members'] if m['username'] == 'abot'], [])
 
     def test_it_needs_a_login(self):
         self.client.logout()
@@ -2600,7 +2601,9 @@ class MembersPageTests(TestCase):
         html = self.client.get('/members/').content.decode()
         self.assertIn('Not in yet', html)
         # Arizona is the default for three of the four fields.
-        block = html[html.index('Team Mate'):html.index('Team Mate') + 900]
+        start = html.index('Team Mate')
+        end = html.find('class="mb-row', start)
+        block = html[start:end if end > 0 else start + 900]
         self.assertNotIn('Arizona Cardinals', block)
 
 
@@ -2682,13 +2685,13 @@ class TiedLeaderboardTests(TestCase):
     def test_the_rank_badge_renders_the_shared_place(self):
         html = self.client.get('/home/').content.decode()
         import re
-        badges = re.findall(r'class="rank-badge [^"]*">(\d+)</div>', html)
+        badges = re.findall(r'class="n muted-3" style="font-size:12px;">(\d+)</td>', html)
         self.assertEqual(badges[:4], ['1', '1', '1', '4'])
 
     def test_the_podium_blocks_agree_with_the_table(self):
         html = self.client.get('/home/').content.decode()
         import re
-        blocks = re.findall(r'class="pod-block">(\d+)</div>', html)
+        blocks = re.findall(r'class="pod-block">(\d+)</span>', html)
         # Rendered left-to-right as 2nd, 1st, 3rd — all tied here, so all 1.
         self.assertEqual(blocks, ['1', '1', '1'])
 
@@ -2737,7 +2740,7 @@ class HomePicksCardTests(TestCase):
         self.settings.auto_scrape_dt = datetime(2026, 9, 1, 14, 0, tzinfo=timezone.utc)
         self.settings.save()
         html = self._html()
-        self.assertIn('Not out yet', html)
+        self.assertIn('Not out', html)
         self.assertIn('2026-09-01', html)
         # The lock is derived from the first kickoff at publish time, so before
         # the week opens there is no honest time to show.
@@ -2749,8 +2752,8 @@ class HomePicksCardTests(TestCase):
         self.settings.auto_scrape_dt = datetime(2026, 9, 1, 14, 0, tzinfo=timezone.utc)
         self.settings.save()
         html = self._html()
-        self.assertIn('When the commissioner opens it', html)
         self.assertNotIn('2026-09-01', html)
+        self.assertIn('Set when the week opens', html)
 
     def test_open_shows_the_lock_time_and_links_to_picks(self):
         self.settings.publish = True
@@ -2758,7 +2761,7 @@ class HomePicksCardTests(TestCase):
         self.settings.auto_lock_dt = datetime(2026, 9, 13, 16, 40, tzinfo=timezone.utc)
         self.settings.save()
         html = self._html()
-        self.assertIn('Picks are open', html)
+        self.assertIn('status is-open', html)
         self.assertIn('2026-09-13', html)
         self.assertIn('Make your picks', html)
         self.assertIn('/picks/', html)
@@ -2768,8 +2771,8 @@ class HomePicksCardTests(TestCase):
         self.settings.lock_picks = True
         self.settings.save()
         html = self._html()
-        self.assertIn('Picks are locked', html)
-        self.assertIn("See how you're doing", html)
+        self.assertIn('status is-locked', html)
+        self.assertIn('Watch my picks', html)
 
     def test_dates_convert_in_the_browser(self):
         """Rendered server-side but stamped for the viewer's timezone, and the
@@ -2778,14 +2781,13 @@ class HomePicksCardTests(TestCase):
         self.settings.auto_lock_dt = datetime(2026, 9, 13, 16, 40, tzinfo=timezone.utc)
         self.settings.save()
         html = self._html()
-        self.assertIn('data-utc-day', html)
-        self.assertIn('data-utc-time', html)
+        self.assertIn('data-utc-daytime="2026-09-13', html)
 
     def test_the_emails_feed_is_on_the_home_page(self):
         """It briefly lived at /emails/. There is no such page now: the feed is
         a column on home, under the picks card."""
         from django.urls import NoReverseMatch, reverse
-        self.assertIn('em-item', self._html())
+        self.assertIn('home-mail', self._html())
         with self.assertRaises(NoReverseMatch):
             reverse('main:emails')
 
@@ -3351,12 +3353,12 @@ class CopyLeagueAddressesTests(TestCase):
     def test_the_league_address_is_what_it_offers_first(self):
         """The mailbox *is* the league address - the site fans it out."""
         html = self._html()
-        self.assertIn('copy-addrs', html)
-        self.assertIn('Email the league yourself', html)
+        self.assertIn('Copy league address', html)
+        self.assertLess(html.index('Copy league address'), html.index('member address'))
 
     def test_the_member_list_is_the_secondary_option(self):
         html = self._html()
-        self.assertIn('copy-members', html)
+        self.assertIn('member address', html)
         self.assertIn('mate1@example.com', html)
         self.assertIn('BCC', html)
 

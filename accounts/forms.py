@@ -39,13 +39,16 @@ class ProfileForm(forms.Form):
     real_name = forms.CharField(max_length=50, required=False)
     email = forms.EmailField(max_length=200)
     favorite_team = forms.ChoiceField(choices=TEAMS)
-    bio = forms.CharField(widget=forms.Textarea(attrs={'rows': 4}), required=False)
-    theme = forms.CharField(widget=forms.TextInput(attrs={'type': 'color'}))
+    bio = forms.CharField(widget=forms.Textarea(attrs={'rows': 4}), required=False, max_length=300)
+    email_weekly = forms.BooleanField(required=False)
+    email_reminder = forms.BooleanField(required=False)
 
     def __init__(self, user, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['real_name'].initial = user.profile.real_name
+        p = user.profile
+        self.fields['real_name'].initial = p.real_name
         self.fields['email'].initial = user.email
-        self.fields['favorite_team'].initial = user.profile.favorite_team
-        self.fields['bio'].initial = user.profile.bio
-        self.fields['theme'].initial = user.profile.theme
+        self.fields['favorite_team'].initial = p.favorite_team
+        self.fields['bio'].initial = p.bio
+        self.fields['email_weekly'].initial = p.email_weekly
+        self.fields['email_reminder'].initial = p.email_reminder

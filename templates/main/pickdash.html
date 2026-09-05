@@ -1,825 +1,348 @@
 {% extends 'base.html' %}
-{% block title %}Pick Dashboard — PutnamBowl{% endblock %}
+{% block title %}Dashboard{% endblock %}
 
 {% block extra_head %}
 <style>
-  .dash-input {
-    background: var(--surface2);
-    border: 1px solid var(--border2);
-    color: var(--text);
-    border-radius: 8px;
-    padding: 6px 10px;
-    font-size: .8125rem;
-    width: 100%;
-    outline: none;
-    transition: border-color .15s;
-  }
-  .dash-input:focus { border-color: var(--accent); }
-  .dash-input option { background: var(--surface); color: var(--text); }
-  .dash-label {
-    display: block;
-    font-size: .72rem;
-    font-weight: 500;
-    color: var(--muted2);
-    margin-bottom: 3px;
-  }
-
-  /* Game-day picker. The native checkbox is hidden and the label carries the
-     state, so the whole chip is the hit target rather than a 13px square. */
-  .day-chip { position: relative; cursor: pointer; user-select: none; }
-  .day-chip input {
-    position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none;
-  }
-  .day-chip span {
-    display: block;
-    padding: 5px 10px;
-    border: 1px solid var(--border2);
-    border-radius: 8px;
-    background: var(--surface2);
-    color: var(--muted);
-    font-size: .72rem;
-    font-weight: 600;
-    transition: background .15s, border-color .15s, color .15s;
-  }
-  .day-chip:hover span { border-color: var(--border); color: var(--muted2); }
-  .day-chip input:checked + span {
-    background: var(--good-fill);
-    border-color: var(--good);
-    color: var(--good);
-  }
-  .day-chip input:focus-visible + span {
-    outline: 2px solid var(--accent); outline-offset: 2px;
-  }
-
-  .dash-toggle {
-    display: flex; align-items: flex-start; gap: 8px;
-    cursor: pointer; font-size: .78rem; color: var(--muted2); line-height: 1.4;
-  }
-  .dash-toggle input { margin-top: 2px; flex-shrink: 0; accent-color: var(--good); }
-  .dash-section {
-    font-size: .65rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: .07em;
-    color: var(--muted);
-    margin: 0 0 8px;
-  }
-  .ctrl-btn {
-    padding: 9px 16px;
-    font-size: .8125rem;
-    font-weight: 700;
-    border-radius: 9px;
-    border: 1.5px solid var(--border2);
-    cursor: pointer;
-    transition: background .15s, color .15s, border-color .15s;
-    background: var(--surface2);
-    color: var(--text);
-    white-space: nowrap;
-    flex: 1;
-  }
-  .ctrl-btn:hover { background: var(--surface); border-color: var(--border); }
-  .ctrl-btn.on-amber { background: rgba(245,158,11,.18); border-color: rgba(245,158,11,.5); color: #fbbf24; }
-  .ctrl-btn.on-red   { background: rgba(239,68,68,.18);  border-color: rgba(239,68,68,.5);  color: #f87171; }
-  .ctrl-btn.on-violet{ background: rgba(139,92,246,.22); border-color: rgba(139,92,246,.6); color: #a78bfa; }
-  .mode-tab { flex:1;padding:11px 14px;font-size:.8125rem;font-weight:600;cursor:pointer;border:none;border-bottom:2px solid transparent;background:transparent;color:var(--muted2);transition:color .15s,border-color .15s; }
-  .mode-tab.active { color:var(--text);border-bottom-color:var(--accent); }
-  .next-card {
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 10px 12px;
-  }
-  .next-card.active-card {
-    border-color: var(--accent);
-    background: color-mix(in srgb, var(--accent) 8%, var(--surface2));
-  }
-  .action-btn {
-    padding: 10px 0;
-    font-size: .875rem;
-    font-weight: 700;
-    border-radius: 9px;
-    width: 100%;
-    cursor: pointer;
-    border: none;
-    color: #fff;
-    transition: filter .15s;
-  }
-  .action-btn:hover { filter: brightness(1.12); }
-  .action-btn.indigo  { background: #4f46e5; }
-  .action-btn.emerald { background: #059669; }
-  .action-btn.slate   { background: #334155; }
-  .action-btn.violet  { background: #7c3aed; }
-  .action-btn.red     { background: #dc2626; }
-  .danger-btn {
-    padding: 10px 0; font-size: .875rem; font-weight: 700; border-radius: 9px;
-    width: 100%; cursor: pointer; background: transparent;
-    border: 1.5px solid rgba(239,68,68,.4); color: #f87171; transition: background .15s, border-color .15s;
-  }
-  .danger-btn:hover { background: rgba(239,68,68,.1); border-color: rgba(239,68,68,.6); }
-  hr.dash-hr { border: none; border-top: 1px solid var(--border); margin: 18px 0; }
-
-  /* Two-column page layout — left controls, right games */
-  .dash-layout {
-    display: grid;
-    grid-template-columns: 380px 1fr;
-    gap: 16px;
-    align-items: start;
-  }
-  .dash-right {
-    position: sticky;
-    top: 68px;
-    max-height: calc(100vh - 84px);
-    overflow-y: auto;
-    border-radius: 12px;
-  }
-  .dash-right::-webkit-scrollbar { width: 4px; }
-  .dash-right::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 4px; }
-
-  /* Collapse to single column only on phones */
-  @media (max-width: 600px) {
-    .dash-layout { grid-template-columns: 1fr; }
-    .dash-right { position: static; max-height: none; }
-  }
-
-  /* Game rows */
-  .game-row {
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-    padding: 9px 16px;
-  }
-  /* ── Result selector ──
-     Three segments backed by radios: home win, tie, away win. Selection lives
-     in :checked rather than a JS-positioned knob, which is what used to drift
-     out of step with the saved result. Clicking the active segment clears it
-     back to ungraded. */
-  .grade-3up { display:grid;grid-template-columns:1fr auto 1fr;gap:5px;flex:1;min-width:0; }
-  .grade-radio { position:absolute;width:1px;height:1px;opacity:0;pointer-events:none; }
-  .grade-seg {
-    display:flex;align-items:baseline;justify-content:center;gap:5px;
-    padding:7px 8px;border-radius:var(--radius-sm);
-    border:1px solid var(--border);background:var(--fill-1);
-    cursor:pointer;user-select:none;min-width:0;
-    transition:background .14s ease,border-color .14s ease;
-  }
-  .grade-seg:hover { background:var(--fill-2);border-color:var(--border2); }
-  .grade-name { font-size:.6875rem;font-weight:700;color:var(--muted2);line-height:1;letter-spacing:-.01em; }
-  .grade-pts  { font-size:.5625rem;font-weight:600;color:var(--muted);line-height:1;font-variant-numeric:tabular-nums; }
-  .grade-seg-tie { padding-left:12px;padding-right:12px; }
-
-  /* Winner is green; a tie is neutral. Both read the same in either theme. */
-  .grade-radio:checked + .grade-seg {
-    background:var(--good-fill);
-    border-color:color-mix(in srgb,var(--good) 55%,transparent);
-  }
-  .grade-radio:checked + .grade-seg .grade-name { color:var(--good); }
-  .grade-radio:checked + .grade-seg .grade-pts  { color:var(--good);opacity:.75; }
-  .grade-radio[value="tie"]:checked + .grade-seg {
-    background:var(--fill-3);border-color:var(--border2);
-  }
-  .grade-radio[value="tie"]:checked + .grade-seg .grade-name { color:var(--text); }
-  .grade-radio:focus-visible + .grade-seg { outline:2px solid var(--accent);outline-offset:2px; }
+  .pd-actions { display: flex; flex-wrap: wrap; gap: 8px; padding: 16px 0; border-bottom: 1px solid var(--rule); }
+  .pd-actions form { margin: 0; }
+  .pd-split { grid-template-columns: 1fr 320px; }
+  .game-row { padding: 10px 0; border-top: 1px solid var(--rule-2); }
+  .game-row-top { display: flex; align-items: center; gap: 8px; }
+  .grade { display: grid; grid-template-columns: 1fr auto 1fr; gap: 4px; flex: 1; min-width: 0; position: relative; }
+  .grade-radio { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
+  .seg { display: flex; align-items: baseline; justify-content: center; gap: 6px; padding: 7px 8px; border: 1px solid var(--rule-3); border-radius: 4px; background: #fff; cursor: pointer; font-size: 12.5px; font-weight: 600; color: var(--muted); user-select: none; }
+  .seg:hover { border-color: #b6b4ae; }
+  .seg-tie { font: 600 10px var(--mono); letter-spacing: .08em; text-transform: uppercase; padding: 7px 10px; }
+  .seg-pts { font: 500 10.5px var(--mono); color: var(--dim); }
+  .grade-radio:checked + .seg { background: var(--pos-fill); border-color: var(--pos); color: var(--pos); }
+  .grade-radio:checked + .seg .seg-pts { color: var(--pos); }
+  .grade-radio:checked + .seg-tie { background: var(--fill); border-color: var(--ink); color: var(--ink); }
+  .grade-radio:focus-visible + .seg { outline: 2px solid var(--ink); outline-offset: 2px; }
+  .game-when { margin: 5px 0 0; font-size: 10.5px; color: var(--muted-3); text-align: right; }
+  .pd-form .field { margin-bottom: 14px; }
+  .pd-form .eyebrow { margin: 18px 0 10px; letter-spacing: .12em; }
+  .pd-form .eyebrow:first-child { margin-top: 0; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .lock-mode { display: flex; border: 1px solid var(--rule-3); border-radius: 4px; overflow: hidden; margin-bottom: 10px; }
+  .lock-mode label { flex: 1; display: flex; justify-content: center; padding: 7px; cursor: pointer; font: 600 10.5px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--muted-2); position: relative; }
+  .lock-mode label + label { border-left: 1px solid var(--rule-3); }
+  .lock-mode input { position: absolute; opacity: 0; }
+  .lock-mode input:checked + span { color: var(--ink); }
+  .lock-mode label:has(input:checked) { background: var(--fill); }
+  .issue { color: var(--neg); }
+  @media (max-width: 999px) { .pd-split { grid-template-columns: 1fr; } }
 </style>
 {% endblock %}
 
 {% block content %}
+<div class="page-head">
+  <div class="page-head-title">
+    <p class="eyebrow">Week {{ settings.week }} · {% if week_type == 'superbowl' %}Super Bowl{% elif week_type == 'playoffs' %}Playoffs{% else %}Regular season{% endif %}</p>
+    <p class="status {% if not settings.publish %}is-notout{% elif not settings.lock_picks %}is-open{% elif all_graded and games %}is-final{% else %}is-locked{% endif %}">
+      {% if not settings.publish %}Not out{% elif not settings.lock_picks %}Open{% elif all_graded and games %}Final{% else %}Locked{% endif %}
+    </p>
+  </div>
+  <div class="page-head-end">
+    <form method="post">{% csrf_token %}
+      <button name="toggle_auto" class="btn btn-sm {% if settings.auto_enabled %}btn-primary{% else %}btn-secondary{% endif %}">Auto-pilot {% if settings.auto_enabled %}on{% else %}off{% endif %}</button>
+    </form>
+    {% if settings.auto_enabled %}
+    <form method="post" onsubmit="return confirm('Run one auto-pilot tick now? This can publish the week and email the league.');">{% csrf_token %}
+      <button name="run_tick" class="btn btn-secondary btn-sm">Run a tick</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
 
-<div class="dash-layout">
+<div class="stats" style="padding:16px 0;border-bottom:1px solid var(--rule);">
+  <div class="stat">
+    <p class="stat-label">publish</p>
+    <p class="stat-value">{% if settings.publish %}Live{% elif settings.auto_scrape_dt %}<span data-utc-daytime="{{ settings.auto_scrape_dt|date:'c' }}">{{ settings.auto_scrape_dt|date:"D g:i A" }}</span>{% else %}Not set{% endif %}</p>
+  </div>
+  <div class="stat">
+    <p class="stat-label">lock</p>
+    <p class="stat-value">{% if settings.lock_picks %}Locked{% elif settings.auto_lock_dt %}<span data-utc-daytime="{{ settings.auto_lock_dt|date:'c' }}">{{ settings.auto_lock_dt|date:"D g:i A" }}</span>{% elif settings.lock_mode == 'offset' and display_auto_lock_computed_dt %}<span data-utc-daytime="{{ display_auto_lock_computed_dt|date:'c' }}">{{ display_auto_lock_computed_dt|date:"D g:i A" }}</span>{% elif settings.lock_mode == 'offset' %}{{ settings.auto_lock_offset_minutes }}m before kickoff{% else %}Not set{% endif %}</p>
+  </div>
+  <div class="stat"><p class="stat-label">games</p><p class="stat-value" id="game-counter">{{ games|length }}</p></div>
+  <div class="stat"><p class="stat-label">graded</p><p class="stat-value">{{ graded_count }}/{{ games|length }}</p></div>
+  <div class="stat"><p class="stat-label">multiplier</p><p class="stat-value">{{ settings.multiplier }}×</p></div>
+  {% if settings.auto_last_issue %}
+  <div class="stat"><p class="stat-label">last issue</p><p class="stat-value issue" style="font-weight:400;font-size:12px;">{{ settings.auto_last_issue }}</p></div>
+  {% endif %}
+</div>
 
-  <!-- LEFT: single card with tabs -->
-  <div>
-    <div class="card" style="padding:0;overflow:hidden;">
-      <!-- Tab strip -->
-      <div style="display:flex;border-bottom:1px solid var(--border);">
-        <button id="btn-manual" class="mode-tab" onclick="setMode('manual')">Manual</button>
-        <button id="btn-auto"   class="mode-tab" onclick="setMode('auto')">Auto-Pilot</button>
-      </div>
+<div class="pd-actions">
+  <form method="post">{% csrf_token %}<button name="toggle_publish" class="btn btn-secondary btn-sm">{% if settings.publish %}Unpublish{% else %}Publish{% endif %}</button></form>
+  <form method="post">{% csrf_token %}<button name="toggle_lock" class="btn btn-secondary btn-sm">{% if settings.lock_picks %}Unlock{% else %}Lock picks{% endif %}</button></form>
+  <button type="button" class="btn btn-secondary btn-sm" id="open-scrape">Scrape…</button>
+  <form method="post">{% csrf_token %}<button name="grade" class="btn btn-secondary btn-sm">Grade</button></form>
+  <form method="post">{% csrf_token %}<button name="cycle_multiplier" class="btn btn-secondary btn-sm">Multiplier {{ settings.multiplier }}× → {% if settings.multiplier < 4 %}{{ settings.multiplier|add:settings.multiplier }}{% else %}1{% endif %}×</button></form>
+  <button type="button" class="btn btn-secondary btn-sm" id="open-add">Add game…</button>
+  {% if all_graded %}
+  <form method="post" onsubmit="return confirm('Advance to week {{ settings.week|add:1 }}?')">{% csrf_token %}<button name="nextweek" class="btn btn-primary btn-sm">Next week</button></form>
+  {% else %}
+  <button class="btn btn-secondary btn-sm" disabled title="Every game must be graded first">Next week</button>
+  {% endif %}
+  <span style="flex:1;"></span>
+  <form method="post" onsubmit="return confirm('Delete every game this week, and every pick on them?')">{% csrf_token %}<button name="delete_all_games" class="btn btn-danger btn-sm">Delete all games</button></form>
+  <button type="button" class="btn btn-danger btn-sm" id="open-season">Save season &amp; reset…</button>
+</div>
 
-    <div style="display:grid;">
-    <!-- ===== MANUAL MODE ===== -->
-    <div id="panel-manual" style="grid-area:1/1;align-self:start;padding:20px;display:flex;flex-direction:column;gap:0;transition:opacity .15s;">
-
-      <!-- Manage Picks -->
-      <p class="dash-section">Manage Picks</p>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:20px;">
-        <form method="post">{% csrf_token %}
-          <button name="toggle_publish" class="ctrl-btn {% if settings.publish %}on-amber{% endif %}" style="width:100%;">
-            {% if settings.publish %}Published{% else %}Publish{% endif %}
-          </button>
-        </form>
-        <form method="post">{% csrf_token %}
-          <button name="toggle_lock" class="ctrl-btn {% if settings.lock_picks %}on-red{% endif %}" style="width:100%;">
-            {% if settings.lock_picks %}Locked{% else %}Lock Picks{% endif %}
-          </button>
-        </form>
-      </div>
-
-      <hr class="dash-hr" style="margin-top:0;">
-
-      <!-- Edit Games -->
-      <p class="dash-section">Edit Games</p>
-      <form method="post" id="scrape-form" style="position:relative;margin-bottom:8px;">
-        {% csrf_token %}
-        <input type="hidden" name="scrape_year" id="sh-year" value="{{ scrape_year }}">
-        <input type="hidden" name="scrape_week" id="sh-week" value="{{ settings.scrape_week }}">
-        <input type="hidden" name="scrape_api" id="sh-scrape-api" value="{{ settings.scrape_api }}">
-        <input type="hidden" name="grade_api" id="sh-grade-api" value="{{ settings.grade_api }}">
-        <div style="display:flex;gap:8px;align-items:center;">
-          <button name="scrape" type="submit" class="ctrl-btn" style="flex:1;">Scrape</button>
-          <button name="grade" type="submit" class="ctrl-btn" style="flex:1;">Grade</button>
-          <button type="button" id="scrape-gear-btn" onclick="toggleScrapePopout(event)"
-                  style="padding:9px 11px;background:var(--surface2);border:1.5px solid var(--border2);border-radius:9px;cursor:pointer;color:var(--muted2);font-size:.9rem;line-height:1;flex-shrink:0;">⚙</button>
-        </div>
-        <div id="scrape-popout" style="display:none;position:absolute;top:calc(100% + 8px);left:50%;transform:translateX(-50%);background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;width:200px;z-index:50;box-shadow:0 8px 24px rgba(0,0,0,.3);">
-          <p style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:0 0 10px;">Scrape Settings</p>
-          <div style="display:flex;flex-direction:column;gap:8px;">
-            <div>
-              <label class="dash-label">Year</label>
-              <input id="sp-year" type="number" value="{{ scrape_year }}" class="dash-input">
-            </div>
-            <div>
-              <label class="dash-label">Week</label>
-              <input id="sp-week" type="number" value="{{ settings.scrape_week }}" class="dash-input">
-            </div>
-            <div>
-              <label class="dash-label">Scrape source</label>
-              <select id="sp-scrape-api" class="dash-input">
-                {% for val, label in api_options %}
-                <option value="{{ val }}" {% if val == settings.scrape_api %}selected{% endif %}>{{ label }}</option>
-                {% endfor %}
-              </select>
-              <p style="font-size:.6rem;color:var(--muted);margin:4px 0 0;line-height:1.4;">Only NFL Data Py has moneylines — ESPN scrapes every game at flat 1×.</p>
-            </div>
-            <div>
-              <label class="dash-label">Grade source</label>
-              <select id="sp-grade-api" class="dash-input">
-                {% for val, label in api_options %}
-                <option value="{{ val }}" {% if val == settings.grade_api %}selected{% endif %}>{{ label }}</option>
-                {% endfor %}
-              </select>
-              <p style="font-size:.6rem;color:var(--muted);margin:4px 0 0;line-height:1.4;">Only ESPN has live scores — NFL Data Py lags 1–3 days.</p>
-            </div>
-            <button type="button" onclick="saveScrapeSettings()" class="ctrl-btn" style="width:100%;padding:7px 0;font-size:.8rem;margin-top:2px;">Save</button>
-          </div>
-        </div>
-      </form>
-      <form method="post" style="margin-bottom:8px;">{% csrf_token %}
-        <button name="cycle_multiplier" class="ctrl-btn" style="width:100%;">{{ settings.multiplier }}× Multiplier</button>
-      </form>
-      <button type="button" onclick="openAddGameModal()" class="ctrl-btn" style="width:100%;margin-bottom:8px;">Manual Add Game</button>
-      <form method="post" onsubmit="return confirm('Delete all games?')">
-        {% csrf_token %}
-        <button name="delete_all_games" class="danger-btn">Delete All Games</button>
-      </form>
-
-      <hr class="dash-hr">
-
-      <!-- Advance -->
-      <p class="dash-section">Week</p>
-      {% if all_graded %}
-      <form method="post" onsubmit="return confirm('Advance to week {{ settings.week|add:1 }}?')" style="margin-bottom:0;">
-        {% csrf_token %}
-        <button name="nextweek" class="ctrl-btn" style="width:100%;">Next Week →</button>
-      </form>
-      {% else %}
-      <button disabled class="ctrl-btn" style="width:100%;opacity:.35;cursor:not-allowed;">Next Week →</button>
-      {% endif %}
-
-      <hr class="dash-hr">
-
-      <!-- Danger -->
-      <p class="dash-section">Season</p>
-      <form method="post" onsubmit="return confirm('Save season and reset all scores?')">
-        {% csrf_token %}
-        <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:6px;">Season year
-          <input type="number" name="year" value="{{ scrape_year }}" required min="2000" max="2100" style="width:100%;margin-top:4px;">
-        </label>
-        <input type="text" name="notes" placeholder="Notes (optional)" style="width:100%;margin-bottom:8px;">
-        <button name="newseason" class="action-btn red">Save Season & Reset</button>
-      </form>
-
+<div class="split pd-split">
+  <div class="split-main">
+    <div class="section-head">
+      <p class="eyebrow">Games</p>
+      <p class="n" style="font-size:10.5px;color:var(--muted-3);">click a side to grade it; click it again to clear</p>
     </div>
+    <div id="game-list">
+      {% for game in games %}{% include 'main/_game_row.html' %}{% endfor %}
+      <p class="empty" id="no-games" {% if games %}hidden{% endif %} style="padding:12px 0;">No games yet.</p>
+    </div>
+  </div>
 
-    <!-- ===== AUTO MODE ===== -->
-    <div id="panel-auto" style="grid-area:1/1;align-self:start;padding:20px;display:flex;flex-direction:column;gap:0;transition:opacity .15s;">
+  <aside class="rail">
+    <form method="post" class="pd-form">
+      {% csrf_token %}
+      <p class="eyebrow">Auto-pilot</p>
+      <div class="field">
+        <label class="label" for="tz">Timezone</label>
+        <select class="select" name="tz" id="tz">
+          {% for val, label in tz_options %}<option value="{{ val }}" {% if settings.auto_tz == val %}selected{% endif %}>{{ label }}</option>{% endfor %}
+        </select>
+      </div>
 
-        <!-- ON/OFF toggle -->
-        <form method="post" style="margin-bottom:20px;">{% csrf_token %}
-          <button name="toggle_auto" style="
-            width:100%;padding:14px;border:none;border-radius:12px;cursor:pointer;
-            font-size:.9375rem;font-weight:800;letter-spacing:.03em;
-            {% if settings.auto_enabled %}
-              background:rgba(139,92,246,.2);color:#a78bfa;border:1.5px solid rgba(139,92,246,.45);
-            {% else %}
-              background:var(--surface2);color:var(--muted2);border:1.5px solid var(--border2);
-            {% endif %}
-            transition:background .15s,color .15s,border-color .15s;">
-            {% if settings.auto_enabled %}Auto-Pilot ON{% else %}Auto-Pilot OFF{% endif %}
-          </button>
-        </form>
-
-        <!-- Status cards. Publish and Lock only: grading is not a milestone
-             anyone waits on, and its schedule is set in the form below. -->
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:18px;">
-          <div class="next-card {% if settings.publish %}active-card{% endif %}">
-            <p style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin:0 0 5px;">Publish</p>
-            {% if settings.publish %}
-              <p style="font-size:.8125rem;font-weight:700;color:var(--text);margin:0;">Live</p>
-              <p style="font-size:.72rem;color:var(--muted2);margin:0;">Week {{ settings.week }}</p>
-            {% elif settings.auto_scrape_dt %}
-              <p style="font-size:.8125rem;font-weight:700;color:var(--text);margin:0;" data-utc-day="{{ settings.auto_scrape_dt|date:'c' }}">{{ settings.auto_scrape_dt|date:"D, M j" }}</p>
-              <p style="font-size:.72rem;color:var(--muted2);margin:0;" data-utc-time="{{ settings.auto_scrape_dt|date:'c' }}">{{ settings.auto_scrape_dt|date:"g:i A" }}</p>
-            {% else %}
-              <p style="font-size:.8rem;color:var(--muted);margin:0;">Not live</p>
-            {% endif %}
-          </div>
-          <div class="next-card {% if settings.publish and not settings.lock_picks %}active-card{% endif %}">
-            <p style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin:0 0 5px;">Lock</p>
-            {% if settings.auto_lock_dt %}
-              <p style="font-size:.8125rem;font-weight:700;color:var(--text);margin:0;" data-utc-day="{{ settings.auto_lock_dt|date:'c' }}">{{ settings.auto_lock_dt|date:"D, M j" }}</p>
-              <p style="font-size:.72rem;color:var(--muted2);margin:0;" data-utc-time="{{ settings.auto_lock_dt|date:'c' }}">{{ settings.auto_lock_dt|date:"g:i A" }}</p>
-            {% elif settings.lock_mode == 'offset' and display_auto_lock_computed_dt %}
-              <p style="font-size:.8125rem;font-weight:700;color:var(--text);margin:0;" data-utc-day="{{ display_auto_lock_computed_dt|date:'c' }}">{{ display_auto_lock_computed_dt|date:"D, M j" }}</p>
-              <p style="font-size:.72rem;color:var(--muted2);margin:0;" data-utc-time="{{ display_auto_lock_computed_dt|date:'c' }}">{{ display_auto_lock_computed_dt|date:"g:i A" }}</p>
-            {% elif settings.lock_mode == 'offset' %}
-              <p style="font-size:.8rem;color:var(--muted);margin:0;">{{ settings.auto_lock_offset_minutes }}m before kickoff</p>
-            {% else %}
-              <p style="font-size:.8rem;color:var(--muted);margin:0;">Not set</p>
-            {% endif %}
-            {% if settings.lock_picks %}<p style="font-size:.65rem;font-weight:600;color:#f87171;margin:3px 0 0;">Done</p>{% endif %}
-          </div>
+      <p class="eyebrow">Scrape</p>
+      <div class="two field">
+        <div>
+          <label class="label" for="asw">Day</label>
+          <select class="select" name="auto_scrape_weekday" id="asw">
+            {% for val, name in weekday_options %}<option value="{{ val }}" {% if display_scrape_weekday == val %}selected{% endif %}>{{ name }}</option>{% endfor %}
+          </select>
         </div>
+        <div>
+          <label class="label" for="ast">Time</label>
+          <input class="input" type="time" name="auto_scrape_time" id="ast" value="{{ display_scrape_time }}">
+        </div>
+      </div>
+      <div class="field">
+        <span class="label">Game days</span>
+        <div class="chips">
+          {% for val, name, checked in scrape_day_choices %}
+          <label class="chip-check"><input type="checkbox" name="scrape_days" value="{{ val }}" {% if checked %}checked{% endif %}><span>{{ name|slice:":3" }}</span></label>
+          {% endfor %}
+        </div>
+      </div>
 
-        <hr class="dash-hr" style="margin-top:0;">
-
-        <form method="post" style="display:flex;flex-direction:column;gap:14px;">
-          {% csrf_token %}
-
-          <!-- Timezone (shared) -->
+      <p class="eyebrow">Lock</p>
+      <div class="lock-mode">
+        <label><input type="radio" name="lock_mode" value="offset" {% if settings.lock_mode != 'manual' %}checked{% endif %}><span>Before kickoff</span></label>
+        <label><input type="radio" name="lock_mode" value="manual" {% if settings.lock_mode == 'manual' %}checked{% endif %}><span>Set time</span></label>
+      </div>
+      <div id="lock-offset-fields" class="field" {% if settings.lock_mode == 'manual' %}hidden{% endif %}>
+        <label class="label" for="alo">Minutes before kickoff</label>
+        <input class="input n" name="auto_lock_offset_minutes" id="alo" type="number" min="0" max="240" value="{{ settings.auto_lock_offset_minutes }}">
+      </div>
+      <div id="lock-manual-fields" {% if settings.lock_mode != 'manual' %}hidden{% endif %}>
+        <div class="two field">
           <div>
-            <label class="dash-label">Timezone</label>
-            <select name="tz" id="tz-select" class="dash-input">
-              <option value="America/New_York" {% if settings.auto_tz == 'America/New_York' %}selected{% endif %}>Eastern (ET)</option>
-              <option value="America/Chicago" {% if settings.auto_tz == 'America/Chicago' %}selected{% endif %}>Central (CT)</option>
-              <option value="America/Denver" {% if settings.auto_tz == 'America/Denver' %}selected{% endif %}>Mountain (MT)</option>
-              <option value="America/Los_Angeles" {% if settings.auto_tz == 'America/Los_Angeles' %}selected{% endif %}>Pacific (PT)</option>
-              <option value="America/Anchorage" {% if settings.auto_tz == 'America/Anchorage' %}selected{% endif %}>Alaska (AKT)</option>
-              <option value="Pacific/Honolulu" {% if settings.auto_tz == 'Pacific/Honolulu' %}selected{% endif %}>Hawaii (HT)</option>
-              <option value="UTC" {% if settings.auto_tz == 'UTC' or not settings.auto_tz %}selected{% endif %}>UTC</option>
+            <label class="label" for="alw">Day</label>
+            <select class="select" name="auto_lock_weekday" id="alw">
+              {% for val, name in weekday_options_all %}<option value="{{ val }}" {% if display_lock_weekday == val %}selected{% endif %}>{{ name }}</option>{% endfor %}
             </select>
           </div>
-
-          <!-- Scrape schedule -->
           <div>
-            <p class="dash-section">Scrape Schedule</p>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
-              <div>
-                <label class="dash-label">Day</label>
-                <select name="auto_scrape_weekday" class="dash-input">
-                  {% for val, name in weekday_options %}
-                  <option value="{{ val }}" {% if display_scrape_weekday == val %}selected{% endif %}>{{ name }}</option>
-                  {% endfor %}
-                </select>
-              </div>
-              <div>
-                <label class="dash-label">Time</label>
-                <input type="time" name="auto_scrape_time" class="dash-input" value="{{ display_scrape_time }}">
-              </div>
-            </div>
+            <label class="label" for="alt">Time</label>
+            <input class="input" type="time" name="auto_lock_time" id="alt" value="{{ display_lock_time }}">
           </div>
-
-          <!-- Game days -->
-          <div>
-            <p class="dash-section">Game Days</p>
-            <p style="font-size:.67rem;color:var(--muted);margin:0 0 8px;">Only pull games kicking off on these days.</p>
-            <div style="display:flex;flex-wrap:wrap;gap:5px;">
-              {% for val, name, checked in scrape_day_choices %}
-              <label class="day-chip">
-                <input type="checkbox" name="scrape_days" value="{{ val }}" {% if checked %}checked{% endif %}>
-                <span>{{ name|slice:":3" }}</span>
-              </label>
-              {% endfor %}
-            </div>
-          </div>
-
-          <!-- Grade schedule -->
-          <!-- Lock picks -->
-          <div>
-            <p class="dash-section">Lock Picks</p>
-            <div style="display:flex;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;overflow:hidden;margin-bottom:10px;">
-              <label style="flex:1;display:flex;align-items:center;justify-content:center;padding:7px;cursor:pointer;font-size:.8rem;font-weight:600;gap:6px;">
-                <input type="radio" name="lock_mode" value="offset" {% if settings.lock_mode != 'manual' %}checked{% endif %} onchange="setLockMode('offset')" style="display:none;">
-                <span id="lm-offset-tab" style="color:{% if settings.lock_mode != 'manual' %}var(--text){% else %}var(--muted){% endif %};">Before kickoff</span>
-              </label>
-              <label style="flex:1;display:flex;align-items:center;justify-content:center;padding:7px;cursor:pointer;font-size:.8rem;font-weight:600;gap:6px;border-left:1px solid var(--border2);">
-                <input type="radio" name="lock_mode" value="manual" {% if settings.lock_mode == 'manual' %}checked{% endif %} onchange="setLockMode('manual')" style="display:none;">
-                <span id="lm-manual-tab" style="color:{% if settings.lock_mode == 'manual' %}var(--text){% else %}var(--muted){% endif %};">Specific time</span>
-              </label>
-            </div>
-            <div id="lock-offset-fields" style="display:{% if settings.lock_mode != 'manual' %}block{% else %}none{% endif %};">
-              <label class="dash-label">Minutes before kickoff</label>
-              <input name="auto_lock_offset_minutes" type="number" min="0" max="240" value="{{ settings.auto_lock_offset_minutes }}" class="dash-input">
-            </div>
-            <div id="lock-manual-fields" style="display:{% if settings.lock_mode == 'manual' %}block{% else %}none{% endif %};">
-              <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
-                <div>
-                  <label class="dash-label">Day</label>
-                  <select name="auto_lock_weekday" class="dash-input">
-                    {% for val, name in weekday_options %}
-                    <option value="{{ val }}" {% if display_lock_weekday == val %}selected{% endif %}>{{ name }}</option>
-                    {% endfor %}
-                  </select>
-                </div>
-                <div>
-                  <label class="dash-label">Time</label>
-                  <input type="time" name="auto_lock_time" class="dash-input" value="{{ display_lock_time }}">
-                </div>
-              </div>
-              {% if settings.auto_lock_dt %}<p style="font-size:.67rem;color:var(--muted);margin:4px 0 0;">Next: <span data-utc-full="{{ settings.auto_lock_dt|date:'c' }}">{{ settings.auto_lock_dt|date:"M j, g:i A" }}</span> · repeats weekly</p>{% endif %}
-            </div>
-          </div>
-
-          <!-- Advancing -->
-          <div>
-            <p class="dash-section">Advancing</p>
-            <label class="dash-toggle">
-              <input type="checkbox" name="auto_advance" {% if settings.auto_advance %}checked{% endif %}>
-              <span>Roll to the next week once every game is graded</span>
-            </label>
-            <div style="margin-top:8px;">
-              <label class="dash-label">Last week of the season</label>
-              <input name="season_last_week" type="number" min="1" max="30" value="{{ settings.season_last_week }}" class="dash-input">
-              <p style="font-size:.67rem;color:var(--muted);margin:4px 0 0;">Autopilot scores this week and then stands down. 18 regular season, 22 through the Super Bowl.</p>
-            </div>
-          </div>
-
-          <!-- Misc -->
-          <div>
-            <p class="dash-section">Other</p>
-            <label class="dash-label">Retry window (min)</label>
-            <input name="auto_retry_window_minutes" type="number" min="0" max="2880" value="{{ settings.auto_retry_window_minutes }}" class="dash-input">
-            <p style="font-size:.67rem;color:var(--muted);margin:4px 0 8px;">If the scrape comes back empty, unpriced, or disagreeing with the other source, keep retrying this long — then publish anyway and flag it.</p>
-            <label class="dash-label">Tick interval (sec)</label>
-            <input name="tick_interval" type="number" min="10" max="3600" value="{{ settings.tick_interval }}" class="dash-input">
-          </div>
-
-          <button name="save_auto" class="action-btn indigo" style="padding:10px 0;">Save Settings</button>
-        </form>
-
-        {% comment %}
-          Its own form: a tick scrapes, publishes and mails the league, so it must
-          not ride along with saving a setting. It used to run on every page load.
-        {% endcomment %}
-        <form method="post" style="margin-top:10px;"
-              onsubmit="return confirm('Run one auto-pilot tick now?
-
-This can publish the week and email the league.');">
-          {% csrf_token %}
-          <button name="run_tick" class="ctrl-btn" style="width:100%;">Run a tick now</button>
-          <p style="font-size:.67rem;color:var(--muted);margin:6px 0 0;">
-            The worker does this on its own every {{ settings.tick_interval }}s when it is running.</p>
-        </form>
-
-    </div><!-- end panel-auto -->
-    </div><!-- end panel grid -->
-
-    </div><!-- end card -->
-  </div><!-- end left -->
-
-  <!-- RIGHT: games (sticky, scrollable) -->
-  <div class="dash-right">
-      <p style="font-size:.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;padding:10px 16px 6px;margin:0;">Week {{ settings.week }} · <span id="game-counter">{{ games|length }} game{{ games|length|pluralize }}</span>{% if all_graded and games %} · all graded{% endif %} · <span style="color:{% if week_type == 'superbowl' %}#fbbf24{% elif week_type == 'playoffs' %}#f59e0b{% else %}var(--muted){% endif %};">{% if week_type == 'superbowl' %}Super Bowl{% elif week_type == 'playoffs' %}Playoffs{% else %}Regular Season{% endif %}</span></p>
-      <div id="game-list-inner">
-      {% if games %}
-      {% for game in games %}
-      <div class="game-row" id="game-row-{{ game.id }}" data-graded="{% if game.graded %}1{% else %}0{% endif %}">
-        <div style="display:flex;align-items:center;gap:8px;">
-          <div class="grade-3up" data-game-id="{{ game.id }}" data-winner="{{ game.winner }}"
-               role="radiogroup" aria-label="Result: {{ game.team1_abbrev }} versus {{ game.team2_abbrev }}">
-            <input class="grade-radio" type="radio" name="w{{ game.id }}" id="w{{ game.id }}-t1"
-                   value="team1"{% if game.winner == 'team1' %} checked{% endif %}>
-            <label class="grade-seg" for="w{{ game.id }}-t1">
-              <span class="grade-name">{{ game.team1_abbrev }}</span><span class="grade-pts">{{ game.points1 }}</span>
-            </label>
-            <input class="grade-radio" type="radio" name="w{{ game.id }}" id="w{{ game.id }}-tie"
-                   value="tie"{% if game.winner == 'tie' %} checked{% endif %}>
-            <label class="grade-seg grade-seg-tie" for="w{{ game.id }}-tie">
-              <span class="grade-name">TIE</span>
-            </label>
-            <input class="grade-radio" type="radio" name="w{{ game.id }}" id="w{{ game.id }}-t2"
-                   value="team2"{% if game.winner == 'team2' %} checked{% endif %}>
-            <label class="grade-seg" for="w{{ game.id }}-t2">
-              <span class="grade-name">{{ game.team2_abbrev }}</span><span class="grade-pts">{{ game.points2 }}</span>
-            </label>
-          </div>
-          <button type="button" class="danger-btn" style="width:auto;padding:2px 8px;font-size:.7rem;" onclick="deleteGame('{{ game.id }}', this)">✕</button>
         </div>
-        {# Always right. It used to mirror on team1_is_home, so the date jumped from #}
-        {# side to side down the list and there was no column to read along. #}
-        <p style="font-size:.65rem;color:var(--muted);margin:0;padding:0 4px;text-align:right;">{% if game.game_dt_iso %}<span data-utc-full="{{ game.game_dt_iso }}">{{ game.game_dt_iso }}</span> · {% endif %}@ {% if game.team1_is_home %}{{ game.team1_abbrev }}{% else %}{{ game.team2_abbrev }}{% endif %}</p>
+        {% if settings.auto_lock_dt %}<p class="hint" style="margin-top:-8px;">Next <span data-utc-full="{{ settings.auto_lock_dt|date:'c' }}">{{ settings.auto_lock_dt|date:"M j, g:i A" }}</span>, then weekly.</p>{% endif %}
       </div>
-      {% endfor %}
-      {% else %}
-      <div class="no-games-msg" style="padding:40px;text-align:center;color:var(--muted);font-size:.875rem;">No games yet.</div>
-      {% endif %}
+
+      <p class="eyebrow">Advance</p>
+      <label class="check field"><input type="checkbox" name="auto_advance" {% if settings.auto_advance %}checked{% endif %}> Advance once every game is graded</label>
+      <div class="field">
+        <label class="label" for="slw">Last week of the season</label>
+        <input class="input n" name="season_last_week" id="slw" type="number" min="1" max="30" value="{{ settings.season_last_week }}">
+        <p class="hint">18 regular season, 22 through the Super Bowl.</p>
       </div>
-  </div>
 
-</div>
-
-<!-- Add Game Modal -->
-<div id="add-game-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);backdrop-filter:blur(4px);z-index:200;align-items:center;justify-content:center;">
-  <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:32px 32px 28px;width:min(600px,calc(100vw - 32px));max-height:90vh;overflow-y:auto;position:relative;">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
-      <h2 style="font-size:1rem;font-weight:800;color:var(--text);margin:0;">Add Game</h2>
-      <button onclick="closeAddGameModal()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.5rem;line-height:1;padding:0 4px;">&times;</button>
-    </div>
-    <div id="add-game-success" style="display:none;background:rgba(5,150,105,.15);border:1px solid rgba(5,150,105,.35);border-radius:8px;padding:8px 12px;margin-bottom:14px;font-size:.8125rem;color:#34d399;font-weight:600;"></div>
-    <div id="add-game-error" style="display:none;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);border-radius:8px;padding:8px 12px;margin-bottom:14px;font-size:.8125rem;color:#f87171;font-weight:600;"></div>
-    <form id="add-game-form" style="display:flex;flex-direction:column;gap:10px;">
-      {% csrf_token %}
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <p class="eyebrow">Worker</p>
+      <div class="two field">
         <div>
-          <label class="dash-label">Underdog</label>
-          <select name="underdog" class="dash-input">
-            {% for val, label in add_game_form.underdog.field.choices %}<option value="{{ val }}">{{ label }}</option>{% endfor %}
-          </select>
+          <label class="label" for="arw">Retry window (min)</label>
+          <input class="input n" name="auto_retry_window_minutes" id="arw" type="number" min="0" max="2880" value="{{ settings.auto_retry_window_minutes }}">
         </div>
         <div>
-          <label class="dash-label">Favorite</label>
-          <select name="favorite" class="dash-input">
-            {% for val, label in add_game_form.favorite.field.choices %}<option value="{{ val }}">{{ label }}</option>{% endfor %}
-          </select>
+          <label class="label" for="ati">Tick (sec)</label>
+          <input class="input n" name="tick_interval" id="ati" type="number" min="10" max="3600" value="{{ settings.tick_interval }}">
         </div>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:8px;align-items:end;">
-        <div>
-          <label class="dash-label">Dog ML</label>
-          <input name="underdog_moneyline" type="number" placeholder="150" class="dash-input">
-        </div>
-        <div>
-          <label class="dash-label">Fav ML</label>
-          <input name="favorite_moneyline" type="number" placeholder="-150" class="dash-input">
-        </div>
-        <div>
-          <label class="dash-label">Date & Time</label>
-          <input name="game_dt" type="datetime-local" class="dash-input">
-          <input type="hidden" name="game_dt_offset" id="game-dt-offset">
-        </div>
-        <label style="display:flex;align-items:center;gap:4px;font-size:.8rem;color:var(--muted2);cursor:pointer;padding-bottom:4px;white-space:nowrap;">
-          <input name="favorite_is_home" type="checkbox" checked> Home
-        </label>
-      </div>
-      <button type="submit" class="action-btn indigo" style="margin-top:4px;">Add Game</button>
+      <p class="hint" style="margin:-6px 0 14px;">A bad scrape is retried for the window, then published anyway and flagged.</p>
+      <button name="save_auto" class="btn btn-primary btn-block">Save auto-pilot settings</button>
     </form>
-  </div>
+  </aside>
 </div>
 
+<dialog id="scrape-dialog" class="dialog">
+  <form method="post">
+    {% csrf_token %}
+    <div class="dialog-head">
+      <div class="grow"><p class="eyebrow">Scrape</p><p class="meta" style="margin-top:4px;">pulls the week's games and lines; a published week is re-mailed</p></div>
+      <button type="button" class="icon-btn" data-close aria-label="Close">×</button>
+    </div>
+    <div class="two" style="margin-top:18px;">
+      <div class="field"><label class="label" for="sy">Season</label><input class="input n" type="number" name="scrape_year" id="sy" value="{{ scrape_year }}"></div>
+      <div class="field"><label class="label" for="sw">Week</label><input class="input n" type="number" name="scrape_week" id="sw" min="1" max="30" value="{{ settings.scrape_week }}"></div>
+    </div>
+    <div class="two">
+      <div class="field">
+        <label class="label" for="sa">Scrape source</label>
+        <select class="select" name="scrape_api" id="sa">{% for val, label in api_options %}<option value="{{ val }}" {% if val == settings.scrape_api %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+        <p class="hint">Only nflverse carries money lines.</p>
+      </div>
+      <div class="field">
+        <label class="label" for="ga">Grade source</label>
+        <select class="select" name="grade_api" id="ga">{% for val, label in api_options %}<option value="{{ val }}" {% if val == settings.grade_api %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+        <p class="hint">Only ESPN has live scores.</p>
+      </div>
+    </div>
+    <div class="dialog-actions">
+      <button type="button" class="btn btn-secondary" data-close>Cancel</button>
+      <button name="scrape" class="btn btn-primary">Scrape</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="add-dialog" class="dialog">
+  <form id="add-form">
+    {% csrf_token %}
+    <div class="dialog-head">
+      <div class="grow"><p class="eyebrow">Add game</p><p class="meta" style="margin-top:4px;" id="add-note">points come from the money lines</p></div>
+      <button type="button" class="icon-btn" data-close aria-label="Close">×</button>
+    </div>
+    <div class="two" style="margin-top:18px;">
+      <div class="field"><label class="label" for="ag-fav">Favorite</label><select class="select" name="favorite" id="ag-fav">{% for val, label in add_game_form.favorite.field.choices %}<option value="{{ val }}">{{ label }}</option>{% endfor %}</select></div>
+      <div class="field"><label class="label" for="ag-dog">Underdog</label><select class="select" name="underdog" id="ag-dog">{% for val, label in add_game_form.underdog.field.choices %}<option value="{{ val }}">{{ label }}</option>{% endfor %}</select></div>
+    </div>
+    <div class="two">
+      <div class="field"><label class="label" for="ag-fml">Favorite line</label><input class="input n" name="favorite_moneyline" id="ag-fml" type="number" placeholder="-150"></div>
+      <div class="field"><label class="label" for="ag-dml">Underdog line</label><input class="input n" name="underdog_moneyline" id="ag-dml" type="number" placeholder="150"></div>
+    </div>
+    <div class="two">
+      <div class="field"><label class="label" for="ag-dt">Kickoff</label><input class="input" name="game_dt" id="ag-dt" type="datetime-local"><input type="hidden" name="game_dt_offset" id="ag-off"></div>
+      <div class="field" style="display:flex;align-items:flex-end;"><label class="check"><input name="favorite_is_home" type="checkbox" checked> Favorite is at home</label></div>
+    </div>
+    <p class="error" id="add-error" hidden></p>
+    <div class="dialog-actions">
+      <button type="button" class="btn btn-secondary" data-close>Close</button>
+      <button type="submit" class="btn btn-primary">Add game</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="season-dialog" class="dialog">
+  <form method="post">
+    {% csrf_token %}
+    <div class="dialog-head">
+      <div class="grow"><p class="eyebrow">Save season &amp; reset</p><p class="meta" style="margin-top:4px;">archives the standings, then clears every game, pick and score</p></div>
+      <button type="button" class="icon-btn" data-close aria-label="Close">×</button>
+    </div>
+    <div class="field" style="margin-top:18px;"><label class="label" for="ss-year">Season</label><input class="input n" type="number" name="year" id="ss-year" value="{{ scrape_year }}" required min="2000" max="2100"></div>
+    <div class="field"><label class="label" for="ss-notes">Notes</label><textarea class="textarea" name="notes" id="ss-notes" rows="3"></textarea></div>
+    <div class="dialog-actions">
+      <button type="button" class="btn btn-secondary" data-close>Cancel</button>
+      <button name="newseason" class="btn btn-danger" onclick="return confirm('Archive the season and reset every score? This cannot be undone.')">Save &amp; reset</button>
+    </div>
+  </form>
+</dialog>
 {% endblock %}
 
 {% block extra_js %}
 <script>
-function setLockMode(mode) {
-  document.getElementById('lock-offset-fields').style.display = mode === 'offset' ? 'block' : 'none';
-  document.getElementById('lock-manual-fields').style.display = mode === 'manual' ? 'block' : 'none';
-  document.getElementById('lm-offset-tab').style.color = mode === 'offset' ? 'var(--text)' : 'var(--muted)';
-  document.getElementById('lm-manual-tab').style.color = mode === 'manual' ? 'var(--text)' : 'var(--muted)';
-}
+(function(){
+  var CSRF="{{ csrf_token }}";
+  var WINNER_URL="{% url 'main:ajax_set_winner' %}", DELETE_URL="{% url 'main:ajax_delete_game' %}", ADD_URL="{% url 'main:ajax_add_game' %}";
 
-function setMode(mode) {
-  var isAuto = mode === 'auto';
-  var manual = document.getElementById('panel-manual');
-  var auto   = document.getElementById('panel-auto');
-  manual.style.opacity       = isAuto ? '0' : '1';
-  manual.style.pointerEvents = isAuto ? 'none' : '';
-  auto.style.opacity         = isAuto ? '1' : '0';
-  auto.style.pointerEvents   = isAuto ? '' : 'none';
-  document.getElementById('btn-manual').classList.toggle('active', !isAuto);
-  document.getElementById('btn-auto').classList.toggle('active', isAuto);
-  localStorage.setItem('dashMode', mode);
-}
-var saved = localStorage.getItem('dashMode');
-setMode(saved || ({{ settings.auto_enabled|yesno:"true,false" }} ? 'auto' : 'manual'));
-
-// Grade toggle
-var WINNER_URL = "{% url 'main:ajax_set_winner' %}";
-var CSRF = "{{ csrf_token }}";
-// Reflect a result onto the radios. data-winner stays the single source of
-// truth so "click the active segment to clear" keeps working — a plain radio
-// cannot be unchecked by clicking it.
-function applyWinner(group, winner) {
-  group.dataset.winner = winner || '';
-  group.querySelectorAll('.grade-radio').forEach(function (r) {
-    r.checked = (r.value === winner);
-  });
-  var row = group.closest('.game-row');
-  if (row) row.dataset.graded = winner ? '1' : '0';
-}
-
-function commitWinner(group, prev, next) {
-  applyWinner(group, next);
-  fetch(WINNER_URL, {
-    method: 'POST',
-    headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': CSRF},
-    body: 'game_id=' + encodeURIComponent(group.dataset.gameId) + '&winner=' + encodeURIComponent(next)
-  })
-  .then(function (r) { return r.json(); })
-  .then(function (d) { if (!d.ok) applyWinner(group, prev); })
-  .catch(function () { applyWinner(group, prev); });
-}
-
-// Graded rows deliberately stay in place. They used to animate to the bottom of
-// the list, which moved every other game while you were still grading.
-document.addEventListener('click', function (e) {
-  var seg = e.target.closest('.grade-seg');
-  if (!seg) return;
-  var group = seg.closest('.grade-3up');
-  if (!group) return;
-  e.preventDefault();   // we set the radio ourselves, including the clear case
-  var radio = document.getElementById(seg.getAttribute('for'));
-  if (!radio) return;
-  var prev = group.dataset.winner || '';
-  var next = (prev === radio.value) ? '' : radio.value;
-  commitWinner(group, prev, next);
-});
-
-// Keyboard: arrow keys move between segments and fire change.
-document.addEventListener('change', function (e) {
-  var radio = e.target.closest('.grade-radio');
-  if (!radio) return;
-  var group = radio.closest('.grade-3up');
-  if (!group || group.dataset.winner === radio.value) return;
-  commitWinner(group, group.dataset.winner || '', radio.value);
-});
-
-// Shared state for game counter
-var gameCount = {{ games|length }};
-var gameCounter = document.getElementById('game-counter');
-function updateGameCounter() {
-  if (gameCounter) gameCounter.textContent = gameCount + ' game' + (gameCount === 1 ? '' : 's');
-}
-
-// Delete single game via AJAX
-var DELETE_URL = "{% url 'main:ajax_delete_game' %}";
-function deleteGame(gameId, btn) {
-  btn.disabled = true;
-  fetch(DELETE_URL, {
-    method: 'POST',
-    headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': CSRF},
-    body: 'game_id=' + encodeURIComponent(gameId)
-  })
-  .then(function(r) { return r.json(); })
-  .then(function(d) {
-    if (d.ok) {
-      var row = btn.closest('.game-row');
-      if (row) row.remove();
-      gameCount--;
-      updateGameCounter();
-      var gl = document.getElementById('game-list-inner');
-      if (gl && !gl.querySelector('.game-row')) {
-        var msg = document.createElement('div');
-        msg.className = 'no-games-msg';
-        msg.style.cssText = 'padding:40px;text-align:center;color:var(--muted);font-size:.875rem;';
-        msg.textContent = 'No games yet.';
-        gl.appendChild(msg);
-      }
-    } else {
-      btn.disabled = false;
-    }
-  })
-  .catch(function() { btn.disabled = false; });
-}
-
-// Scrape settings popout
-function toggleScrapePopout(e) {
-  e.stopPropagation();
-  var pop = document.getElementById('scrape-popout');
-  pop.style.display = pop.style.display === 'none' ? 'block' : 'none';
-}
-function saveScrapeSettings() {
-  document.getElementById('sh-year').value = document.getElementById('sp-year').value;
-  document.getElementById('sh-week').value = document.getElementById('sp-week').value;
-  document.getElementById('sh-scrape-api').value = document.getElementById('sp-scrape-api').value;
-  document.getElementById('sh-grade-api').value  = document.getElementById('sp-grade-api').value;
-  document.getElementById('scrape-popout').style.display = 'none';
-}
-document.addEventListener('click', function(e) {
-  var pop = document.getElementById('scrape-popout');
-  var btn = document.getElementById('scrape-gear-btn');
-  if (pop && pop.style.display !== 'none' && !pop.contains(e.target) && e.target !== btn) {
-    pop.style.display = 'none';
+  // Dialogs.
+  function wire(id, openId){
+    var d=document.getElementById(id), o=document.getElementById(openId);
+    if(!d||typeof d.showModal!=='function')return d;
+    if(o) o.addEventListener('click',function(){ if(id==='add-dialog'){document.getElementById('ag-off').value=new Date().getTimezoneOffset();} d.showModal(); });
+    d.querySelectorAll('[data-close]').forEach(function(b){b.addEventListener('click',function(){d.close();});});
+    d.addEventListener('click',function(e){if(e.target===d)d.close();});
+    return d;
   }
-});
+  wire('scrape-dialog','open-scrape'); wire('season-dialog','open-season');
+  var addDlg=wire('add-dialog','open-add');
 
-// Add Game Modal
-(function() {
-  var modal      = document.getElementById('add-game-modal');
-  var form       = document.getElementById('add-game-form');
-  var successEl  = document.getElementById('add-game-success');
-  var errorEl    = document.getElementById('add-game-error');
-  var gameList   = document.getElementById('game-list-inner');
-  var ADD_URL    = "{% url 'main:ajax_add_game' %}";
-
-  function esc(s) {
-    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-  }
-
-  function makeGameRow(g) {
-    // Always right, matching the server-rendered rows above — only which team the
-    // venue names still depends on who is at home.
-    var align = 'right';
-    var homeAbbrev = g.team1_is_home ? esc(g.team1_abbrev) : esc(g.team2_abbrev);
-    var dateStr = g.game_dt_iso ? '<span data-utc-full="' + esc(g.game_dt_iso) + '">' + esc(g.game_dt_iso) + '</span> · ' : '';
-    var row = document.createElement('div');
-    row.className = 'game-row';
-    row.id = 'game-row-' + g.id;
-    row.dataset.graded = '0';
-    row.innerHTML =
-      '<div style="display:flex;align-items:center;gap:8px;">' +
-        '<div class="grade-3up" data-game-id="' + g.id + '" data-winner="" role="radiogroup" ' +
-             'aria-label="Result: ' + esc(g.team1_abbrev) + ' versus ' + esc(g.team2_abbrev) + '">' +
-          '<input class="grade-radio" type="radio" name="w' + g.id + '" id="w' + g.id + '-t1" value="team1">' +
-          '<label class="grade-seg" for="w' + g.id + '-t1"><span class="grade-name">' + esc(g.team1_abbrev) + '</span><span class="grade-pts">' + esc(g.points1) + '</span></label>' +
-          '<input class="grade-radio" type="radio" name="w' + g.id + '" id="w' + g.id + '-tie" value="tie">' +
-          '<label class="grade-seg grade-seg-tie" for="w' + g.id + '-tie"><span class="grade-name">TIE</span></label>' +
-          '<input class="grade-radio" type="radio" name="w' + g.id + '" id="w' + g.id + '-t2" value="team2">' +
-          '<label class="grade-seg" for="w' + g.id + '-t2"><span class="grade-name">' + esc(g.team2_abbrev) + '</span><span class="grade-pts">' + esc(g.points2) + '</span></label>' +
-        '</div>' +
-        '<button type="button" class="danger-btn" style="width:auto;padding:2px 8px;font-size:.7rem;" onclick="deleteGame(\'' + g.id + '\', this)">&#x2715;</button>' +
-      '</div>' +
-      '<p style="font-size:.65rem;color:var(--muted);margin:0;padding:0 4px;text-align:' + align + ';">' + dateStr + '@ ' + homeAbbrev + '</p>';
-    return row;
-  }
-
-  window.openAddGameModal = function() {
-    modal.style.display = 'flex';
-    successEl.style.display = 'none';
-    errorEl.style.display = 'none';
-    var off = document.getElementById('game-dt-offset');
-    if (off) off.value = new Date().getTimezoneOffset();
-  };
-
-  window.closeAddGameModal = function() {
-    modal.style.display = 'none';
-    form.reset();
-    var cb = form.querySelector('[name="favorite_is_home"]');
-    if (cb) cb.checked = true;
-    successEl.style.display = 'none';
-    errorEl.style.display = 'none';
-  };
-
-  modal.addEventListener('click', function(e) { if (e.target === modal) closeAddGameModal(); });
-  document.addEventListener('keydown', function(e) { if (e.key === 'Escape' && modal.style.display === 'flex') closeAddGameModal(); });
-
-  form.addEventListener('submit', function(e) {
-    e.preventDefault();
-    successEl.style.display = 'none';
-    errorEl.style.display = 'none';
-    var btn = form.querySelector('[type="submit"]');
-    btn.disabled = true;
-    btn.textContent = 'Adding…';
-
-    fetch(ADD_URL, {
-      method: 'POST',
-      body: new FormData(form),
-      headers: {'X-CSRFToken': CSRF}
-    })
-    .then(function(r) { return r.json(); })
-    .then(function(d) {
-      btn.disabled = false;
-      btn.textContent = 'Add Game';
-      if (d.ok) {
-        successEl.textContent = 'Game added! Fill in another or close.';
-        successEl.style.display = 'block';
-        form.querySelector('[name="underdog_moneyline"]').value = '';
-        form.querySelector('[name="favorite_moneyline"]').value = '';
-        form.querySelector('[name="game_dt"]').value = '';
-        form.querySelector('[name="underdog"]').selectedIndex = 0;
-        form.querySelector('[name="favorite"]').selectedIndex = 0;
-        var cb = form.querySelector('[name="favorite_is_home"]');
-        if (cb) cb.checked = true;
-
-        var noMsg = gameList.querySelector('.no-games-msg');
-        if (noMsg) noMsg.remove();
-
-        // Delegated listeners already cover the new row — nothing to wire up.
-        var row = makeGameRow(d.game);
-        gameList.appendChild(row);
-        if (window.initUtcDates) initUtcDates(row);
-        gameCount++;
-        updateGameCounter();
-      } else {
-        var msgs = d.errors ? Object.values(d.errors).flat().join('; ') : 'Failed to add game.';
-        errorEl.textContent = msgs;
-        errorEl.style.display = 'block';
-      }
-    })
-    .catch(function() {
-      btn.disabled = false;
-      btn.textContent = 'Add Game';
-      errorEl.textContent = 'Network error.';
-      errorEl.style.display = 'block';
+  // Lock mode fields.
+  document.querySelectorAll('input[name="lock_mode"]').forEach(function(r){
+    r.addEventListener('change',function(){
+      document.getElementById('lock-offset-fields').hidden=r.value!=='offset';
+      document.getElementById('lock-manual-fields').hidden=r.value!=='manual';
     });
+  });
+
+  // Result selector. data-winner is the source of truth so the selected
+  // segment can be clicked again to clear it.
+  function applyWinner(group, winner){
+    group.dataset.winner=winner||'';
+    group.querySelectorAll('.grade-radio').forEach(function(r){r.checked=(r.value===winner);});
+    var row=group.closest('.game-row'); if(row) row.dataset.graded=winner?'1':'0';
+  }
+  function commit(group, prev, next){
+    applyWinner(group,next);
+    fetch(WINNER_URL,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded','X-CSRFToken':CSRF},
+      body:'game_id='+encodeURIComponent(group.dataset.gameId)+'&winner='+encodeURIComponent(next)})
+      .then(function(r){return r.json();}).then(function(d){if(!d.ok)applyWinner(group,prev);})
+      .catch(function(){applyWinner(group,prev);});
+  }
+  document.addEventListener('click',function(e){
+    var seg=e.target.closest('.seg'); if(!seg)return;
+    var group=seg.closest('.grade'); if(!group)return;
+    e.preventDefault();
+    var radio=document.getElementById(seg.getAttribute('for')); if(!radio)return;
+    var prev=group.dataset.winner||'';
+    commit(group, prev, prev===radio.value?'':radio.value);
+  });
+  document.addEventListener('change',function(e){
+    var radio=e.target.closest('.grade-radio'); if(!radio)return;
+    var group=radio.closest('.grade'); if(!group||group.dataset.winner===radio.value)return;
+    commit(group, group.dataset.winner||'', radio.value);
+  });
+
+  // Delete.
+  var count={{ games|length }};
+  function paintCount(){ document.getElementById('game-counter').textContent=count; document.getElementById('no-games').hidden=count>0; }
+  document.addEventListener('click',function(e){
+    var btn=e.target.closest('[data-delete]'); if(!btn)return;
+    btn.disabled=true;
+    fetch(DELETE_URL,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded','X-CSRFToken':CSRF},body:'game_id='+encodeURIComponent(btn.dataset.delete)})
+      .then(function(r){return r.json();}).then(function(d){
+        if(d.ok){var row=btn.closest('.game-row'); if(row)row.remove(); count--; paintCount();} else btn.disabled=false;
+      }).catch(function(){btn.disabled=false;});
+  });
+
+  // Add game: the server renders the row, the same partial the page uses.
+  var form=document.getElementById('add-form'), err=document.getElementById('add-error'), note=document.getElementById('add-note');
+  form.addEventListener('submit',function(e){
+    e.preventDefault(); err.hidden=true;
+    var btn=form.querySelector('[type="submit"]'); btn.disabled=true;
+    fetch(ADD_URL,{method:'POST',body:new FormData(form),headers:{'X-CSRFToken':CSRF}})
+      .then(function(r){return r.json();}).then(function(d){
+        btn.disabled=false;
+        if(d.ok){
+          var list=document.getElementById('game-list'), tmp=document.createElement('div');
+          tmp.innerHTML=d.html; var row=tmp.firstElementChild;
+          list.insertBefore(row, document.getElementById('no-games'));
+          if(window.initUtcDates)initUtcDates(row);
+          count++; paintCount();
+          note.textContent='added · '+d.game.team1_abbrev+' vs '+d.game.team2_abbrev;
+          ['favorite_moneyline','underdog_moneyline','game_dt'].forEach(function(n){form.querySelector('[name="'+n+'"]').value='';});
+        } else {
+          err.textContent=d.errors?Object.values(d.errors).flat().join('; '):'Could not add that game.'; err.hidden=false;
+        }
+      }).catch(function(){btn.disabled=false; err.textContent='Network error.'; err.hidden=false;});
   });
 })();
 </script>

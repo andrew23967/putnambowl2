@@ -1,702 +1,163 @@
 {% extends 'base.html' %}
-{% block title %}Week {{ settings.week }} — PutnamBowl{% endblock %}
+{% block title %}Home{% endblock %}
 
 {% block extra_head %}
 <style>
-  /* ── Podium ── */
-  .podium-wrap { display:flex;align-items:flex-end;justify-content:center;gap:8px;padding:8px 0 0; }
-  .pod { display:flex;flex-direction:column;align-items:center; }
-  .pod-block { display:flex;align-items:center;justify-content:center;font-weight:900;color:rgba(255,255,255,.5); }
-  .pod-1 .pod-block { background:linear-gradient(160deg,rgba(251,191,36,.34),rgba(245,158,11,.17));border-top:1px solid rgba(251,191,36,.45);border-left:1px solid rgba(251,191,36,.26);border-right:1px solid rgba(251,191,36,.26);width:100px;height:44px;font-size:1.2rem; }
-  .pod-2 .pod-block { background:rgba(255,255,255,.04);border-top:1px solid rgba(255,255,255,.08);border-left:1px solid rgba(255,255,255,.06);border-right:1px solid rgba(255,255,255,.06);width:86px;height:28px;font-size:.95rem; }
-  .pod-3 .pod-block { background:linear-gradient(160deg,rgba(251,146,60,.18),rgba(234,88,12,.09));border-top:1px solid rgba(251,146,60,.24);border-left:1px solid rgba(251,146,60,.14);border-right:1px solid rgba(251,146,60,.14);width:80px;height:16px;font-size:.8rem; }
-  .pod-avatar { width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.8rem;color:#fff;margin-bottom:4px; }
-  .pod-1 .pod-avatar { width:36px;height:36px;font-size:.95rem; }
-
-  @keyframes podRise { from{transform:translateY(20px);opacity:0} to{transform:translateY(0);opacity:1} }
-  .pod { animation:podRise .45s ease both; }
-  .pod:nth-child(1){animation-delay:.15s} .pod:nth-child(2){animation-delay:.05s} .pod:nth-child(3){animation-delay:0s}
-
-  /* ── Leaderboard rows ── */
-  .lb-row { display:flex;align-items:center;gap:10px;padding:6px 8px 6px 0;border-bottom:1px solid var(--border);transition:background .12s; }
-  .lb-row:last-child { border-bottom:none; }
-  .lb-row-me { background:color-mix(in srgb,var(--accent) 8%,transparent);padding-right:8px; }
-  .rank-badge { width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:600;font-size:.7rem;flex-shrink:0; }
-  .rank-1 { background:rgba(245,158,11,.07);color:rgba(251,191,36,.6); }
-  .rank-2 { background:rgba(148,163,184,.06);color:rgba(148,163,184,.55); }
-  .rank-3 { background:rgba(180,83,9,.07);color:rgba(251,146,60,.6); }
-  .rank-n { background:rgba(255,255,255,.03);color:rgba(100,116,139,.7); }
-  .fire-indicator { color:#f97316;font-size:.85rem; }
-  .rank-up   { color:#34d399;font-size:.6875rem;font-weight:700; }
-  .rank-down { color:#f87171;font-size:.6875rem;font-weight:700; }
-  .rank-flat { color:var(--muted);font-size:.6875rem; }
-
-  /* ── Layout ──
-     Two equal halves, so the seam between them lands on the centre of the page.
-     A fixed 296px card against a 1fr column put the divider two thirds across
-     and left the card reading as something bolted to the edge. */
-  /* Wireframe: regions are separated by rules, not by panels. Equal columns
-     with symmetric padding and no gap, so the vertical rule lands exactly on
-     the centre of the page. */
-  .main-grid {
-    max-width:1060px;margin:0 auto;
-    display:grid;grid-template-columns:1fr 1fr;gap:0;align-items:stretch;
+  .home { display: grid; grid-template-columns: 1fr 300px; grid-template-areas: "main status" "main mail"; }
+  .home-main { grid-area: main; padding: 24px 28px 30px 0; min-width: 0; }
+  .home-status, .home-mail { border-left: 1px solid var(--rule); padding-left: 26px; min-width: 0; }
+  .home-status { grid-area: status; padding-top: 24px; }
+  .home-mail { grid-area: mail; padding-bottom: 30px; align-self: start; }
+  .home-top { display: flex; align-items: flex-end; justify-content: space-between; gap: 32px; }
+  .chart { flex: 1; min-width: 0; max-width: 430px; }
+  .status-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+  .status-head .status { font-size: 10px; letter-spacing: .12em; }
+  .home-status .rows { margin-top: 10px; }
+  .home-status .btn { margin-top: 14px; }
+  .home-status .btn .frac { display: none; }
+  .phone-line { display: none; justify-content: space-between; margin-top: 11px; font: 400 11.5px var(--mono); color: var(--muted-3); }
+  .mail-more > summary { list-style: none; cursor: pointer; padding: 10px 0; font: 400 11px var(--mono); color: var(--muted-3); border-top: 1px solid var(--rule-3); }
+  .mail-more > summary::-webkit-details-marker { display: none; }
+  .mail-more[open] > summary { display: none; }
+  @media (max-width: 999px) {
+    .home { grid-template-columns: 1fr; grid-template-areas: "status" "main" "mail"; }
+    .home-main { padding-right: 0; }
+    .home-status, .home-mail { border-left: 0; padding-left: 0; }
+    .home-status { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 26px; padding: 16px 0; border-bottom: 1px solid var(--ink); }
+    .home-status .rows { display: flex; margin: 0; border: 0; }
+    .home-status .row { flex-direction: column; gap: 3px; padding: 0 20px; border: 0; border-left: 1px solid var(--rule-3); }
+    .home-status .row-v { text-align: left; font-size: 14px; }
+    .home-status .row-k { font-size: 10.5px; }
+    .home-status .btn { margin-top: 0; }
+    .home-mail { border-top: 1px solid var(--rule); padding-top: 20px; }
+    .home-top .chart { max-width: 430px; }
   }
-  .col-left { padding-right:30px; }
-  /* The right column matches the left one's height, and the feed takes whatever
-     the picks card leaves. min-height:0 is what actually lets it shrink - a flex
-     item defaults to min-height:auto, which is its content height, so without it
-     the column just grows and nothing ever scrolls. */
-  /* height:0 so the column contributes nothing to the grid row - the row is
-     sized by the standings alone. min-height:100% then fills that row, which is
-     now a definite height, which is what lets flex:1 on the feed below resolve
-     to "whatever the card leaves" instead of "as tall as 52 messages".
-     Without the height:0 the feed grew the row and the standings stretched to
-     match it, which is the opposite of cropping. */
-  .col-right {
-    display:flex;flex-direction:column;
-    height:0;min-height:100%;
-    border-left:1px solid var(--border);padding-left:30px;
-  }
-
-  /* ── The picks card ──
-     Was a full-width band across the top. It answers four questions and nothing
-     else: are picks out, when do they come out, when do they lock, and are the
-     preseason picks in. */
-  /* Not a card: no fill, no outline, no corners. The section rules below are
-     what separate it from what follows. */
-  .pk-card { display:block;text-decoration:none; }
-
-  .pk-head { padding:0 0 14px; }
-  .pk-week { display:flex;align-items:baseline;gap:7px;margin-bottom:9px; }
-  .pk-week-num { font-size:1.0625rem;font-weight:800;color:var(--text);letter-spacing:-.01em; }
-  .pk-week-meta { font-size:.75rem;font-weight:600;color:var(--muted); }
-
-  .pk-status { display:flex;align-items:center;gap:7px; }
-  .pk-dot { width:8px;height:8px;border-radius:50%;flex-shrink:0; }
-  .pk-status-text { font-size:1rem;font-weight:700;color:var(--text);margin:0;letter-spacing:-.01em; }
-  .pk-note { font-size:.8125rem;color:var(--muted);line-height:1.5;margin:7px 0 0; }
-
-  /* The two dates. A definition list because that is what it is - a label and
-     the moment it names. */
-  .pk-when { border-top:1px solid var(--border);padding:13px 0;margin:0; }
-  .pk-when-row { display:flex;align-items:baseline;justify-content:space-between;gap:10px;padding:5px 0; }
-  .pk-when-row dt { font-size:.75rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em; }
-  .pk-when-row dd { margin:0;font-size:.8125rem;font-weight:600;color:var(--text);text-align:right; }
-  .pk-when-row dd .pk-when-sub { display:block;font-size:.75rem;font-weight:500;color:var(--muted); }
-  .pk-when-unknown { color:var(--muted) !important;font-weight:500 !important;font-style:italic; }
-
-  /* The action, filled rather than accent-coloured text: --accent is the
-     player's own theme colour and its dark end is unreadable as link text. */
-  .pk-go {
-    display:flex;align-items:center;justify-content:space-between;gap:8px;
-    border-top:1px solid var(--border);padding:13px 0;
-  }
-  a.pk-card:hover .pk-go-text { text-decoration:underline; }
-  .pk-go-text { font-size:.875rem;font-weight:700;color:var(--text); }
-  .pk-go-stat { font-size:.75rem;font-weight:600;color:var(--muted);white-space:nowrap; }
-
-  /* Preseason sits at the bottom as its own link, which is why the card is a
-     wrapper rather than one big anchor - an <a> cannot nest inside an <a>. */
-  .pk-pre {
-    display:flex;align-items:center;gap:8px;
-    border-top:1px solid var(--border);padding:12px 0;
-    text-decoration:none;
-  }
-  .pk-pre:hover .pk-pre-text strong { text-decoration:underline; }
-  .pk-pre-dot { width:6px;height:6px;border-radius:50%;background:var(--warn);flex-shrink:0; }
-  .pk-pre-done .pk-pre-dot { background:var(--good); }
-  .pk-pre-text { font-size:.78rem;color:var(--muted);flex:1;min-width:0;line-height:1.45; }
-  .pk-pre-text strong { font-weight:700;color:var(--text); }
-  .pk-pre-cta { font-size:.75rem;font-weight:700;color:var(--muted2);white-space:nowrap; }
-  .pk-pre:hover .pk-pre-cta { color:var(--text); }
-
-  /* Preseason reminder, shown only after someone chooses "later". */
-
-  /* ── Light mode overrides ── */
-  [data-theme="light"] .pod-block { color: rgba(0,0,0,.45); }
-  [data-theme="light"] .pod-2 .pod-block { background: rgba(0,0,0,.04); border-color: rgba(0,0,0,.08); }
-  [data-theme="light"] .rank-n { background: rgba(0,0,0,.04); }
-
-  /* ── The feed ──
-     Every message, newest first. The newest is expanded in place so the latest
-     recap is readable without a click; the rest are one-line rows that open in
-     the popout below. */
-
-  /* Separated by a stronger rule and more air, not by a panel. A surface fill
-     reads as loud here — in the light theme especially, where a card means white
-     on grey and the column turns into a stack of objects rather than something
-     to read. --border2 rather than --border because this column is dense, so the
-     line has to carry a little more. */
-  .em-item { padding:14px 0;border-top:1px solid var(--border2); }
-  .em-item:first-child { padding-top:0;border-top:none; }
-
-  /* The whole row is the control. A real <button> rather than a div with a click
-     handler, so it is tabbable, fires on Enter and Space, and is announced as a
-     button — which is why the row's contents are spans: a <p> inside a button is
-     invalid. Hover is a wash of --fill-1 and nothing else: the affordance has to
-     read as "this opens", not as a card. */
-  .em-sum {
-    display:block;width:100%;text-align:left;cursor:pointer;position:relative;
-    background:none;border:0;font:inherit;color:inherit;
-    padding:6px 26px 6px 8px;margin:-6px -8px 0;
-    transition:background .14s ease;
-  }
-  .em-sum:hover { background:var(--fill-1); }
-  .em-sum:focus-visible { outline:2px solid var(--accent);outline-offset:2px; }
-  .em-expand {
-    position:absolute;right:7px;top:9px;color:var(--muted);
-    transition:color .14s ease;
-  }
-  .em-sum:hover .em-expand { color:var(--text); }
-
-  /* Only the newest shows its body in the column; the rest are read in the
-     popout. Keeping the others' bodies in the page (just hidden) is what the
-     popout is filled from — no second copy of the text, and Django still does
-     the escaping. */
-  .em-body { display:none; }
-  /* The newest message's text is part of its own target: you are already reading
-     it in the column, so clicking it should open it properly rather than only the
-     header row being live. Same wash and radius as the row, so the two read as
-     one control rather than two. */
-  /* One object, not two: hovering either half washes both, with the rounding
-     split across the pair. Washing only the half under the pointer made one email
-     look like two stacked ones.
-
-     The 8px bleed that gives the wash its breathing room sits on the item, not on
-     each half. Halves carrying their own negative margins resolve to different
-     widths — a block-level button with width:100% adjusts its own margin-right to
-     stay in its box — so the two washes would end at different edges. One box, one
-     geometry, and the halves inherit it. */
-  .em-item.em-item-latest {
-    margin-left:-8px;margin-right:-8px;padding-left:8px;padding-right:8px;
-  }
-  .em-item-latest .em-sum { margin-left:0;margin-right:0;padding-left:0; }
-  .em-item-latest .em-body {
-    display:block;cursor:pointer;
-    /* Butts against the header above, so the two washes meet with no seam; the
-       space that used to be margin is padding inside the wash. */
-    margin:0;padding:10px 0 6px;
-    transition:background .14s ease;
-  }
-  .em-item-latest:hover .em-sum {
-    background:var(--fill-1);
-  }
-  .em-item-latest:hover .em-body {
-    background:var(--fill-1);
-  }
-
-  /* ── The popout ──
-     A native <dialog> opened with showModal(): the browser gives the top layer,
-     the backdrop, focus containment and Escape, none of which is worth
-     hand-rolling. Reading measure and larger type, because the point of opening
-     it is to read a recap that is uncomfortable in a narrow column. */
-  .em-modal {
-    padding:0;border:1px solid var(--border2);
-    background:var(--surface);color:var(--text);
-    width:min(720px,calc(100vw - 40px));max-height:82vh;margin:auto;
-    box-shadow:0 24px 60px rgba(0,0,0,.45);overflow:hidden;
-  }
-  .em-modal::backdrop { background:rgba(3,6,12,.62);backdrop-filter:blur(2px); }
-  .em-modal-scroll { overflow-y:auto;max-height:82vh;padding:26px 30px 30px; }
-  /* It only holds focus so the dialog opens on its content; it is not a control,
-     and a ring around the whole panel would read as an error state. */
-  .em-modal-scroll:focus { outline:none; }
-  .em-modal-subject {
-    font-size:1.15rem;font-weight:800;color:var(--text);
-    margin:9px 0 16px;letter-spacing:-.02em;line-height:1.35;padding-right:30px;
-  }
-  .em-modal .em-body { display:block;font-size:.9375rem;line-height:1.85;margin:0; }
-  .em-modal .em-body p { margin:0 0 14px; }
-  .em-modal .em-from { margin-bottom:0; }
-  .em-modal-x {
-    position:absolute;top:12px;right:12px;z-index:2;
-    display:flex;align-items:center;justify-content:center;
-    width:30px;height:30px;padding:0;cursor:pointer;
-    background:var(--surface);border:1px solid var(--border);
-    border-radius:50%;color:var(--muted);transition:color .14s ease,background .14s ease;
-  }
-  .em-modal-x:hover { color:var(--text);background:var(--fill-2); }
-  @media (max-width:640px) {
-    .em-modal { width:calc(100vw - 24px);max-height:88vh; }
-    .em-modal-scroll { max-height:88vh;padding:22px 20px 26px; }
-  }
-  .em-from { display:flex;align-items:center;gap:7px;margin-bottom:5px;flex-wrap:wrap; }
-  .em-avatar {
-    width:20px;height:20px;border-radius:50%;background:var(--fill-2);flex-shrink:0;
-    display:flex;align-items:center;justify-content:center;font-size:.65rem;
-  }
-  .em-avatar-person { background:var(--accent);color:var(--on-accent);font-weight:800;font-size:.5625rem; }
-  .em-name { font-size:.75rem;font-weight:700;color:var(--text); }
-  .em-dot { font-size:.6875rem;color:var(--muted);opacity:.6; }
-  .em-meta { font-size:.6875rem;color:var(--muted); }
-  .em-subject { display:block;font-size:.8125rem;font-weight:700;color:var(--text);margin:0;letter-spacing:-.01em; }
-  .em-body { font-size:.875rem;color:var(--muted2);line-height:1.75; }
-  .em-body p { margin:0 0 10px; }
-  .em-body p:last-child { margin-bottom:0; }
-  .em-empty { font-size:.8125rem;color:var(--muted);font-style:italic; }
-
-  .em-feed {
-    flex:1;min-height:220px;
-    overflow-y:auto;overscroll-behavior:contain;
-    /* Room for the scrollbar so the rows do not sit under it. */
-    padding-right:10px;margin-right:-10px;
-  }
-  /* A thin bar rather than the browser default, which is wide enough on Windows
-     to look like a second column. */
-  .em-feed { scrollbar-width:thin;scrollbar-color:var(--border2) transparent; }
-  .em-feed::-webkit-scrollbar { width:6px; }
-  .em-feed::-webkit-scrollbar-track { background:transparent; }
-  .em-feed::-webkit-scrollbar-thumb {
-    background:var(--border2);
-  }
-  .em-feed::-webkit-scrollbar-thumb:hover { background:var(--muted); }
-  /* Outside the scroll box, so it stays put with no sticky trickery.
-     One rule, not two: this was split, and the shorthand `margin` in the second
-     silently reset the `margin-top` set by the first, so the gap under the picks
-     card never appeared. */
-  .em-head {
-    font-size:.6875rem;font-weight:700;color:var(--muted);
-    text-transform:uppercase;letter-spacing:.1em;
-    border-top:1px solid var(--border);
-    margin:0;padding:18px 0 11px;
-    display:flex;align-items:center;gap:7px;
-  }
-  .em-count {
-    font-size:.625rem;font-weight:700;padding:1px 6px;
-    background:var(--fill-2);color:var(--muted2);letter-spacing:0;
-  }
-
-  /* ── Narrower ── */
-  @media (max-width:1024px) and (min-width:641px) {
-    main { padding:clamp(12px,2.4vw,24px) !important; }
-    .col-left { padding-right:20px; }
-    .col-right { padding-left:20px; }
-  }
-  @media (max-width:640px) {
-    main { padding:16px !important; }
-    /* The card goes first at this width: on a phone "what do I need to do" beats
-       "where am I", and the standings are long enough to bury it otherwise. */
-    .main-grid { display:flex;flex-direction:column;gap:0; }
-    .col-left { padding-right:0;padding-top:20px;border-top:1px solid var(--border); }
-    .col-right { order:-1;border-left:none;padding-left:0;padding-bottom:20px; }
-    /* Stacked, there is no second column to match, so the feed runs full length
-       and the page scrolls. */
-    .col-right { height:auto;min-height:0; }
-    .em-feed { overflow:visible;min-height:0;padding-right:0;margin-right:0; }
-    .score-bar { display:none !important; }
-    .lb-row { padding:9px 0 !important; }
+  @media (max-width: 640px) {
+    .home-status { display: block; padding: 18px 0 20px; }
+    .home-status .rows { display: none; }
+    .home-status .btn { margin-top: 12px; width: 100%; }
+    .home-status .btn .frac { display: inline; font-weight: 500; opacity: .7; }
+    .phone-line { display: flex; }
+    .hide-phone { display: none; }
+    .home-top { flex-direction: column; align-items: stretch; gap: 18px; }
+    .chart { max-width: none; }
+    .table.standings td { padding: 12px 0; }
   }
 </style>
 {% endblock %}
 
 {% block content %}
+<div class="home">
 
-
-<!-- ── STANDINGS ── -->
-<div class="main-grid anim-up">
-
-  <div class="col-left">
-
-    <!-- Podium -->
-    <div id="home-podium-view">
-      {% comment %}
-        The step a player stands on is fixed - tallest in the middle - but the
-        number on the block is their rank. With three tied at the top all three
-        blocks read 1, which is the truth and matches the table below.
-      {% endcomment %}
-      {% if leaderboard|length >= 3 %}
-      <div class="podium-wrap" style="margin-bottom:12px;">
-        {% with p2=leaderboard.1 %}
-        <div class="pod pod-2">
-          <div class="pod-avatar" style="background:#334155;">{{ p2.username|first|upper }}</div>
-          <p style="font-size:.625rem;font-weight:600;color:var(--muted2);margin:0 0 3px;max-width:64px;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ p2.username }}</p>
-          <p style="font-size:.8rem;font-weight:800;color:#94a3b8;margin:0 0 4px;">{{ p2.score }}</p>
-          <div class="pod-block">{{ p2.rank }}</div>
-        </div>
-        {% endwith %}
-        {% with p1=leaderboard.0 %}
-        <div class="pod pod-1">
-          <div class="pod-avatar" style="background:#b45309;">{{ p1.username|first|upper }}</div>
-          <p style="font-size:.625rem;font-weight:600;color:var(--muted2);margin:0 0 2px;max-width:72px;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ p1.username }}</p>
-          <p style="font-size:1rem;font-weight:900;color:#fbbf24;margin:0 0 5px;">{{ p1.score }}</p>
-          <div class="pod-block">{{ p1.rank }}</div>
-        </div>
-        {% endwith %}
-        {% with p3=leaderboard.2 %}
-        <div class="pod pod-3">
-          <div class="pod-avatar" style="background:#431407;">{{ p3.username|first|upper }}</div>
-          <p style="font-size:.625rem;font-weight:600;color:var(--muted2);margin:0 0 3px;max-width:64px;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ p3.username }}</p>
-          <p style="font-size:.8rem;font-weight:800;color:#fb923c;margin:0 0 4px;">{{ p3.score }}</p>
-          <div class="pod-block">{{ p3.rank }}</div>
-        </div>
-        {% endwith %}
-      </div>
-      {% endif %}
-    </div><!-- end home-podium-view -->
-
-    <div class="lb-wrap">
-      <div id="lb-list">
-      {% for entry in leaderboard %}
-      <div class="lb-row{% if entry.username == request.user.username %} lb-row-me{% endif %}">
-        {% comment %}
-          entry.rank, not forloop.counter: tied players share a place, so the
-          row number and the rank are different things. Three tied at the top
-          are all 1st and the fourth is 4th.
-        {% endcomment %}
-        <div class="rank-badge {% if entry.rank == 1 %}rank-1{% elif entry.rank == 2 %}rank-2{% elif entry.rank == 3 %}rank-3{% else %}rank-n{% endif %}">{{ entry.rank }}</div>
-        <div style="flex:1;min-width:0;">
-          <div style="display:flex;align-items:center;gap:5px;margin-bottom:4px;">
-            <span style="font-size:.8125rem;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ entry.username }}</span>
-            {% if entry.on_fire %}<span class="fire-indicator">🔥</span>{% endif %}
-          </div>
-          <div class="score-bar"><div class="score-bar-fill" data-pct="{{ entry.score }}"></div></div>
-        </div>
-        <div style="text-align:right;flex-shrink:0;">
-          <div style="font-size:.875rem;font-weight:800;color:var(--text);">{{ entry.score }}</div>
-          {% if entry.rank_change > 0 %}<div class="rank-up">↑{{ entry.rank_change }}</div>
-          {% elif entry.rank_change < 0 %}<div class="rank-down">↓{{ entry.rank_change_abs }}</div>
-          {% else %}<div class="rank-flat">—</div>{% endif %}
-        </div>
-      </div>
-      {% endfor %}
-      </div>
+  <section class="home-status">
+    <div class="status-head">
+      <p class="eyebrow">Week {{ settings.week }} · {{ week_type_label }}</p>
+      <p class="status is-{{ state }}">{{ state_word }}</p>
     </div>
-  </div><!-- end LEFT -->
-
-
-  <!-- RIGHT: what to do about this week -->
-  <div class="col-right">
-    {% if not settings.publish %}
-    <div class="pk-card">
-    {% else %}
-    <a href="{% url 'main:picks' %}" class="pk-card">
-    {% endif %}
-
-      <div class="pk-head">
-        <div class="pk-week">
-          <span class="pk-week-num">Week {{ settings.week }}</span>
-          <span class="pk-week-meta">{{ season_year }} · {{ week_type_label }}</span>
-        </div>
-        <div class="pk-status">
-          {% if not settings.publish %}
-            <span class="pk-dot" style="background:var(--muted);opacity:.5;"></span>
-            <p class="pk-status-text">Not out yet</p>
-          {% elif not settings.lock_picks %}
-            <span class="pk-dot pulse" style="background:var(--warn);"></span>
-            <p class="pk-status-text">Picks are open</p>
-          {% else %}
-            <span class="pk-dot" style="background:var(--good);"></span>
-            <p class="pk-status-text">Picks are locked</p>
-          {% endif %}
-        </div>
-        {% if not settings.publish %}
-        <p class="pk-note">The commissioner is still setting up this week's games.</p>
-        {% endif %}
+    <div class="rows">
+      <div class="row">
+        <span class="row-k">{{ frac_label }}</span>
+        <span class="row-v strong">{% if frac_countdown %}<span data-countdown-to="{{ frac_countdown|date:'c' }}" data-countdown-done="now">…</span>{% else %}{{ frac }}{% endif %}</span>
       </div>
-
-      <dl class="pk-when">
-        <div class="pk-when-row">
-          <dt>Out</dt>
-          <dd>
-            {% if settings.publish %}
-              Now
-            {% elif settings.auto_enabled and settings.auto_scrape_dt %}
-              <span data-utc-day="{{ settings.auto_scrape_dt|date:'c' }}">{{ settings.auto_scrape_dt|date:"D, M j" }}</span>
-              <span class="pk-when-sub" data-utc-time="{{ settings.auto_scrape_dt|date:'c' }}">{{ settings.auto_scrape_dt|date:"g:i A" }}</span>
-            {% else %}
-              {% comment %}
-                Without auto-pilot there is no scheduled publish, so there is no
-                honest time to print here.
-              {% endcomment %}
-              <span class="pk-when-unknown">When the commissioner opens it</span>
-            {% endif %}
-          </dd>
-        </div>
-        <div class="pk-when-row">
-          <dt>Lock</dt>
-          <dd>
-            {% if settings.lock_picks %}
-              Locked
-            {% elif settings.auto_lock_dt %}
-              <span data-utc-day="{{ settings.auto_lock_dt|date:'c' }}">{{ settings.auto_lock_dt|date:"D, M j" }}</span>
-              <span class="pk-when-sub" data-utc-time="{{ settings.auto_lock_dt|date:'c' }}">{{ settings.auto_lock_dt|date:"g:i A" }}</span>
-            {% else %}
-              {% comment %}
-                auto_lock_dt is derived from the first kickoff at publish time, so
-                before the week opens it genuinely is not known yet.
-              {% endcomment %}
-              <span class="pk-when-unknown">Set when the week opens</span>
-            {% endif %}
-          </dd>
-        </div>
-      </dl>
-
-      {% if settings.publish %}
-      <div class="pk-go">
-        {% if not settings.lock_picks %}
-          <span class="pk-go-text">Make your picks →</span>
-          <span class="pk-go-stat">{{ picks_made }} / {{ total_games }} in</span>
-        {% else %}
-          <span class="pk-go-text">See how you're doing →</span>
-          {% if graded_count %}
-          <span class="pk-go-stat">{{ my_correct }} of {{ graded_count }} right</span>
-          {% else %}
-          <span class="pk-go-stat">{{ total_games }} games</span>
-          {% endif %}
-        {% endif %}
+      <div class="row">
+        <span class="row-k">opens</span>
+        <span class="row-v">{% if opens_dt %}<span data-utc-daytime="{{ opens_dt|date:'c' }}">{{ opens_dt|date:"D g:i A" }}</span>{% else %}{{ opens_text }}{% endif %}</span>
+      </div>
+      <div class="row">
+        <span class="row-k">locks</span>
+        <span class="row-v">{% if locks_dt %}<span data-utc-daytime="{{ locks_dt|date:'c' }}">{{ locks_dt|date:"D g:i A" }}</span>{% else %}{{ locks_text }}{% endif %}</span>
+      </div>
+      {% if preseason_open %}
+      <div class="row">
+        <span class="row-k">preseason picks</span>
+        <a class="row-v" href="{% url 'main:preseason' %}">{% if preseason_done %}In · edit{% else %}Not in{% endif %}</a>
       </div>
       {% endif %}
-
-    {% if not settings.publish %}</div>{% else %}</a>{% endif %}
-
-    {% if preseason_open %}
-    <a href="{% url 'main:preseason' %}"
-       class="pk-card pk-pre{% if preseason_done %} pk-pre-done{% endif %}"
-       style="position:static;margin-top:10px;">
-      <span class="pk-pre-dot"></span>
-      <span class="pk-pre-text">
-        {% if preseason_done %}
-        <strong>Preseason picks are in.</strong> Editable until picks lock.
-        {% else %}
-        <strong>Preseason picks aren't in.</strong> Make them before picks lock.
-        {% endif %}
-      </span>
-      <span class="pk-pre-cta">{% if preseason_done %}Edit{% else %}Make{% endif %} →</span>
-    </a>
+    </div>
+    {% if cta_url %}
+    <a class="btn btn-primary btn-block btn-split" href="{{ cta_url }}">{{ cta_text }}<span class="frac n">{{ frac }}</span></a>
     {% endif %}
+    <div class="phone-line">
+      <span>opens {% if opens_dt %}<span data-utc-daytime="{{ opens_dt|date:'c' }}">{{ opens_dt|date:"D g:i A" }}</span>{% else %}{{ opens_text|lower }}{% endif %}</span>
+      <span>locks {% if locks_dt %}<span data-utc-daytime="{{ locks_dt|date:'c' }}">{{ locks_dt|date:"D g:i A" }}</span>{% else %}{{ locks_text|lower }}{% endif %}</span>
+    </div>
+  </section>
 
-    <p class="em-head">Emails <span class="em-count">{{ email_count }}</span></p>
-    <div class="em-feed">
-  {% for msg in emails %}
-  {% comment %}
-    The newest shows its body in the column, so the home page still carries the
-    latest recap without a click; everything older is one scannable row. Any
-    row, the newest included, opens the popout.
-  {% endcomment %}
-  <article class="em-item{% if forloop.first %} em-item-latest{% endif %}">
-    <button type="button" class="em-sum">
-      <span class="em-from">
-        {% if msg.author and msg.author.profile.is_bot %}
-        <span class="em-avatar">🤖</span>
-        {% else %}
-        <span class="em-avatar em-avatar-person">{{ msg.display_name|first|upper }}</span>
-        {% endif %}
-        <span class="em-name">{{ msg.display_name }}</span>
-        <span class="em-dot">·</span>
-        <span class="em-meta" data-utc-date="{{ msg.sent_at|date:'c' }}">{{ msg.sent_at|date:"M j" }}</span>
-        {% if msg.recipient_count %}
-        <span class="em-dot">·</span>
-        <span class="em-meta">{{ msg.recipient_count }} recipient{{ msg.recipient_count|pluralize }}</span>
-        {% elif msg.source == 'inbound' %}
-        {% comment %}
-          Mail sent to the league: we see it after the send, so there is no
-          recipient count of our own to report — "0 recipients" would be a lie.
-        {% endcomment %}
-        <span class="em-dot">·</span>
-        <span class="em-meta">to the league</span>
-        {% endif %}
-      </span>
-      <span class="em-subject">{{ msg.subject }}</span>
-      <svg class="em-expand" aria-hidden="true" width="12" height="12" fill="none"
-           stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round"
-           stroke-linejoin="round" stroke-width="2.2"
-           d="M15 3h6v6M21 3l-8 8M9 21H3v-6M3 21l8-8"/></svg>
+  <section class="home-main" id="standings">
+    {% include 'main/_standings.html' %}
+  </section>
+
+  <section class="home-mail">
+    <p class="eyebrow" style="margin-bottom:4px;">Mail</p>
+    {% for msg in mail %}
+    <button type="button" class="mail-row" data-id="{{ msg.id }}" data-from="{{ msg.display_name }}" data-subject="{{ msg.subject }}">
+      <span class="mail-dot{% if forloop.first %} is-new{% endif %}"></span>
+      <span class="mail-subject">{{ msg.subject }}</span>
+      <span class="mail-when" data-utc-date="{{ msg.sent_at|date:'c' }}">{{ msg.sent_at|date:"M j" }}</span>
     </button>
-    <div class="em-body">{{ msg.body|linebreaks }}</div>
-  </article>
-  {% empty %}
-  <p class="em-empty">Nothing here yet — a recap lands once week
-    {{ settings.week }} is scored.</p>
-  {% endfor %}
+    {% empty %}
+    <p class="empty" style="padding-top:8px;">No mail yet.</p>
+    {% endfor %}
+    {% if mail_more %}
+    <details class="mail-more">
+      <summary>{{ mail_more|length }} older</summary>
+      {% for msg in mail_more %}
+      <button type="button" class="mail-row" data-id="{{ msg.id }}" data-from="{{ msg.display_name }}" data-subject="{{ msg.subject }}">
+        <span class="mail-dot"></span>
+        <span class="mail-subject">{{ msg.subject }}</span>
+        <span class="mail-when" data-utc-date="{{ msg.sent_at|date:'c' }}">{{ msg.sent_at|date:"M j" }}</span>
+      </button>
+      {% endfor %}
+    </details>
+    {% endif %}
+  </section>
+</div>
+
+{% for msg in mail_all %}<template id="mail-{{ msg.id }}">{{ msg.body|linebreaks }}</template>{% endfor %}
+
+<dialog id="mail-dialog" class="dialog" aria-labelledby="mail-dialog-title">
+  <div class="dialog-head">
+    <div class="grow">
+      <p class="meta" id="mail-dialog-meta" style="font-size:11px;color:var(--muted-3);"></p>
+      <h2 class="dialog-title" id="mail-dialog-title"></h2>
     </div>
-  </div><!-- end RIGHT -->
-</div><!-- end main-grid -->
-
-{% comment %}
-  One dialog for the whole feed, filled from whichever row was clicked, rather
-  than one per message: the bodies are already in the page, so a second copy of
-  every recap would be dead weight that grows with the season.
-{% endcomment %}
-<dialog id="em-modal" class="em-modal" aria-labelledby="em-modal-title">
-  <button type="button" class="em-modal-x" id="em-modal-x" aria-label="Close">
-    <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path
-      stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 6l12 12M18 6L6 18"/></svg>
-  </button>
-  {% comment %}
-    showModal() focuses the first autofocus element, else the first focusable one.
-    Without this that is the close button, which opens the popout with a focus ring
-    on "Close" — and lands a screen reader on the way out rather than on the email.
-    tabindex="-1" makes the content region focusable for that purpose only; it is
-    still unreachable by Tab.
-  {% endcomment %}
-  <div class="em-modal-scroll" id="em-modal-scroll" tabindex="-1" autofocus></div>
+    <button type="button" class="icon-btn" id="mail-dialog-close" aria-label="Close">×</button>
+  </div>
+  <div class="dialog-body" id="mail-dialog-body" tabindex="-1" autofocus></div>
 </dialog>
-
-
 {% endblock %}
 
 {% block extra_js %}
 <script>
 (function(){
-  const dlg    = document.getElementById('em-modal');
-  const scroll = document.getElementById('em-modal-scroll');
-  if (!dlg || !scroll || typeof dlg.showModal !== 'function') return;
-
-  let opener = null;
-
-  function openEmail(item){
-    const from = item.querySelector('.em-from');
-    const subj = item.querySelector('.em-subject');
-    const body = item.querySelector('.em-body');
-
-    scroll.innerHTML = '';
-    if (from) scroll.appendChild(from.cloneNode(true));
-    // A heading rather than the row's span, so the dialog has something real to
-    // be labelled by; aria-labelledby on the dialog points at this id.
-    const h = document.createElement('h2');
-    h.className = 'em-modal-subject';
-    h.id = 'em-modal-title';
-    h.textContent = subj ? subj.textContent.trim() : '';
-    scroll.appendChild(h);
-    if (body) scroll.appendChild(body.cloneNode(true));
-
-    // Always the row's button, whatever was clicked: it is the focusable thing,
-    // so focus has somewhere real to go back to on close.
-    opener = item.querySelector('.em-sum');
-    scroll.scrollTop = 0;
-    dlg.showModal();
-  }
-
-  document.querySelectorAll('.em-item .em-sum').forEach(btn => {
-    btn.addEventListener('click', () => openEmail(btn.closest('.em-item')));
-  });
-
-  // The newest message's body is in the column, so its text opens the popout too.
-  // Not while a selection stands, though — dragging to copy a line out of a recap
-  // ends in a click, and that should not throw the popout in your face. No
-  // tabindex here on purpose: the row button above is already the keyboard route
-  // to this same email, and a second tab stop for one action is worse than none.
-  document.querySelectorAll('.em-item-latest .em-body').forEach(body => {
-    body.addEventListener('click', () => {
-      const sel = window.getSelection();
-      if (sel && String(sel).trim()) return;
-      openEmail(body.closest('.em-item'));
+  var dlg=document.getElementById('mail-dialog');
+  if(!dlg||typeof dlg.showModal!=='function')return;
+  var meta=document.getElementById('mail-dialog-meta'),title=document.getElementById('mail-dialog-title'),body=document.getElementById('mail-dialog-body');
+  var opener=null;
+  document.querySelectorAll('.mail-row').forEach(function(btn){
+    btn.addEventListener('click',function(){
+      var tpl=document.getElementById('mail-'+btn.dataset.id);
+      var when=btn.querySelector('.mail-when');
+      meta.textContent=btn.dataset.from+' · '+(when?when.textContent:'');
+      title.textContent=btn.dataset.subject;
+      body.innerHTML=tpl?tpl.innerHTML:'';
+      opener=btn; body.scrollTop=0; dlg.showModal();
     });
   });
-
-  document.getElementById('em-modal-x').addEventListener('click', () => dlg.close());
-
-  // The dialog fills its own box, so a click that lands on the element itself is
-  // a click on the backdrop around it.
-  dlg.addEventListener('click', e => { if (e.target === dlg) dlg.close(); });
-
-  // Escape and the close button both end here, so focus returns either way.
-  dlg.addEventListener('close', () => { if (opener) { opener.focus(); opener = null; } });
+  document.getElementById('mail-dialog-close').addEventListener('click',function(){dlg.close();});
+  dlg.addEventListener('click',function(e){if(e.target===dlg)dlg.close();});
+  dlg.addEventListener('close',function(){if(opener){opener.focus();opener=null;}});
 })();
-// Score bars
+{% if settings.lock_picks %}
 (function(){
-  const data = {{ leaderboard_json|safe }};
-  if (!data.length) return;
-  const max = Math.max(...data.map(d=>d.score));
-  if (max<=0) return;
-  document.querySelectorAll('.score-bar-fill').forEach((el,i)=>{
-    const rawPct = parseFloat(el.dataset.pct)/max*100;
-    const hue = (rawPct/100*120).toFixed(0);
-    el.style.background = `hsl(${hue},58%,48%)`;
-    setTimeout(()=>{ el.style.width=rawPct.toFixed(1)+'%'; }, 250+i*55);
-  });
+  var url="{% url 'main:ajax_leaderboard' %}?week={{ settings.week }}";
+  var box=document.getElementById('standings');
+  setInterval(function(){
+    fetch(url,{credentials:'same-origin'}).then(function(r){return r.json();}).then(function(d){
+      if(d.html){box.innerHTML=d.html;}
+    }).catch(function(){});
+  },30000);
 })();
-
-const SITE_WEEK = {{ settings.week }};
-const LOCK_PICKS = {{ settings.lock_picks|yesno:"true,false" }};
-
-// Live leaderboard polling while games are being graded
-if (LOCK_PICKS) {
-  setInterval(() => {
-    fetch(`{% url 'main:ajax_leaderboard' %}?week=${SITE_WEEK}`)
-      .then(r => r.json())
-      .then(data => { renderLeaderboard(data.entries); renderPodium(data.entries); });
-  }, 30000);
-}
-
-function renderScoreBars(entries){
-  if(!entries.length)return;
-  const max=Math.max(...entries.map(e=>e.score));
-  if(max<=0)return;
-  document.querySelectorAll('.score-bar-fill').forEach((el,i)=>{
-    const rawPct=parseFloat(el.dataset.pct)/max*100;
-    const hue=(rawPct/100*120).toFixed(0);
-    el.style.background=`hsl(${hue},58%,48%)`;
-    el.style.width='0%';
-    setTimeout(()=>{ el.style.width=rawPct.toFixed(1)+'%'; },250+i*55);
-  });
-}
-
-function renderLeaderboard(entries){
-  const list=document.getElementById('lb-list');
-  if(!list)return;
-  const me='{{ request.user.username|escapejs }}';
-  let html='';
-  entries.forEach((e,i)=>{
-    // Sent by the server, because ties share a place and the row index does not.
-    const rank=e.rank!=null?e.rank:i+1;
-    const isMe=e.me||e.username===me;
-    const badge=rank===1?'rank-1':rank===2?'rank-2':rank===3?'rank-3':'rank-n';
-    const rc=e.rank_change>0?`<div class="rank-up">↑${e.rank_change}</div>`
-             :e.rank_change<0?`<div class="rank-down">↓${e.rank_change_abs}</div>`
-             :`<div class="rank-flat">—</div>`;
-    html+=`<div class="lb-row${isMe?' lb-row-me':''}">
-      <div class="rank-badge ${badge}">${rank}</div>
-      <div style="flex:1;min-width:0;">
-        <div style="display:flex;align-items:center;gap:5px;margin-bottom:4px;">
-          <span style="font-size:.8125rem;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${e.username}</span>
-          ${e.on_fire?'<span class="fire-indicator">🔥</span>':''}
-        </div>
-        <div class="score-bar"><div class="score-bar-fill" data-pct="${e.score}"></div></div>
-      </div>
-      <div style="text-align:right;flex-shrink:0;">
-        <div style="font-size:.875rem;font-weight:800;color:var(--text);">${e.score}${e.week_gained != null && e.week_gained > 0 ? `<span style="font-size:.65rem;font-weight:600;color:#34d399;margin-left:3px;">+${e.week_gained}</span>` : ''}</div>
-        ${rc}
-      </div>
-    </div>`;
-  });
-  list.innerHTML=html;
-  renderScoreBars(entries);
-}
-
-function renderPodium(entries){
-  const wrap=document.querySelector('.podium-wrap');
-  if(!wrap||entries.length<3)return;
-  const cfg=[
-    {cls:'pod-1',bg:'#b45309',nameSize:'.625rem',nameColor:'var(--muted2)',scoreStyle:'font-size:1rem;font-weight:900;color:#fbbf24;margin:0 0 5px;',nameMb:'2',maxW:'72px'},
-    {cls:'pod-2',bg:'#334155',nameSize:'.625rem',nameColor:'var(--muted2)',scoreStyle:'font-size:.8rem;font-weight:800;color:#94a3b8;margin:0 0 4px;',nameMb:'3',maxW:'64px'},
-    {cls:'pod-3',bg:'#431407',nameSize:'.625rem',nameColor:'var(--muted2)',scoreStyle:'font-size:.8rem;font-weight:800;color:#fb923c;margin:0 0 4px;',nameMb:'3',maxW:'64px'},
-  ];
-  const displayOrder=[1,0,2];
-  let html='';
-  displayOrder.forEach(idx=>{
-    if(idx>=entries.length)return;
-    const e=entries[idx];
-    const c=cfg[idx];
-    html+=`<div class="pod ${c.cls}">
-      <div class="pod-avatar" style="background:${c.bg};">${e.username[0].toUpperCase()}</div>
-      <p style="font-size:${c.nameSize};font-weight:600;color:${c.nameColor};margin:0 0 ${c.nameMb}px;max-width:${c.maxW};text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${e.username}</p>
-      <p style="${c.scoreStyle}">${e.score}</p>
-      <div class="pod-block">${e.rank!=null?e.rank:idx+1}</div>
-    </div>`;
-  });
-  wrap.innerHTML=html;
-}
-
-/* ── Email popout ──
-   Each row fills the one dialog from its own markup, so the modal shows exactly
-   what the server rendered — no re-escaping, no second copy of the text.
-
-   showModal() is doing the work the hand-rolled version of this would have to:
-   the top layer (so no z-index fight with the nav or the scroll boxes), the
-   backdrop, containing Tab inside the dialog, and closing on Escape. What is
-   left is filling it, closing on a backdrop click, and putting focus back where
-   it came from. */
+{% endif %}
 </script>
 {% endblock %}

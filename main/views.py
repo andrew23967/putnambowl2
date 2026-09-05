@@ -3,6 +3,8 @@ import logging
 from collections import defaultdict
 from datetime import datetime, timezone, timedelta
 from django.shortcuts import render, redirect, get_object_or_404
+from django.template.loader import render_to_string
+from django.urls import reverse
 from django.contrib.auth.models import User
 from django.contrib import messages
 from django.db.models import Prefetch
@@ -13,9 +15,10 @@ from leagues.access import current_league, current_settings, league_manager_requ
 from . import forms, scrape
 from .models import (
     Game, IntroTemplate, Pick, WeeklyLeaderboard,
-    LeagueEmail,
+    LeagueEmail, SeasonRecord,
 )
-from .rankings import competition_ranks, rank_rows
+from . import charts
+from .rankings import competition_ranks
 from .scoring import calculate_points
 from .teams import team_from_abbrev
 
@@ -50,9 +53,8 @@ def _countdown(settings, games):
             milestones.append({
                 'kind': 'lock',
                 'ts': int(lock_dt.timestamp() * 1000),
-                'label': 'Picks lock in:',
-                'short': 'Locks in:',
-                'expired': 'Picks are locked',
+                'label': 'picks lock in',
+                'expired': 'picks are locked',
             })
 
     upcoming = sorted((g for g in games if not g.graded and g.game_dt),
@@ -62,22 +64,19 @@ def _countdown(settings, games):
         milestones.append({
             'kind': 'game',
             'ts': int(game.game_dt.timestamp() * 1000),
-            'label': f'{matchup} · Kickoff in:',
-            # The units under the digits already say this is a countdown, so the
-            # matchup alone carries the whole message when space is short.
-            'short': matchup,
+            'label': f'next kickoff · {matchup}',
             # A game only plausibly runs for so long; past that it has finished
             # and is waiting on the grader rather than being played.
-            'expired': f'{matchup} · Underway',
-            'stale': f'{matchup} · Awaiting result',
+            'expired': f'{matchup} · underway',
+            'stale': f'{matchup} · awaiting result',
         })
 
     if not games:
-        idle = 'No games this week'
+        idle = 'no games this week'
     elif all(g.graded for g in games):
-        idle = 'Week complete'
+        idle = 'week complete'
     else:
-        idle = 'Waiting on kickoff times'
+        idle = 'waiting on kickoff times'
 
     return {'milestones_json': json.dumps(milestones), 'idle_label': idle}
 
@@ -95,112 +94,176 @@ def _email_feed(league, limit=None):
     return list(qs[:limit] if limit else qs)
 
 
+def standings_rows(league, settings, viewer_username, week=None):
+    """The standings as a list of row dicts: rank, score, this week's points,
+    rank movement and a share of the top score for the season bar.
+
+    Ranks come from `rankings.competition_ranks`, so ties share a place.
+    Movement has two baselines, and neither is WeeklyLeaderboard(current):
+
+    - while the current week is being graded, each player's stored
+      `profile.score` is where they stood when the week locked, so the arrow
+      tracks the day's results;
+    - otherwise WeeklyLeaderboard(week - 1), the table going into last week,
+      so the arrow shows what last week's results did.
+
+    Returns (rows, live_grading).
+    """
+    week = settings.week if week is None else week
+    players = list(User.objects.select_related('profile').filter(profile__league=league))
+    live_grading = False
+
+    if week == settings.week:
+        if settings.lock_picks:
+            live_grading = True
+            gained = {}
+            for pick in (Pick.objects.filter(game__league=league, game__week=week)
+                         .select_related('game', 'user')):
+                gained[pick.user.username] = gained.get(pick.user.username, 0) + pick.points_earned
+            entries = [{
+                'username': p.username,
+                'score': round(p.profile.score + gained.get(p.username, 0), 1),
+                '_base': round(p.profile.score, 1),
+                '_gained': round(gained.get(p.username, 0), 1),
+            } for p in players]
+        else:
+            entries = [{'username': p.username, 'score': round(p.profile.score, 1)}
+                       for p in players]
+    else:
+        lb = WeeklyLeaderboard.objects.filter(league=league, week=week).first()
+        entries = [dict(e) for e in lb.entries] if lb else []
+    entries.sort(key=lambda e: (-e['score'], e['username']))
+
+    prev_ranks, prev_scores = {}, {}
+    if live_grading:
+        prev_ranks = competition_ranks((e['username'], e['_base']) for e in entries)
+        prev_scores = {e['username']: e['_base'] for e in entries}
+    elif week > 1:
+        prev_lb = WeeklyLeaderboard.objects.filter(league=league, week=week - 1).first()
+        if prev_lb:
+            prev_ranks = competition_ranks((e['username'], e['score']) for e in prev_lb.entries)
+            prev_scores = {e['username']: e['score'] for e in prev_lb.entries}
+
+    ranks = competition_ranks((e['username'], e['score']) for e in entries)
+    top = entries[0]['score'] if entries else 0
+    is_past = week < settings.week
+    rows = []
+    for e in entries:
+        rank = ranks[e['username']]
+        prev = prev_ranks.get(e['username'])
+        change = (prev - rank) if prev else 0
+        if live_grading:
+            gained = e['_gained']
+        elif is_past:
+            gained = round(e['score'] - prev_scores.get(e['username'], e['score']), 1)
+        else:
+            gained = None
+        rows.append({
+            'username': e['username'],
+            'score': e['score'],
+            'rank': rank,
+            'rank_change': change,
+            'rank_change_abs': abs(change),
+            'week_gained': gained,
+            'on_fire': False,
+            'me': e['username'] == viewer_username,
+            'pct': round(e['score'] / top * 100) if top and top > 0 else 0,
+        })
+    return rows, live_grading
+
+
+def _podium(rows):
+    """Display order 2nd, 1st, 3rd. The step is fixed - tallest in the middle -
+    and the number on the block is the rank, so three tied at the top all read 1."""
+    if len(rows) < 3:
+        return []
+    return [dict(rows[1], pos=2), dict(rows[0], pos=1), dict(rows[2], pos=3)]
+
+
 @league_required
 def home(request):
     settings = current_settings(request)
     league = settings.league
-    # Open until week 1's picks lock — the same deadline as the slate above it in
-    # the bar, so the countdown there is the countdown for these too. Shown in
-    # both states meanwhile: a prompt before they are in, the way back in after.
+    # Open until week 1's picks lock. Shown in both states meanwhile: a prompt
+    # before they are in, the way back in after.
     preseason_open = settings.week == 1 and not settings.lock_picks
 
     # Nudge to the preseason form, but only while it can still be filled in.
     # This used to test `settings.week == 1` alone, so anyone who missed the
-    # deadline was bounced to a form that would no longer accept anything — and
-    # bounced again on every visit, with no way to reach the home page until the
-    # week rolled over. "Later" sets a session flag, but a new browser session
-    # forgot it and the trap closed again.
-    needs_preseason = (preseason_open
-                       and not request.user.profile.preseason_submitted)
+    # deadline was bounced to a form that would no longer accept anything -
+    # on every visit, with no way to reach the home page until the week rolled
+    # over. "Later" sets a session flag, which a new session forgets.
+    needs_preseason = preseason_open and not request.user.profile.preseason_submitted
     if needs_preseason and not request.session.get('preseason_deferred'):
         return redirect('main:preseason')
 
-    players = User.objects.select_related('profile').filter(profile__league=league)
-
-    leaderboard = sorted(
-        [{'score': round(p.profile.score, 1), 'username': p.username} for p in players],
-        key=lambda x: x['score'], reverse=True
-    )
-
-    # Rank change vs previous week. Both sides use competition ranking, so two
-    # players tied all season do not show a change every week as their arbitrary
-    # order flips.
-    rank_rows(leaderboard)
-    prev_ranks = {}
-    if settings.week > 1:
-        try:
-            prev_lb = WeeklyLeaderboard.objects.get(league=league, week=settings.week - 1)
-            prev_ranks = competition_ranks(
-                (e['username'], e['score']) for e in prev_lb.entries)
-        except WeeklyLeaderboard.DoesNotExist:
-            pass
-    for entry in leaderboard:
-        prev = prev_ranks.get(entry['username'])
-        change = (prev - entry['rank']) if prev else 0
-        entry['rank_change'] = change
-        entry['rank_change_abs'] = abs(change)
-
-    # On-fire streak: 3+ consecutive weeks with >= 50% correct
-    past_games = list(Game.objects.filter(league=league, week__lt=settings.week).prefetch_related(
-        Prefetch('picks', queryset=Pick.objects.select_related('user'))
-    ).order_by('week'))
-    games_by_past_week = defaultdict(list)
-    for pg in past_games:
-        games_by_past_week[pg.week].append(pg)
-
-    player_week_results = {}
-    for wk_num in sorted(games_by_past_week.keys()):
-        week_correct = {}
-        week_total = {}
-        for pg in games_by_past_week[wk_num]:
-            for pp in pg.picks.all():
-                _u = pp.user.username
-                week_correct[_u] = week_correct.get(_u, 0) + (1 if pp.is_correct else 0)
-                week_total[_u] = week_total.get(_u, 0) + 1
-        for _u in week_correct:
-            player_week_results.setdefault(_u, [])
-            _t = week_total[_u]
-            player_week_results[_u].append(week_correct[_u] >= _t / 2 if _t else False)
-
-    fire_players = {u for u, results in player_week_results.items() if len(results) >= 3 and all(results[-3:])}
-    for entry in leaderboard:
-        entry['on_fire'] = entry['username'] in fire_players
-
-    # This week at a glance. The slate itself lives on /picks/ now, so the home
-    # page only needs enough to say what state the week is in.
+    rows, live = standings_rows(league, settings, request.user.username)
     games = list(Game.objects.filter(league=league, week=settings.week))
-    my_picks = list(
-        Pick.objects.filter(user=request.user, game__in=games).select_related('game')
-    )
+    my_picks = list(Pick.objects.filter(user=request.user, game__in=games).select_related('game'))
+    total_games = len(games)
+    picks_made = len(my_picks)
+    my_graded = sum(1 for p in my_picks if p.game.graded)
+    my_correct = sum(1 for p in my_picks if p.is_correct)
+    all_graded = bool(games) and all(g.graded for g in games)
+
+    week_type = scrape.get_week_type(settings.week, allow_network=False)
+    week_type_label = {'regular': 'Regular season', 'playoffs': 'Playoffs',
+                       'superbowl': 'Super Bowl'}.get(week_type, 'Regular season')
+
+    # The rail: one status word, one fraction, two dates, one action.
+    opens_dt = locks_dt = frac_countdown = None
+    opens_text = locks_text = ''
+    cta_text = cta_url = None
+    if not settings.publish:
+        state, state_word = 'notout', 'Not out'
+        frac_label = 'until picks open'
+        opens_dt = settings.auto_scrape_dt if settings.auto_enabled else None
+        frac_countdown = opens_dt
+        frac = '—'
+        opens_text = '—'
+        locks_text = 'Set when the week opens'
+        if settings.week > 1:
+            cta_text = "See last week's results"
+            cta_url = f"{reverse('main:pick_history')}?week={settings.week - 1}"
+        elif preseason_open:
+            cta_text, cta_url = 'Make preseason picks', reverse('main:preseason')
+    elif not settings.lock_picks:
+        state, state_word = 'open', 'Open'
+        frac, frac_label = f'{picks_made}/{total_games}', 'picks in'
+        opens_text = 'Now'
+        locks_dt = settings.auto_lock_dt or settings.first_game_dt
+        locks_text = 'At the first kickoff'
+        cta_text, cta_url = 'Make your picks', reverse('main:picks')
+    elif not all_graded:
+        state, state_word = 'locked', 'Locked'
+        frac, frac_label = f'{my_correct}/{my_graded}', 'right so far'
+        opens_text, locks_text = 'Opened', 'Locked'
+        cta_text, cta_url = 'Watch my picks', reverse('main:picks')
+    else:
+        state, state_word = 'final', 'Final'
+        frac, frac_label = f'{my_correct}/{total_games}', 'right'
+        opens_text, locks_text = 'Opened', 'Locked'
+        cta_text, cta_url = 'See my picks', reverse('main:picks')
 
     feed = _email_feed(league)
-    countdown = _countdown(settings, games)
-
-    # allow_network=False is required in a page view: the week-number fallback is
-    # accurate for 2021+ and the download costs seconds on every home page load.
-    week_type = scrape.get_week_type(settings.week, allow_network=False)
-    week_type_label = {
-        'regular': 'Regular Season',
-        'playoffs': 'Playoffs',
-        'superbowl': 'Super Bowl',
-    }.get(week_type, 'Regular Season')
 
     return render(request, 'main/home.html', {
-        'countdown_json': countdown['milestones_json'],
-        'countdown_idle': countdown['idle_label'],
-        'leaderboard': leaderboard,
-        'leaderboard_json': json.dumps(leaderboard),
         'settings': settings,
-        'emails': feed,
-        'email_count': len(feed),
-        'season_year': scrape.current_season_year(),
+        'rows': rows,
+        'podium': _podium(rows),
+        'chart': charts.points_chart(league, settings, request.user.username, rows if live else None),
         'week_type_label': week_type_label,
-        'total_games': len(games),
-        'picks_made': len(my_picks),
-        'my_correct': sum(1 for p in my_picks if p.is_correct),
-        'graded_count': sum(1 for g in games if g.winner),
+        'state': state, 'state_word': state_word,
+        'frac': frac, 'frac_label': frac_label, 'frac_countdown': frac_countdown,
+        'opens_dt': opens_dt, 'opens_text': opens_text,
+        'locks_dt': locks_dt, 'locks_text': locks_text,
+        'cta_text': cta_text, 'cta_url': cta_url,
+        'mail': feed[:8], 'mail_more': feed[8:], 'mail_all': feed,
         'preseason_open': preseason_open,
         'preseason_done': request.user.profile.preseason_submitted,
+        # Kept for the tests and the JSON refresh.
+        'leaderboard': rows,
+        'emails': feed,
     })
 
 
@@ -270,9 +333,17 @@ def pick_history(request):
     )
     if settings.lock_picks and settings.week not in completed_weeks:
         completed_weeks = sorted(completed_weeks + [settings.week])
+    initial_week = completed_weeks[-1] if completed_weeks else 1
+    try:
+        wanted = int(request.GET.get('week', ''))
+        if wanted in completed_weeks:
+            initial_week = wanted
+    except (TypeError, ValueError):
+        pass
     return render(request, 'main/pick_history.html', {
         'settings': settings,
         'completed_weeks': completed_weeks,
+        'initial_week': initial_week,
     })
 
 
@@ -306,101 +377,24 @@ def site_state(request):
 
 @league_required
 def ajax_leaderboard(request):
+    """The standings for a week: JSON rows, plus the rendered block the home
+    page swaps in while games are being graded, so the two cannot drift."""
     week = request.GET.get('week')
     if not week:
         return JsonResponse({'error': 'week required'}, status=400)
     week = int(week)
     settings = current_settings(request)
     league = settings.league
-    players = list(User.objects.select_related('profile').filter(profile__league=league))
-    live_grading = False
-
+    rows, live_grading = standings_rows(league, settings, request.user.username, week)
+    html = ''
     if week == settings.week:
-        if settings.lock_picks:
-            # Sum points earned so far from graded picks this week without touching profile.score
-            live_grading = True
-            all_picks = Pick.objects.filter(game__league=league, game__week=week).select_related('game', 'user')
-            live_gained = {}
-            for pick in all_picks:
-                uname = pick.user.username
-                live_gained[uname] = live_gained.get(uname, 0) + pick.points_earned
-            entries = sorted(
-                [{
-                    'username': p.username,
-                    'score': round(p.profile.score + live_gained.get(p.username, 0), 1),
-                    '_base': round(p.profile.score, 1),
-                    '_gained': round(live_gained.get(p.username, 0), 1),
-                } for p in players],
-                key=lambda x: x['score'], reverse=True,
-            )
-        else:
-            entries = sorted(
-                [{'username': p.username, 'score': round(p.profile.score, 1)} for p in players],
-                key=lambda x: x['score'], reverse=True,
-            )
-    else:
-        try:
-            lb = WeeklyLeaderboard.objects.get(league=league, week=week)
-            entries = sorted(lb.entries, key=lambda x: x['score'], reverse=True)
-        except WeeklyLeaderboard.DoesNotExist:
-            entries = []
-
-    prev_ranks = {}
-    prev_scores = {}
-    if live_grading:
-        # Movement caused by this week's results so far. The baseline is each
-        # player's stored score, which is exactly "where they stood when the week
-        # locked" - profile.score is only written by do_advance_week, so it does
-        # not move again until the week rolls over. `_base` already carries it.
-        #
-        # This used to read WeeklyLeaderboard(week=settings.week), which does not
-        # exist yet: that row is written when the week is advanced *away* from,
-        # so it only appears once the week is over. The lookup always missed, and
-        # every arrow came back flat - so the page rendered real movement and the
-        # first live poll wiped it to dashes.
-        prev_ranks = competition_ranks((e['username'], e['_base']) for e in entries)
-        prev_scores = {e['username']: e['_base'] for e in entries}
-    else:
-        # Otherwise compare against the snapshot from before the previous week,
-        # which is what the home page itself does. WeeklyLeaderboard(week=N)
-        # holds the scores as they stood going *into* week N.
-        baseline_week = week - 1
-        if baseline_week > 0:
-            try:
-                prev_lb = WeeklyLeaderboard.objects.get(league=league, week=baseline_week)
-                prev_ranks = competition_ranks(
-                    (e['username'], e['score']) for e in prev_lb.entries)
-                prev_scores = {e['username']: e['score'] for e in prev_lb.entries}
-            except WeeklyLeaderboard.DoesNotExist:
-                pass
-
-    is_past = week < settings.week
-    current_user = request.user.username
-    # Ranks come from the scores, not from row position, so ties share a place.
-    ranks = competition_ranks((e['username'], e['score']) for e in entries)
-    result = []
-    for entry in entries:
-        rank = ranks[entry['username']]
-        prev = prev_ranks.get(entry['username'])
-        change = (prev - rank) if prev else 0
-        if live_grading:
-            gained = entry.get('_gained', 0)
-        elif is_past:
-            gained = round(entry['score'] - prev_scores.get(entry['username'], entry['score']), 1)
-        else:
-            gained = None
-        result.append({
-            'username': entry['username'],
-            'score': entry['score'],
-            'rank': rank,
-            'rank_change': change,
-            'rank_change_abs': abs(change),
-            'week_gained': gained,
-            'on_fire': False,
-            'me': entry['username'] == current_user,
+        html = render_to_string('main/_standings.html', {
+            'rows': rows,
+            'podium': _podium(rows),
+            'chart': charts.points_chart(league, settings, request.user.username,
+                                         rows if live_grading else None),
         })
-
-    return JsonResponse({'entries': result, 'live_grading': live_grading})
+    return JsonResponse({'entries': rows, 'live_grading': live_grading, 'html': html})
 
 
 @league_manager_required
@@ -441,7 +435,7 @@ def ajax_add_game(request):
         'points2': game.points2,
         'team1_is_home': game.team1_is_home,
         'game_dt_iso': game.game_dt_iso,
-    }})
+    }, 'html': render_to_string('main/_game_row.html', {'game': game})})
 
 
 @league_manager_required
@@ -475,13 +469,61 @@ def ajax_set_winner(request):
     return JsonResponse({'ok': True})
 
 
+def _ordinal(n):
+    if 10 <= n % 100 <= 20:
+        suffix = 'th'
+    else:
+        suffix = {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th')
+    return f'{n}{suffix}'
+
+
+def _last_week_summary(league, settings, user):
+    """What the picks page shows while the new week is not out: how the last
+    one went for you, and its graded list."""
+    week = settings.week - 1
+    if week < 1:
+        return None
+    games = list(Game.objects.filter(league=league, week=week))
+    if not games:
+        return None
+    games.sort(key=lambda g: (g.game_dt is None, g.game_dt, g.id))
+    all_picks = list(Pick.objects.filter(game__in=games).select_related('game', 'user'))
+    mine = {p.game_id: p for p in all_picks if p.user_id == user.id}
+    per_user = {}
+    for p in all_picks:
+        per_user[p.user_id] = per_user.get(p.user_id, 0) + p.points_earned
+    n_players = User.objects.filter(profile__league=league).count() or 1
+    graded = [g for g in games if g.graded]
+    rows, _ = standings_rows(league, settings, user.username)
+    my_rank = next((r['rank'] for r in rows if r['me']), None)
+    out_games = []
+    for g in games:
+        pick = mine.get(g.id)
+        right = bool(pick and g.graded and pick.choice == g.winner)
+        out_games.append({
+            't1': g.team1_abbrev, 't2': g.team2_abbrev, 'winner': g.winner,
+            'took': (g.team1_abbrev if pick.choice == 'team1' else g.team2_abbrev) if pick else '',
+            'mark': '' if not (pick and g.graded) else ('pos' if right else 'neg'),
+            'result': '—' if not (pick and g.graded) else (f'+{pick.points_earned}' if right else '0'),
+        })
+    return {
+        'week': week,
+        'points': round(sum(p.points_earned for p in mine.values()), 1),
+        'record': f"{sum(1 for p in mine.values() if p.is_correct)}/{len(graded)}",
+        'average': round(sum(per_user.values()) / n_players, 1),
+        'rank': _ordinal(my_rank) if my_rank else '—',
+        'graded': len(graded), 'total': len(games), 'final': len(graded) == len(games),
+        'games': out_games,
+    }
+
+
 @league_required
 def picks(request):
-    """This week's slate, in whichever of its three states applies: unpublished,
+    """This week's slate, in whichever of its three states applies: not out,
     open for picking, or locked and filling in with results as games are graded.
 
     Picks save one at a time through ajax_save_pick, so there is no POST branch
-    here — the page is the form and the receipt for it.
+    here - the page is the form and the receipt for it.
     """
     settings = current_settings(request)
     league = settings.league
@@ -492,13 +534,20 @@ def picks(request):
     # picked games to the bottom made the list reshuffle under your cursor.
     games.sort(key=lambda g: (g.game_dt is None, g.game_dt, g.id))
 
+    my_picks = list(picks_map.values())
     countdown = _countdown(settings, games)
-
+    total = len(games)
     return render(request, 'main/picks.html', {
         'settings': settings,
         'games': games,
         'picks_map': picks_map,
         'graded_count': sum(1 for g in games if g.winner),
+        'all_graded': bool(games) and all(g.graded for g in games),
+        'my_graded': sum(1 for p in my_picks if p.game.graded),
+        'my_correct': sum(1 for p in my_picks if p.is_correct),
+        'week_points': round(sum(p.points_earned for p in my_picks), 1),
+        'pct_made': round(len(picks_map) / total * 100) if total else 0,
+        'last_week': _last_week_summary(league, settings, request.user) if not settings.publish else None,
         'countdown_json': countdown['milestones_json'],
         'countdown_idle': countdown['idle_label'],
     })
@@ -643,43 +692,113 @@ def preseason(request):
 
 @league_required
 def rules(request):
-    """The commissioner's rules, kept verbatim in the template.
-
-    They were a list of (title, body) pairs paraphrased here in the view. That
-    is prose, not data — nothing queries it and nothing varies it — and the
-    paraphrase had drifted from what the league was actually told. The template
-    now carries the original text from the old site instead.
-    """
+    """Each league writes its own rules; the text lives on the League row."""
     return render(request, 'main/rules.html')
 
+
+@league_manager_required
+def rulesdash(request):
+    league = current_league(request)
+    if request.method == 'POST':
+        league.rules = request.POST.get('rules', '').strip()
+        league.save(update_fields=['rules'])
+        messages.success(request, 'Rules saved.')
+        return redirect('main:rules')
+    return render(request, 'main/rulesdash.html')
+
+
+@league_required
+def seasons(request):
+    league = current_league(request)
+    rows = []
+    for rec in SeasonRecord.objects.filter(league=league).order_by('-year'):
+        entries = [e for e in (rec.final_standings or []) if e.get('username')]
+        humans = [e for e in entries if not e.get('is_bot')]
+        rows.append({
+            'year': rec.year,
+            'winner': rec.winner_username,
+            'players': len(humans) or len(entries),
+            'weeks': rec.weeks,
+            'top': max((e.get('score', 0) for e in entries), default=0),
+        })
+    return render(request, 'main/seasons.html', {'rows': rows})
+
+
+@league_required
+def season(request, year):
+    from .teams import TEAM_ABBREV
+    league = current_league(request)
+    record = get_object_or_404(SeasonRecord, league=league, year=year)
+    entries = [e for e in (record.final_standings or []) if e.get('username')]
+    entries.sort(key=lambda e: (-e.get('score', 0), e['username']))
+    ranks = competition_ranks({e['username']: e.get('score', 0) for e in entries})
+    standings = []
+    for e in entries:
+        pre = e.get('preseason')
+        standings.append({
+            'rank': e.get('rank') or ranks[e['username']],
+            'name': e.get('display_name') or e['username'],
+            'score': e.get('score', 0),
+            'record': f"{e['correct']}/{e['graded']}" if e.get('graded') else '',
+            'is_bot': e.get('is_bot', False),
+            'me': e['username'] == request.user.username,
+            'preseason': {
+                'big_loser_abbrev': TEAM_ABBREV.get(pre.get('big_loser', ''), '?'),
+                'nfc_abbrev': TEAM_ABBREV.get(pre.get('nfc', ''), '?'),
+                'afc_abbrev': TEAM_ABBREV.get(pre.get('afc', ''), '?'),
+                'superbowl_abbrev': TEAM_ABBREV.get(pre.get('superbowl', ''), '?'),
+            } if pre else None,
+        })
+    scores = [e.get('score', 0) for e in entries]
+    humans = [e for e in entries if not e.get('is_bot')]
+    return render(request, 'main/season.html', {
+        'record': record,
+        'standings': standings,
+        'players': len(humans) or len(entries),
+        'top': max(scores, default=0),
+        'average': round(sum(scores) / len(scores), 1) if scores else 0,
+        'has_records': any(r['record'] for r in standings),
+        'has_preseason': any(r['preseason'] for r in standings),
+        'chart': charts.season_chart(record, request.user.username),
+    })
 
 
 @league_required
 def members(request):
-    """The league roster: who is in it, when they joined, what they wrote.
+    """The league roster, one ruled row per member.
 
-    Ordered by join date, oldest first, so the page reads as the league's history
-    rather than an alphabetical list. Bots are included — they play and they
-    score, so leaving them out would make the standings not add up — but they are
-    marked, and sorted last regardless of when they were created.
+    Bots are folded into one line at the bottom: they play and they score, so
+    the standings need them, but a page about who is in the league does not
+    need seventeen rows all claiming Arizona as a favourite team.
     """
+    from . import seasons as seasons_mod
+
     league = current_league(request)
-    people = (User.objects.select_related('profile').filter(profile__league=league)
-              .order_by('date_joined', 'username'))
+    sort = request.GET.get('sort', 'points')
+    if sort not in ('points', 'name', 'joined'):
+        sort = 'points'
+    people = list(User.objects.select_related('profile').filter(profile__league=league))
+    ranks = competition_ranks({u.username: round(u.profile.score, 1) for u in people})
+    finishes = seasons_mod.finishes_by_username(league)
+
     rows = []
     for user in people:
         profile = user.profile
+        if profile.is_bot:
+            continue
+        rank = ranks[user.username]
         rows.append({
             'username': user.username,
             'display_name': profile.display_name,
+            'me': user == request.user,
             'bio': profile.bio.strip(),
             'joined': user.date_joined,
             'team': profile.favorite_team,
-            'team_abbrev': profile.favorite_team_abbrev,
             'score': profile.score_display,
-            'theme': profile.theme or '#00897b',
-            'initial': (profile.display_name or user.username)[:1].upper(),
-            'is_bot': profile.is_bot,
+            'rank': rank,
+            'rank_label': _ordinal(rank),
+            'finishes': [dict(f, rank_label=_ordinal(f['rank']))
+                         for f in finishes.get(user.username, [])],
             # Only when they actually submitted. Every preseason field has a team
             # as its default, so an untouched profile would otherwise claim four
             # confident picks nobody made.
@@ -690,12 +809,21 @@ def members(request):
                 'superbowl': profile.superbowl_winner,
             } if profile.preseason_submitted else None,
         })
-    rows.sort(key=lambda r: (r['is_bot'], r['joined']))
+    if sort == 'name':
+        rows.sort(key=lambda r: r['display_name'].lower())
+    elif sort == 'joined':
+        rows.sort(key=lambda r: (r['joined'], r['username']))
+    else:
+        rows.sort(key=lambda r: (-float(r['score']), r['username']))
 
+    bot_count = sum(1 for u in people if u.profile.is_bot)
     return render(request, 'main/members.html', {
         'members': rows,
-        'human_count': sum(1 for r in rows if not r['is_bot']),
-        'bot_count': sum(1 for r in rows if r['is_bot']),
+        'sort': sort,
+        'bot_count': bot_count,
+        'bot_line': f'{bot_count} bot{"s" if bot_count != 1 else ""} also play, scored like everyone else.',
+        # Kept for the tests.
+        'human_count': len(rows),
     })
 
 
@@ -824,6 +952,10 @@ def emaildash(request):
 def accountdash(request):
     from main.teams import TEAMS
     league = current_league(request)
+    if request.method == 'POST' and 'rotate_code' in request.POST:
+        league.rotate_join_code()
+        messages.success(request, f'New join code: {league.join_code}')
+        return redirect('main:accountdash')
     players = sorted(
         User.objects.select_related('profile').filter(profile__league=league),
         key=lambda u: u.profile.score, reverse=True
@@ -864,7 +996,6 @@ def edit_player(request, user_id):
         pass
     p.real_name = request.POST.get('real_name', p.real_name)
     p.bio = request.POST.get('bio', p.bio)
-    p.theme = request.POST.get('theme', p.theme)
     p.favorite_team = request.POST.get('favorite_team', p.favorite_team)
     p.big_loser = request.POST.get('big_loser', p.big_loser)
     p.nfc_champ = request.POST.get('nfc_champ', p.nfc_champ)
@@ -882,6 +1013,8 @@ def edit_player(request, user_id):
     # Granting this is granting write access to the home page — see
     # main/inbound_email.py for the checks a message still has to pass.
     p.email_posts_enabled = request.POST.get('email_posts_enabled') == 'on'
+    p.email_weekly = request.POST.get('email_weekly') == 'on'
+    p.email_reminder = request.POST.get('email_reminder') == 'on'
     p.save()
 
     return JsonResponse({'ok': True, 'username': user.username})
@@ -1217,8 +1350,14 @@ def pickdash(request):
         'games': games,
         'settings': settings,
         'all_graded': all_graded,
+        'graded_count': sum(1 for g in games if g.graded),
+        'tz_options': [
+            ('America/New_York', 'Eastern'), ('America/Chicago', 'Central'),
+            ('America/Denver', 'Mountain'), ('America/Los_Angeles', 'Pacific'),
+            ('America/Anchorage', 'Alaska'), ('Pacific/Honolulu', 'Hawaii'), ('UTC', 'UTC'),
+        ],
         'week_type': scrape.get_week_type(settings.week, allow_network=False),
-        'api_options': [('nfl_data_py', 'NFL Data Py'), ('espn', 'ESPN API')],
+        'api_options': [('nfl_data_py', 'nflverse'), ('espn', 'ESPN')],
         'scrape_year': default_scrape_year,
         'weekday_options': weekday_options,
         'weekday_options_all': weekday_options_all,

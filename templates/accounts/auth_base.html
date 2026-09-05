@@ -1,58 +1,16 @@
 {% extends 'base.html' %}
-{# Shared shell for sign in / create account so the two never drift apart. #}
-
-{% block extra_head %}
-<style>
-  .auth-wrap { min-height:calc(100vh - 160px);display:flex;align-items:center;justify-content:center;padding:24px 0; }
-  .auth-col { width:100%;max-width:360px; }
-  .auth-mark {
-    font-size:1.75rem;font-weight:800;letter-spacing:-.03em;color:var(--text);
-    margin:0 0 6px;text-align:center;
-  }
-  .auth-sub { font-size:.8125rem;color:var(--muted);margin:0 0 26px;text-align:center; }
-  .auth-card { background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:26px 24px; }
-  .auth-field { margin-bottom:15px; }
-  .auth-label {
-    display:block;font-size:.6875rem;font-weight:700;color:var(--muted2);
-    margin-bottom:7px;text-transform:uppercase;letter-spacing:.07em;
-  }
-  .auth-input {
-    width:100%;background:var(--surface2);color:var(--text);
-    border:1px solid var(--border2);border-radius:var(--radius-sm);
-    padding:11px 12px;font-size:.9375rem;font-family:inherit;
-    transition:border-color .14s ease,background .14s ease;
-  }
-  .auth-input:focus { outline:none;border-color:var(--accent);background:var(--surface); }
-  .auth-input[aria-invalid="true"] { border-color:var(--bad); }
-  .auth-err { color:var(--bad);font-size:.75rem;margin:6px 0 0; }
-  .auth-hint { color:var(--muted);font-size:.6875rem;margin:6px 0 0;line-height:1.5; }
-  .auth-alert {
-    background:var(--bad-fill);border:1px solid var(--bad);color:var(--bad);
-    border-radius:var(--radius-sm);padding:10px 12px;font-size:.8125rem;
-    font-weight:500;margin-bottom:16px;line-height:1.5;
-  }
-  .auth-alert ul { margin:0;padding-left:18px; }
-  .auth-submit {
-    width:100%;margin-top:6px;padding:12px;border:none;cursor:pointer;
-    background:var(--accent);color:var(--on-accent);
-    border-radius:var(--radius-sm);font-size:.9375rem;font-weight:600;font-family:inherit;
-    transition:filter .14s ease;
-  }
-  .auth-submit:hover { filter:brightness(1.12); }
-  .auth-alt { text-align:center;font-size:.8125rem;color:var(--muted);margin:18px 0 0; }
-  .auth-alt a { color:var(--accent);font-weight:600;text-decoration:none; }
-  .auth-alt a:hover { text-decoration:underline; }
-</style>
-{% endblock %}
-
+{# One shell for sign in, create account, password change and the site admin login. #}
+{% block main_class %}auth-main{% endblock %}
 {% block content %}
-<div class="auth-wrap">
-  <div class="auth-col">
-    <h1 class="auth-mark">PutnamBowl</h1>
-    <p class="auth-sub">{% block auth_sub %}{% endblock %}</p>
-    <div class="auth-card">
-      {% block auth_body %}{% endblock %}
-    </div>
+<div class="auth">
+  <div class="auth-side">
+    <p class="auth-mark">{% block auth_mark %}{% if league %}{{ league.name }}{% else %}PutnamBowl{% endif %}{% endblock %}</p>
+    {% block auth_side %}{% endblock %}
+  </div>
+  <div class="auth-form">
+    <p class="eyebrow">{% block auth_eyebrow %}{% endblock %}</p>
+    {% block auth_lead %}{% endblock %}
+    {% block auth_body %}{% endblock %}
   </div>
 </div>
 {% endblock %}

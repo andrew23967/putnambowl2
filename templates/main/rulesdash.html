@@ -1,0 +1,20 @@
+{% extends 'base.html' %}
+{% block title %}Edit rules{% endblock %}
+{% block main_class %}page page-narrow{% endblock %}
+
+{% block content %}
+<form method="post">
+  {% csrf_token %}
+  <div class="page-head">
+    <div class="page-head-title">
+      <p class="eyebrow">Rules</p>
+      <p class="meta">plain text · a blank line starts a new paragraph</p>
+    </div>
+    <div class="page-head-end">
+      <a class="btn btn-secondary btn-sm" href="{% url 'main:rules' %}">View</a>
+      <button type="submit" class="btn btn-primary btn-sm">Save</button>
+    </div>
+  </div>
+  <textarea class="textarea" name="rules" rows="28" style="margin-top:20px;min-height:400px;font-size:13.5px;line-height:1.6;">{{ league.rules }}</textarea>
+</form>
+{% endblock %}

@@ -1,342 +1,184 @@
 {% extends 'base.html' %}
-{% block title %}Analytics — PutnamBowl{% endblock %}
+{% block title %}Analytics{% endblock %}
 
 {% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <style>
-  /* One panel per graph; the tabs decide which is showing. */
-  .slide { display:none; }
-  .slide.active { display:block; }
-  .slide-chart-area { position:relative;flex:1;min-height:0; }
-
-  /* ── Tabs ──
-     One per graph, so every chart is reachable in a single click and you can see
-     the whole set at once. Real buttons, so they tab and fire on Enter. */
-  .an-head { margin-bottom:14px;flex-shrink:0; }
-  .an-tabs { display:flex;align-items:center;gap:4px;flex-wrap:wrap;
-             border-bottom:1px solid var(--border);padding-bottom:0; }
-  .an-tab {
-    background:none;border:0;border-bottom:2px solid transparent;
-    margin-bottom:-1px;padding:7px 11px;cursor:pointer;
-    font-family:inherit;font-size:.75rem;font-weight:600;color:var(--muted);
-    transition:color .14s ease,border-color .14s ease;
-  }
-  .an-tab:hover { color:var(--text); }
-  .an-tab.active { color:var(--text);border-bottom-color:var(--accent); }
-  .an-tab:focus-visible { outline:2px solid var(--accent);outline-offset:-2px;border-radius:4px; }
-  /* What the graph on screen is showing, under the tabs rather than beside a
-     title — the tab is the title now. */
-  .an-sub { display:flex;align-items:center;gap:14px;margin-top:9px;flex-wrap:wrap; }
-  .an-label { font-size:.6875rem;color:var(--muted);margin:0; }
-  .an-week { display:flex;align-items:center;gap:7px;margin-left:auto; }
-  .an-week[hidden] { display:none; }
-  .an-week-text { font-size:.625rem;font-weight:700;color:var(--muted);
-                  text-transform:uppercase;letter-spacing:.07em;white-space:nowrap; }
-
-  /* Fade transition */
-  @keyframes slideFadeIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
-  .slide.active { display:flex;flex-direction:column;flex:1;min-height:0;animation:slideFadeIn .22s ease both; }
-
-  /* No data */
-  .no-data-msg { display:none;position:absolute;inset:0;align-items:center;justify-content:center;color:var(--muted);font-size:.875rem; }
-  .no-data-msg.show { display:flex; }
-
-  /* Viewport fill */
-  @media (min-width:641px) {
-    main { height:calc(100vh - 53px) !important;display:flex !important;flex-direction:column !important;overflow:hidden !important;box-sizing:border-box !important; }
-  }
+  .an-tabs { display: flex; gap: 6px; }
+  .an-tabs button { padding: 6px 10px; border: 1px solid var(--rule-3); background: #fff; border-radius: 4px; font: 600 10.5px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--muted-2); cursor: pointer; }
+  .an-tabs button:hover { border-color: #b6b4ae; }
+  .an-tabs button[aria-selected="true"] { background: var(--fill); border-color: var(--ink); color: var(--ink); }
+  .an-week { display: flex; align-items: center; gap: 6px; }
+  .an-week .input { width: 58px; text-align: center; padding: 4px 6px; font-size: 12.5px; font-weight: 600; }
+  .an-area { position: relative; height: 380px; margin-top: 20px; }
+  .an-area canvas { display: none; }
+  .an-area canvas.active { display: block; }
+  .an-note { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-top: 12px; }
+  @media (max-width: 640px) { .page-head { flex-wrap: wrap; } .page-head-end { margin-left: 0; width: 100%; justify-content: space-between; } .an-area { height: 300px; } }
 </style>
 {% endblock %}
 
 {% block content %}
-{% if completed_weeks %}
-
-<!-- Carousel card -->
-<div class="card animate-fade-up" style="padding:20px 24px 24px;flex:1;display:flex;flex-direction:column;min-height:0;">
-
-  {% comment %}
-    One tab per graph. The pills that used to switch Score/Rank and
-    Win Rate/Efficiency in place are gone: those were four graphs hiding behind
-    two, reachable only by finding a control that appeared on some slides and not
-    others. Every graph is now its own tab and its own canvas.
-  {% endcomment %}
-  <div class="an-head">
+<div class="page-head">
+  <div class="page-head-title">
+    <p class="eyebrow">Analytics</p>
+    <p class="meta" id="an-label">&nbsp;</p>
+  </div>
+  {% if completed_weeks %}
+  <div class="page-head-end">
+    <div class="an-week" id="an-week" hidden>
+      <button type="button" class="icon-btn" id="an-week-prev" aria-label="Previous week">‹</button>
+      <input class="input n" type="number" id="an-week-input" inputmode="numeric" min="1" max="{{ completed_weeks|last }}" value="{{ completed_weeks|last }}" aria-label="Week">
+      <button type="button" class="icon-btn" id="an-week-next" aria-label="Next week">›</button>
+    </div>
     <div class="an-tabs" id="an-tabs" role="tablist" aria-label="Charts"></div>
-    <div class="an-sub">
-      <p class="an-label" id="an-label"></p>
-      {% comment %}
-        The week lives on the card, not up in the nav: it belongs to the graph it
-        changes, and it only appears for the graphs that read it. Score and Rank
-        always plot the whole season.
-      {% endcomment %}
-      <div class="an-week" id="an-week" hidden>
-        <span class="an-week-text">Week</span>
-        <div class="nav-wk">
-          <button type="button" class="nav-wk-btn" id="an-week-prev" aria-label="Previous week">
-            <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path
-              stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"/></svg>
-          </button>
-          <input type="number" class="nav-wk-input" id="an-week-input" inputmode="numeric"
-                 min="1" max="{{ completed_weeks|last }}" value="{{ completed_weeks|last }}"
-                 aria-label="Week">
-          <button type="button" class="nav-wk-btn" id="an-week-next" aria-label="Next week">
-            <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path
-              stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/></svg>
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  {% if points_chart %}
-  <div class="slide" id="slide-0">
-    <div class="slide-chart-area">
-      <canvas id="scoreChart"></canvas>
-      <div class="no-data-msg" id="scoreChart-nodata">No data yet</div>
-    </div>
-  </div>
-
-  <div class="slide" id="slide-1">
-    <div class="slide-chart-area">
-      <canvas id="rankChart"></canvas>
-      <div class="no-data-msg" id="rankChart-nodata">No data yet</div>
-    </div>
-  </div>
-
-  {% comment %}
-    Panel ids track the CHARTS index, so removing a tab means renumbering the ones
-    after it — otherwise goToSlide activates a panel that is not the chart it just
-    drew.
-  {% endcomment %}
-  {% if efficiency_chart %}
-  <div class="slide" id="slide-2">
-    <div class="slide-chart-area">
-      <canvas id="efficiencyChart"></canvas>
-      <div class="no-data-msg" id="efficiencyChart-nodata">No data yet</div>
-    </div>
-  </div>
-
-  <div class="slide" id="slide-3">
-    <div class="slide-chart-area">
-      <canvas id="consistencyChart"></canvas>
-      <div class="no-data-msg" id="consistencyChart-nodata">No data yet</div>
-    </div>
   </div>
   {% endif %}
-  {% endif %}
-
 </div>
 
+{% if completed_weeks %}
+<div class="an-area">
+  <canvas id="scoreChart"></canvas>
+  <canvas id="rankChart"></canvas>
+  <canvas id="efficiencyChart"></canvas>
+  <canvas id="consistencyChart"></canvas>
+</div>
+<div class="an-note">
+  <div class="legend" id="an-legend">
+    <span><i class="swatch" style="background:var(--ink);"></i>you</span>
+    <span><i class="swatch" style="background:var(--accent);"></i>leader</span>
+    <span><i class="swatch" style="background:var(--placeholder);"></i>everyone else</span>
+  </div>
+  <p class="n" id="an-caption" style="font-size:10.5px;color:var(--muted-3);"></p>
+</div>
 {% else %}
-<div class="card" style="padding:48px;text-align:center;flex:1;display:flex;align-items:center;justify-content:center;">
-  <p style="color:var(--muted);font-size:.875rem;">No data yet. Complete week 1 to see analytics here.</p>
-</div>
+<p class="empty" style="margin-top:20px;">No completed weeks yet.</p>
 {% endif %}
-
 {% endblock %}
 
 {% block extra_js %}
+{% if completed_weeks %}
 <script>
-const PALETTE = ['#6366f1','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#f97316','#ec4899'];
-var chartWeek = {{ completed_weeks|last|default:1 }};
-
+const ME = '{{ request.user.username|escapejs }}';
 const pointsData   = {{ points_chart|safe }};
 const positionData = {{ position_chart|safe }};
 const effData      = {{ efficiency_chart|safe }};
+const MAX_WEEK = {{ completed_weeks|last }};
+var chartWeek = MAX_WEEK;
+
+const INK = '#14161a', ACCENT = '#0f7a6c', DIM = '#c4c2bd', FILL = '#dedcd7', RULE = '#ecece8', MUTED = '#9a9ea4';
+if (window.Chart) { Chart.defaults.font.family = "'IBM Plex Sans', system-ui, sans-serif"; Chart.defaults.color = MUTED; }
+
+const TIP = { backgroundColor: '#fff', titleColor: INK, bodyColor: '#5f6469', padding: 10, cornerRadius: 5, borderColor: '#e4e3df', borderWidth: 1 };
+const SX  = { grid: { display: false }, border: { display: false }, ticks: { font: { size: 10, family: "'IBM Plex Mono', monospace" }, color: MUTED } };
+const SY  = (e = {}) => ({ grid: { color: RULE, drawTicks: false }, border: { display: false }, ticks: { font: { size: 10, family: "'IBM Plex Mono', monospace" }, color: MUTED, padding: 6 }, ...e });
 
 function filteredByWeek(data, week) {
   if (!data || data.length < 2) return data;
   return [data[0], ...data.slice(1).filter(r => r[0] <= week)];
 }
-function destroyChart(id) { const c = Chart.getChart(id); if (c) c.destroy(); }
-function showNoData(id) { const el = document.getElementById(id+'-nodata'); if (el) el.classList.add('show'); }
-function hideNoData(id) { const el = document.getElementById(id+'-nodata'); if (el) el.classList.remove('show'); }
+/* The leader is whoever is top on the last row of the score table. */
+function leaderName() {
+  if (!pointsData || pointsData.length < 2) return null;
+  const last = pointsData[pointsData.length - 1], names = pointsData[0].slice(1);
+  let best = -Infinity, who = null;
+  names.forEach((n, i) => { if (last[i + 1] > best) { best = last[i + 1]; who = n; } });
+  return who;
+}
+function colourFor(name) { return name === ME ? INK : name === leaderName() ? ACCENT : DIM; }
 
-const TIP = {backgroundColor:'#0e1422',titleColor:'#f1f5f9',bodyColor:'#64748b',padding:10,cornerRadius:8,borderColor:'rgba(255,255,255,.1)',borderWidth:1};
-const SX  = {grid:{display:false},border:{display:false},ticks:{font:{size:10},color:'#475569'}};
-const SY  = (e={}) => ({grid:{color:'rgba(255,255,255,.04)',drawTicks:false},border:{display:false},ticks:{font:{size:10},color:'#475569',padding:6},...e});
-const LEG = {position:'bottom',labels:{boxWidth:8,padding:14,font:{size:10},color:'#64748b'}};
-
-function lineDS(data, fill, ctx, h) {
-  return data[0].slice(1).map((p,i) => {
-    const c = PALETTE[i%PALETTE.length];
-    let bg = 'transparent';
-    if (fill && ctx) { const g=ctx.createLinearGradient(0,0,0,h); g.addColorStop(0,c+'28'); g.addColorStop(1,c+'00'); bg=g; }
-    return {label:p, data:data.slice(1).map(r=>r[i+1]), borderColor:c, backgroundColor:bg,
-      pointBackgroundColor:c, pointBorderColor:'rgba(7,11,20,.9)', pointBorderWidth:1.5,
-      pointRadius:3, pointHoverRadius:6, tension:0.4, fill, borderWidth:2};
-  });
+function lineDS(data) {
+  return data[0].slice(1).map((p, i) => ({
+    label: p, data: data.slice(1).map(r => r[i + 1]),
+    borderColor: colourFor(p), backgroundColor: 'transparent',
+    pointRadius: p === ME ? 3 : 0, pointHoverRadius: 5, pointBackgroundColor: colourFor(p),
+    tension: 0, borderWidth: p === ME ? 2 : 1.5, order: p === ME ? 0 : p === leaderName() ? 1 : 2,
+  }));
 }
 
-/* ── The graphs ──────────────────────────────────────
-   One entry per tab, in the order they appear. `build` takes the canvas id, so a
-   graph that used to be a mode of another one is now just its own row here —
-   which is the whole point of dropping the pills. */
-const MAX_WEEK = {{ completed_weeks|last|default:1 }};
-
-/* `usesWeek` decides whether the week control appears, and every graph is drawn
-   through the same `week` argument — so a graph without the control is not
-   quietly left on whatever week was chosen elsewhere; it plots the full season by
-   being handed MAX_WEEK. */
 const CHARTS = [
-  { tab:'Score',      label:'Cumulative score, whole season',
-    canvasId:'scoreChart',      usesWeek:false, build:(c,w) => buildMainOn(c, 'score', w) },
-  { tab:'Rank',       label:'League position, whole season',
-    canvasId:'rankChart',       usesWeek:false, build:(c,w) => buildMainOn(c, 'rank', w) },
-  {% if efficiency_chart %}
-  { tab:'Efficiency', label:'Points won as a share of the points on offer, in the chosen week',
-    canvasId:'efficiencyChart', usesWeek:true,  build:(c,w) => buildEfficiencyOn(c, w) },
-  { tab:'Consistency', label:'Swing in weekly efficiency, through the chosen week — a shorter bar is a steadier player',
-    canvasId:'consistencyChart', usesWeek:true, build:(c,w) => buildConsistencyOn(c, w, false, true) },
-  {% endif %}
+  { tab: 'Score', label: 'Cumulative score, whole season', caption: '', canvasId: 'scoreChart', usesWeek: false, legend: true, build: (c, w) => buildMainOn(c, 'score', w) },
+  { tab: 'Rank', label: 'League position, whole season', caption: '', canvasId: 'rankChart', usesWeek: false, legend: true, build: (c, w) => buildMainOn(c, 'rank', w) },
+  { tab: 'Efficiency', label: 'Points won as a share of the points on offer, in the chosen week', caption: '', canvasId: 'efficiencyChart', usesWeek: true, legend: false, build: (c, w) => buildEfficiencyOn(c, w) },
+  { tab: 'Consistency', label: 'Swing in weekly efficiency through the chosen week', caption: 'a shorter bar is a steadier player', canvasId: 'consistencyChart', usesWeek: true, legend: false, build: (c, w) => buildConsistencyOn(c, w) },
 ];
-
-let currentSlide = 0;
-let activeChart = null;
-
+let currentSlide = 0, activeChart = null;
 const tabsEl = document.getElementById('an-tabs');
 CHARTS.forEach((c, i) => {
   const b = document.createElement('button');
-  b.type = 'button';
-  b.className = 'an-tab' + (i === 0 ? ' active' : '');
-  b.textContent = c.tab;
-  b.setAttribute('role', 'tab');
+  b.type = 'button'; b.textContent = c.tab; b.setAttribute('role', 'tab');
   b.setAttribute('aria-selected', i === 0 ? 'true' : 'false');
   b.addEventListener('click', () => goToSlide(i));
   tabsEl.appendChild(b);
 });
-
-/* Draw whichever graph is showing. Called on tab change and when the week picker
-   moves, so there is one place that knows how to put a chart on screen. */
 function drawCurrent() {
   const c = CHARTS[currentSlide];
-  if (!c) return;
   if (activeChart) { activeChart.destroy(); activeChart = null; }
   activeChart = c.build(c.canvasId, c.usesWeek ? chartWeek : MAX_WEEK);
-  if (!activeChart) showNoData(c.canvasId);
 }
-
 function goToSlide(idx) {
-  if (idx < 0 || idx >= CHARTS.length) return;
-
-  const oldPanel = document.getElementById('slide-' + currentSlide);
-  if (oldPanel) oldPanel.classList.remove('active');
-
   currentSlide = idx;
   const c = CHARTS[idx];
-
-  const panel = document.getElementById('slide-' + currentSlide);
-  if (panel) panel.classList.add('active');
-
+  document.querySelectorAll('.an-area canvas').forEach(cv => cv.classList.toggle('active', cv.id === c.canvasId));
   document.getElementById('an-label').textContent = c.label;
+  document.getElementById('an-caption').textContent = c.caption;
   document.getElementById('an-week').hidden = !c.usesWeek;
-  tabsEl.querySelectorAll('.an-tab').forEach((t, i) => {
-    t.classList.toggle('active', i === idx);
-    t.setAttribute('aria-selected', i === idx ? 'true' : 'false');
-  });
-
+  document.getElementById('an-legend').style.visibility = c.legend ? 'visible' : 'hidden';
+  tabsEl.querySelectorAll('button').forEach((t, i) => t.setAttribute('aria-selected', i === idx ? 'true' : 'false'));
   drawCurrent();
 }
 
-goToSlide(0);
-
-// ── Score / Rank chart ─────────────────────────────
-function buildMainOn(cid, mode, week, showLegend=false) {
-  const el=document.getElementById(cid); if (!el) return null;
-  hideNoData(cid);
-  const ctx=el.getContext('2d'), data=filteredByWeek(mode==='score'?pointsData:positionData,week), rev=mode==='rank';
+function buildMainOn(cid, mode, week) {
+  const el = document.getElementById(cid);
+  const data = filteredByWeek(mode === 'score' ? pointsData : positionData, week), rev = mode === 'rank';
   if (!data || data.length < 2) return null;
-  const h=el.parentElement.offsetHeight||240;
-  return new Chart(ctx, {type:'line',
-    data:{labels:data.slice(1).map(r=>'Wk '+r[0]), datasets:lineDS(data,false,ctx,h)},
-    options:{responsive:true, maintainAspectRatio:false, interaction:{mode:'index',intersect:false},
-      plugins:{legend:{...LEG,display:showLegend}, tooltip:{...TIP,callbacks:{label:c=>` ${c.dataset.label}: ${c.parsed.y}${rev?'':' pts'}`}}},
-      scales:{y:SY({reverse:rev}), x:SX}, animation:{duration:600,easing:'easeInOutQuart'}}});
+  return new Chart(el.getContext('2d'), { type: 'line',
+    data: { labels: data.slice(1).map(r => 'wk ' + r[0]), datasets: lineDS(data) },
+    options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'nearest', intersect: false },
+      plugins: { legend: { display: false }, tooltip: { ...TIP, callbacks: { label: c => ` ${c.dataset.label}: ${c.parsed.y}${rev ? '' : ' pts'}` } } },
+      scales: { y: SY({ reverse: rev }), x: SX }, animation: false } });
 }
-
-/* ── Efficiency ──
-   A bar per player for one week, not a line across all of them. The week control
-   picks which week, which is why it says "Week" rather than "Through week" — this
-   is the one chart that reads it as a single week rather than a range. */
+function barColours(players) {
+  return { bg: players.map(p => p === ME ? INK : FILL), border: players.map(p => p === ME ? INK : '#d6d4cf') };
+}
 function buildEfficiencyOn(cid, week) {
-  const el=document.getElementById(cid); if (!el) return null;
-  hideNoData(cid);
+  const el = document.getElementById(cid);
   if (!effData || effData.length < 2) return null;
   const players = effData[0].slice(1);
-  // Exact week, not everything up to it. Week numbers arrive as strings.
   const row = effData.slice(1).find(r => String(r[0]) === String(week));
   if (!row) return null;
-  return new Chart(el.getContext('2d'), {type:'bar',
-    data:{labels:players, datasets:[{label:'Efficiency', data:row.slice(1),
-      backgroundColor:players.map((_,i)=>PALETTE[i%PALETTE.length]+'bb'),
-      borderColor:players.map((_,i)=>PALETTE[i%PALETTE.length]), borderWidth:1, borderRadius:4}]},
-    options:{responsive:true, maintainAspectRatio:false,
-      plugins:{legend:{display:false},
-        tooltip:{...TIP,callbacks:{label:c=>` ${c.label}: ${c.parsed.y}%`}}},
-      scales:{x:SX, y:SY({min:0,max:100,ticks:{font:{size:10},color:'#475569',padding:6,callback:v=>v+'%'}})},
-      animation:{duration:700,easing:'easeInOutQuart'}}});
+  const c = barColours(players);
+  return new Chart(el.getContext('2d'), { type: 'bar',
+    data: { labels: players, datasets: [{ label: 'Efficiency', data: row.slice(1), backgroundColor: c.bg, borderColor: c.border, borderWidth: 1 }] },
+    options: { responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { ...TIP, callbacks: { label: c => ` ${c.label}: ${c.parsed.y}%` } } },
+      scales: { x: SX, y: SY({ min: 0, max: 100, ticks: { font: { size: 10 }, color: MUTED, padding: 6, callback: v => v + '%' } }) }, animation: false } });
+}
+/* Standard deviation of weekly efficiency: a taller bar swings more. */
+function buildConsistencyOn(cid, week) {
+  const el = document.getElementById(cid);
+  const fd = filteredByWeek(effData, week); if (!fd || fd.length < 2) return null;
+  const players = fd[0].slice(1), rows = fd.slice(1);
+  const v = players.map((_, pi) => { const sc = rows.map(r => r[pi + 1]), m = sc.reduce((a, b) => a + b, 0) / sc.length; return parseFloat(Math.sqrt(sc.reduce((a, b) => a + (b - m) ** 2, 0) / sc.length).toFixed(2)); });
+  const c = barColours(players);
+  return new Chart(el.getContext('2d'), { type: 'bar',
+    data: { labels: players, datasets: [{ label: 'Std. deviation', data: v, backgroundColor: c.bg, borderColor: c.border, borderWidth: 1 }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { ...TIP, callbacks: { label: c => ` ${c.label}: ${c.parsed.y}` } } },
+      scales: { x: SX, y: SY() }, animation: false } });
 }
 
-/* ── Consistency ──
-   Still the standard deviation of weekly efficiency, so a TALLER bar is a player
-   who swings more — the caption says so, because "Consistency" on its own would
-   read the other way round. */
-function buildConsistencyOn(cid, week, showLegend=false, showNames=false) {
-  const el=document.getElementById(cid); if (!el) return null;
-  hideNoData(cid);
-  const fd=filteredByWeek(effData,week); if (!fd||fd.length<2) return null;
-  const players=fd[0].slice(1), rows=fd.slice(1);
-  const v=players.map((_,pi)=>{const sc=rows.map(r=>r[pi+1]),m=sc.reduce((a,b)=>a+b,0)/sc.length; return parseFloat(Math.sqrt(sc.reduce((a,b)=>a+(b-m)**2,0)/sc.length).toFixed(2));});
-  const xAxis={...SX,ticks:{...SX.ticks,display:showNames}};
-  return new Chart(el.getContext('2d'), {type:'bar',
-    data:{labels:players, datasets:[{label:'Std. Deviation', data:v,
-      backgroundColor:players.map((_,i)=>PALETTE[i%PALETTE.length]+'bb'),
-      borderColor:players.map((_,i)=>PALETTE[i%PALETTE.length]), borderWidth:1, borderRadius:4}]},
-    options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{display:showLegend},
-      tooltip:{...TIP,callbacks:{label:c=>` ${c.label}: ${c.parsed.y}`}}},
-      scales:{x:xAxis,y:SY()}, animation:{duration:700,easing:'easeInOutQuart'}}});
-}
-
-/* The card's week control. Deliberately not the nav's initWeekPicker: this
-   belongs to two of the five graphs, so it appears and disappears with the tab
-   rather than sitting across the top of the page whatever you are looking at. */
-{% if completed_weeks %}
-(function(){
-  const box  = document.getElementById('an-week-input');
-  const prev = document.getElementById('an-week-prev');
-  const next = document.getElementById('an-week-next');
-  if (!box || !prev || !next) return;
-
-  const min = 1, max = MAX_WEEK;
-  const clamp = w => Math.min(max, Math.max(min, w));
-
-  function paint() {
-    box.value = chartWeek;              // also snaps back a rejected entry
-    prev.disabled = chartWeek <= min;
-    next.disabled = chartWeek >= max;
-  }
-
-  function set(w) {
-    const wanted = clamp(w);
-    if (wanted === chartWeek) { paint(); return; }
-    chartWeek = wanted;
-    paint();
-    drawCurrent();
-  }
-
+(function () {
+  const box = document.getElementById('an-week-input'), prev = document.getElementById('an-week-prev'), next = document.getElementById('an-week-next');
+  const clamp = w => Math.min(MAX_WEEK, Math.max(1, w));
+  function paint() { box.value = chartWeek; prev.disabled = chartWeek <= 1; next.disabled = chartWeek >= MAX_WEEK; }
+  function set(w) { const wanted = clamp(w); if (wanted === chartWeek) { paint(); return; } chartWeek = wanted; paint(); drawCurrent(); }
   prev.addEventListener('click', () => set(chartWeek - 1));
   next.addEventListener('click', () => set(chartWeek + 1));
-  // 'change', not 'input': typing "12" would otherwise redraw at week 1 on the way.
-  box.addEventListener('change', () => {
-    const typed = parseInt(box.value, 10);
-    if (Number.isNaN(typed)) { paint(); return; }
-    set(typed);
-  });
-  box.addEventListener('keydown', e => {
-    if (e.key === 'Enter') { e.preventDefault(); box.blur(); }
-  });
-
+  box.addEventListener('change', () => { const t = parseInt(box.value, 10); if (Number.isNaN(t)) { paint(); return; } set(t); });
+  box.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); box.blur(); } });
   paint();
 })();
-{% endif %}
+goToSlide(0);
 </script>
+{% endif %}
 {% endblock %}
