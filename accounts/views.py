@@ -1,12 +1,9 @@
-from django.shortcuts import render, redirect, get_object_or_404
-from django.contrib.auth import login, authenticate, logout
+from django.shortcuts import render, redirect
+from django.contrib.auth import login, logout
 from django.contrib.auth.forms import AuthenticationForm
-from django.contrib.auth.models import User
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from .forms import RegisterForm, ProfileForm
-from main.models import SiteSettings, SeasonRecord
-from main.rankings import competition_ranks
 
 
 def register(request):
@@ -45,33 +42,10 @@ def user_profile(request):
         request.user.profile.favorite_team = form.cleaned_data['favorite_team']
         request.user.profile.bio = form.cleaned_data['bio']
         request.user.profile.theme = form.cleaned_data['theme']
+        # Both rows, explicitly. A post_save signal used to re-save the profile
+        # whenever the user saved, which hid every place that forgot to.
         request.user.save()
+        request.user.profile.save()
         messages.success(request, 'Profile updated.')
         return redirect('accounts:user_profile')
     return render(request, 'accounts/user_profile.html', {'form': form})
-
-
-def public_profile(request, username):
-    player = get_object_or_404(User, username=username)
-    settings = SiteSettings.get()
-    player_seasons = []
-    for record in SeasonRecord.objects.all():
-        # Competition ranking, so a shared finish reads the same here as it does
-        # on the season page rather than picking one of them to be "3rd".
-        ranks = competition_ranks(
-            (e.get('username', ''), e.get('score', 0))
-            for e in record.final_standings)
-        for entry in record.final_standings:
-            if entry.get('username') == player.username:
-                player_seasons.append({
-                    'year': record.year,
-                    'rank': ranks.get(player.username, 0),
-                    'score': entry.get('score', 0),
-                    'winner': record.winner_username,
-                })
-                break
-    return render(request, 'accounts/public_profile.html', {
-        'player': player,
-        'week': settings.week,
-        'player_seasons': player_seasons,
-    })

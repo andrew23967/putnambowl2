@@ -6,7 +6,6 @@ from .teams import TEAMS, canonical_game_id
 class SiteSettings(models.Model):
     week = models.IntegerField(default=1)
     publish = models.BooleanField(default=False)
-    edit = models.BooleanField(default=True)
     lock_picks = models.BooleanField(default=False)
     multiplier = models.IntegerField(default=1)
     scrape_week = models.IntegerField(default=1)
@@ -27,13 +26,11 @@ class SiteSettings(models.Model):
     tick_interval = models.IntegerField(default=300)        # seconds between ticks
     auto_scrape_dt = models.DateTimeField(null=True, blank=True)  # exact UTC time to scrape+publish
     auto_lock_dt = models.DateTimeField(null=True, blank=True)    # exact UTC time to lock picks
-    scrape_filter_from_day = models.IntegerField(null=True, blank=True)  # 0=Mon…6=Sun, None=no filter
-    scrape_filter_to_day = models.IntegerField(null=True, blank=True)
 
     # ── Which days the league plays ──
-    # Replaces the from/to pair above, which could only express a contiguous run.
-    # A league that plays Sunday and Monday but skips the Saturday slate had no way
-    # to say so. Comma-separated weekday numbers, 0=Mon…6=Sun; blank means every day.
+    # A set, not a from/to range: a range can only express a contiguous run, so a
+    # league that plays Sunday and Monday but skips Saturday had no way to say so.
+    # Comma-separated weekday numbers, 0=Mon…6=Sun; blank means every day.
     scrape_days = models.CharField(
         max_length=20, blank=True, default='',
         help_text='Weekdays the league picks games on, 0=Mon…6=Sun. Blank = all days.')
@@ -361,38 +358,26 @@ class LeagueEmail(models.Model):
         return self.from_name or self.from_email
 
 
-class Message(models.Model):
-    sender = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sent_messages')
-    recipients = models.CharField(max_length=50, default='Everyone')
-    body = models.TextField()
-    created_at = models.DateTimeField(auto_now_add=True)
-    read = models.BooleanField(default=False)
-
-    class Meta:
-        ordering = ['-created_at']
-
-    def __str__(self):
-        return f'{self.sender} → {self.recipients}'
-
-
-class Bug(models.Model):
-    finder = models.ForeignKey(User, on_delete=models.CASCADE, related_name='bugs')
-    description = models.TextField()
-    resolved = models.BooleanField(default=False)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        ordering = ['-created_at']
-
-    def __str__(self):
-        return f'Bug by {self.finder} ({self.created_at.date()})'
-
-
 class SeasonRecord(models.Model):
+    """A finished season, as it stood at "Save season & reset".
+
+    The reset deletes every Game, Pick and WeeklyLeaderboard row, so this is the
+    only record a past season leaves. `main/seasons.py` writes it.
+
+    `final_standings` entries: {username, display_name, score, rank, correct,
+    graded, is_bot, preseason: {big_loser, nfc, afc, superbowl} | None}. Records
+    written before v3 carry only username and score; readers must cope.
+
+    `weekly` is the WeeklyLeaderboard series - entry k is the table going *into*
+    week k - closed with one more entry holding the final scores, so
+    "score after week k" is always entry k+1.
+    """
     year = models.IntegerField()
     winner_username = models.CharField(max_length=150)
-    final_standings = models.JSONField(default=list)  # [{'username': ..., 'score': ...}, ...]
+    final_standings = models.JSONField(default=list)
     notes = models.TextField(blank=True, default='')
+    weeks = models.IntegerField(default=0)
+    weekly = models.JSONField(default=list)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

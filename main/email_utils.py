@@ -59,7 +59,7 @@ def relay_to_league(league_email, sender_email, already_copied=(), author_name='
     """
     from .models import SiteSettings
     if not SiteSettings.get().email_relay:
-        print('[relay] forwarding switched off on the Emails page', flush=True)
+        log.info('[relay] forwarding switched off on the Emails page')
         return 0
 
     copied = {a.lower() for a in already_copied if a}
@@ -70,8 +70,7 @@ def relay_to_league(league_email, sender_email, already_copied=(), author_name='
 
     recipients = [a for a in league_recipients() if a.lower() not in copied]
     if not recipients:
-        print('[relay] nobody to forward to — everyone was already copied',
-              flush=True)
+        log.info('[relay] nobody to forward to - everyone was already copied')
         return 0
 
     site_url = getattr(django_settings, 'SITE_URL', 'http://localhost:8000')
@@ -86,8 +85,8 @@ def relay_to_league(league_email, sender_email, already_copied=(), author_name='
         sent = sum(1 for a in recipients
                    if send_via_mailbox(a, league_email.subject, body,
                                        reply_to=sender_email)[0])
-        print(f'[relay] "{league_email.subject}" forwarded to '
-              f'{sent}/{len(recipients)} member(s)', flush=True)
+        log.info(f'[relay] "{league_email.subject}" forwarded to '
+              f'{sent}/{len(recipients)} member(s)')
 
     threading.Thread(target=_send, daemon=True).start()
     return len(recipients)
@@ -161,8 +160,7 @@ def record_site_email(subject, body, recipient_count, author=None, sent_at=None,
             'recipient_count': recipient_count,
         },
     )
-    print(f'[email] recorded to feed ({"new" if created else "updated"}): {subject}',
-          flush=True)
+    log.info(f'[email] recorded to feed ({"new" if created else "updated"}): {subject}')
     return obj, created
 
 
@@ -276,11 +274,10 @@ def send_via_mailbox(to, subject, body, in_reply_to=None, reply_to=None):
             smtp.starttls()
             smtp.login(user, password)
             smtp.send_message(msg)
-        print(f'[email] sent via mailbox to {to}: {subject}', flush=True)
+        log.info(f'[email] sent via mailbox to {to}: {subject}')
         return True, 'sent'
     except Exception as e:
         log.error('[email] SMTP send to %s failed: %s', to, e)
-        print(f'[email] SMTP send to {to} FAILED: {e}', flush=True)
         return False, str(e)
 
 
@@ -326,8 +323,8 @@ def record_recap_email(week, recap_text, recipient_count=0, subject=None, year=N
     Keyed per season and week, so regenerating a recap replaces its row instead of
     stacking up duplicates. Returns (obj, created).
 
-    For the normal path use `send_recap_email` — this is for corrections, where
-    the league has already been mailed and should not be mailed again.
+    The recap reaches the league inside the next picks-are-live mail; nothing
+    mails it on its own.
     """
     if not (recap_text or '').strip():
         return None, False
@@ -340,94 +337,6 @@ def record_recap_email(week, recap_text, recipient_count=0, subject=None, year=N
         recipient_count=recipient_count,
         slug=slug or recap_slug(week, year),
     )
-
-
-def send_recap_email(week, recap_text, subject=None, year=None, slug=None):
-    """Mail a weekly recap to the league, and record it in the feed.
-
-    **Not the normal path.** A recap now reaches the league inside the next
-    "picks are live" mail, as its "Last Week" section, and `do_advance_week` only
-    records it to the feed. This is for corrections — a regenerated recap the
-    league should actually be told about.
-
-    Called, it sends. It used to send only when the feed row was newly created, on
-    the theory that advancing a week twice shouldn't mail the league twice — but
-    that guard silently swallowed real emails instead: a new season's preview, and
-    week 1 of any second season. The duplicate it guarded against never happened;
-    the missed sends did, twice. The only switch now is `email_recap` on the Emails
-    page.
-
-    Delivered per member from the accounts, which are the league's membership.
-    There is no mailing list to post to.
-    """
-    if not (recap_text or '').strip():
-        return False
-
-    from .models import SiteSettings
-    if not SiteSettings.get().email_recap:
-        # Still recorded, so it shows on the site; just not mailed.
-        record_recap_email(week, recap_text, subject=subject, year=year, slug=slug)
-        print('[email] recap email switched off on the Emails page — recorded only',
-              flush=True)
-        return False
-
-    recipients = league_recipients()
-    obj, _ = record_recap_email(week, recap_text, recipient_count=len(recipients),
-                                subject=subject, year=year, slug=slug)
-    if obj is None:
-        return False
-
-    site_url = getattr(django_settings, 'SITE_URL', 'http://localhost:8000')
-    body = (f'{obj.body}\n\n'
-            f'Every message the league has sent: {site_url.rstrip("/")}/home/')
-
-    # Per member, from the accounts. There is no list: the site is the mailer.
-    if not recipients:
-        print('[email] no recipients with an address — recap recorded but not emailed',
-              flush=True)
-        return False
-
-    if smtp_ready():
-        def _send_each():
-            sent = sum(1 for a in recipients
-                       if send_via_mailbox(a, obj.subject, body)[0])
-            print(f'[email] recap "{obj.subject}" sent to {sent}/{len(recipients)}',
-                  flush=True)
-        threading.Thread(target=_send_each, daemon=True).start()
-        return True
-
-    api_key = getattr(django_settings, 'RESEND_API_KEY', '')
-    if outbound_suppressed() or not api_key:
-        print('[email] no transport available — recap recorded but not emailed',
-              flush=True)
-        return False
-
-    from_email = getattr(django_settings, 'RESEND_FROM', 'onboarding@resend.dev')
-    inbox = getattr(django_settings, 'IMAP_USER', '') or ''
-
-    def _send():
-        try:
-            import resend
-            resend.api_key = api_key
-        except Exception as e:
-            print(f'[email] FAILED to init resend: {e}', flush=True)
-            return
-        sent = 0
-        for address in recipients:
-            try:
-                payload = {'from': from_email, 'to': [address],
-                           'subject': obj.subject, 'text': body}
-                if inbox:
-                    payload['reply_to'] = [inbox]
-                resend.Emails.send(payload)
-                sent += 1
-            except Exception as e:
-                print(f'[email] recap FAILED for one recipient: {e}', flush=True)
-        print(f'[email] recap "{obj.subject}" sent to {sent}/{len(recipients)}',
-              flush=True)
-
-    threading.Thread(target=_send, daemon=True).start()
-    return True
 
 
 def members_missing_picks(week):
@@ -465,13 +374,13 @@ def send_pick_reminder_email(site_settings):
     """
     week = site_settings.week
     if not site_settings.email_reminder:
-        print('[email] reminder switched off on the Emails page.', flush=True)
+        log.info('[email] reminder switched off on the Emails page.')
         return 0
     if site_settings.reminder_sent_week == week:
         return 0
     if outbound_suppressed() or not (smtp_ready()
                                      or getattr(django_settings, 'RESEND_API_KEY', '')):
-        print('[email] no transport available - skipping reminder.', flush=True)
+        log.info('[email] no transport available - skipping reminder.')
         return 0
 
     outstanding = members_missing_picks(week)
@@ -480,7 +389,7 @@ def send_pick_reminder_email(site_settings):
     site_settings.reminder_sent_week = week
     site_settings.save(update_fields=['reminder_sent_week'])
     if not outstanding:
-        print(f'[email] week {week}: everyone is in, no reminder needed.', flush=True)
+        log.info(f'[email] week {week}: everyone is in, no reminder needed.')
         return 0
 
     site_url = getattr(django_settings, 'SITE_URL', 'http://localhost:8000')
@@ -527,8 +436,7 @@ def send_pick_reminder_email(site_settings):
             else:
                 ok = _send_via_resend(address, subject, body)
             sent += 1 if ok else 0
-        print(f'[email] reminder sent to {sent}/{len(messages)} for week {week}',
-              flush=True)
+        log.info(f'[email] reminder sent to {sent}/{len(messages)} for week {week}')
 
     threading.Thread(target=_send_each, daemon=True).start()
     return len(messages)
@@ -550,20 +458,20 @@ def _send_via_resend(address, subject, body):
         })
         return True
     except Exception as e:
-        print(f'[email] resend failed for {address}: {e}', flush=True)
+        log.error(f'[email] resend failed for {address}: {e}')
         return False
 
 
 def send_picks_published_email(site_settings):
     """Send weekly picks-live notification to all non-bot users with an email address."""
     api_key = getattr(django_settings, 'RESEND_API_KEY', '')
-    print(f'[email] send_picks_published_email called, week={site_settings.week}', flush=True)
+    log.info(f'[email] send_picks_published_email called, week={site_settings.week}')
     if not site_settings.email_picks_live:
-        print('[email] picks-live email switched off on the Emails page.', flush=True)
+        log.info('[email] picks-live email switched off on the Emails page.')
         return
     # Either transport will do; the mailbox is preferred further down.
     if outbound_suppressed() or (not api_key and not smtp_ready()):
-        print('[email] no transport available — skipping.', flush=True)
+        log.info('[email] no transport available - skipping.')
         return
 
     recipients = list(
@@ -572,9 +480,9 @@ def send_picks_published_email(site_settings):
         .exclude(profile__is_bot=True)
         .values_list('email', flat=True)
     )
-    print(f'[email] {len(recipients)} recipient(s)', flush=True)
+    log.info(f'[email] {len(recipients)} recipient(s)')
     if not recipients:
-        print('[email] No recipients — skipping.', flush=True)
+        log.info('[email] No recipients - skipping.')
         return
 
     week = site_settings.week
@@ -592,8 +500,8 @@ def send_picks_published_email(site_settings):
     games.sort(key=lambda g: (g.game_dt is None, g.game_dt, g.id))
     ballot = build_ballot(games) if (inbox and site_settings.email_ballot) else ''
     if games and not inbox:
-        print('[email] IMAP_USER not set — sending without a reply-by-email '
-              'ballot, since replies would go nowhere', flush=True)
+        log.info('[email] IMAP_USER not set - sending without a reply-by-email '
+              'ballot, since replies would go nowhere')
 
     lock_line = ''
     if site_settings.auto_lock_dt:
@@ -658,8 +566,8 @@ def send_picks_published_email(site_settings):
             sent = sum(1 for a in recipients
                        if send_via_mailbox(a, subject, body,
                                            reply_to=inbox or None)[0])
-            print(f'[email] picks-live sent to {sent}/{len(recipients)} '
-                  f'for week {week}', flush=True)
+            log.info(f'[email] picks-live sent to {sent}/{len(recipients)} '
+                  f'for week {week}')
         threading.Thread(target=_send_each, daemon=True).start()
         return
 
@@ -670,7 +578,7 @@ def send_picks_published_email(site_settings):
             import resend
             resend.api_key = api_key
         except Exception as e:
-            print(f'[email] FAILED to init resend: {e}', flush=True)
+            log.error(f'[email] could not init resend: {e}')
             return
 
         sent = 0
@@ -687,7 +595,7 @@ def send_picks_published_email(site_settings):
                 resend.Emails.send(payload)
                 sent += 1
             except Exception as e:
-                print(f'[email] FAILED for one recipient: {e}', flush=True)
-        print(f'[email] sent OK to {sent}/{len(recipients)} recipients for week {week}', flush=True)
+                log.error(f'[email] send failed for one recipient: {e}')
+        log.info(f'[email] sent OK to {sent}/{len(recipients)} recipients for week {week}')
 
     threading.Thread(target=_send, daemon=True).start()

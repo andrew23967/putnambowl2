@@ -1,5 +1,5 @@
 import json
-import random
+import logging
 from collections import defaultdict
 from datetime import datetime, timezone, timedelta
 from django.shortcuts import render, redirect, get_object_or_404
@@ -7,27 +7,19 @@ from django.contrib.auth.models import User
 from django.contrib.auth.decorators import login_required
 from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib import messages
-from django.db.models import Q, Prefetch
+from django.db.models import Prefetch
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
-from . import models, forms, scrape
+from . import forms, scrape
 from .models import (
     Game, IntroTemplate, Pick, SiteSettings, WeeklyLeaderboard,
-    LeagueEmail, SeasonRecord
+    LeagueEmail,
 )
 from .rankings import competition_ranks, rank_rows
-from .teams import TEAM_ABBREV, ABBREV_TO_TEAM, team_from_abbrev
+from .scoring import calculate_points
+from .teams import team_from_abbrev
 
-
-def _calculate_points(underdog_ml, favorite_ml):
-    u = abs(float(underdog_ml))
-    f = abs(float(favorite_ml))
-    if u == 0 or f == 0:
-        return 1.0
-    u_ratio = u / 100
-    f_ratio = 100 / f
-    hp = ((1 / (u_ratio * f_ratio)) ** 0.5) - 1
-    return round((hp + 1) * u_ratio, 2)
+log = logging.getLogger(__name__)
 
 
 def _countdown(settings, games):
@@ -235,7 +227,6 @@ def analytics(request):
         points_chart.append([str(lb.week)] + [score_map.get(u, 0) for u in chart_players])
         position_chart.append([str(lb.week)] + [rank_map.get(u, len(chart_players)) for u in chart_players])
 
-    win_rate_chart = [['Week'] + chart_players]
     efficiency_chart = [['Week'] + chart_players]
     for wk_num in sorted(games_by_past_week.keys()):
         week_correct = {u: 0 for u in chart_players}
@@ -253,13 +244,9 @@ def analytics(request):
                 if pp.is_correct:
                     week_correct[pp.user.username] += 1
                     week_earned[pp.user.username] += pp.points_earned
-        wr_row = [str(wk_num)]
         eff_row = [str(wk_num)]
         for u in chart_players:
-            t = week_total[u]
-            wr_row.append(round(week_correct[u] / t * 100, 1) if t else 0)
             eff_row.append(round(week_earned[u] / week_potential * 100, 1) if week_potential else 0)
-        win_rate_chart.append(wr_row)
         efficiency_chart.append(eff_row)
 
     completed_weeks = sorted(games_by_past_week.keys())
@@ -269,7 +256,6 @@ def analytics(request):
         'completed_weeks': completed_weeks,
         'points_chart': json.dumps(points_chart),
         'position_chart': json.dumps(position_chart),
-        'win_rate_chart': json.dumps(win_rate_chart),
         'efficiency_chart': json.dumps(efficiency_chart),
     })
 
@@ -423,7 +409,7 @@ def ajax_add_game(request):
     d = form.cleaned_data
     ug_ml = d.get('underdog_moneyline') or 0
     fav_ml = d.get('favorite_moneyline') or 0
-    points2 = (_calculate_points(ug_ml, abs(fav_ml)) * settings.multiplier
+    points2 = (calculate_points(ug_ml, abs(fav_ml)) * settings.multiplier
                if ug_ml and fav_ml else settings.multiplier)
     raw_dt = d.get('game_dt')
     if raw_dt:
@@ -497,120 +483,15 @@ def picks(request):
     # picked games to the bottom made the list reshuffle under your cursor.
     games.sort(key=lambda g: (g.game_dt is None, g.game_dt, g.id))
 
-    raw_dist = {}
-    for p in Pick.objects.filter(game__in=games).values('game_id', 'choice'):
-        gid = str(p['game_id'])
-        raw_dist.setdefault(gid, {'team1': 0, 'team2': 0})
-        raw_dist[gid][p['choice']] = raw_dist[gid].get(p['choice'], 0) + 1
-    # Add pct fields
-    pick_dist = {}
-    for gid, counts in raw_dist.items():
-        total = counts['team1'] + counts['team2']
-        pick_dist[gid] = {
-            'team1': counts['team1'],
-            'team2': counts['team2'],
-            'total': total,
-            'team1_pct': round(counts['team1'] / total * 100) if total else 50,
-            'team2_pct': round(counts['team2'] / total * 100) if total else 50,
-        }
-    # Ensure every game has a dist entry so the template can always render the pie chart
-    for game in games:
-        gid = str(game.id)
-        if gid not in pick_dist:
-            pick_dist[gid] = {'team1': 0, 'team2': 0, 'total': 0, 'team1_pct': 50, 'team2_pct': 50}
-
-    # Biggest upset: graded game the underdog (team2) won, where the most
-    # people had backed the favorite.
-    biggest_upset = None
-    for game in games:
-        if not game.graded or game.winner != 'team2':
-            continue
-        dist = pick_dist.get(str(game.id), {})
-        total = dist.get('total', 0)
-        wrong_pct = dist.get('team1_pct', 0)
-        if biggest_upset is None or wrong_pct > biggest_upset['wrong_pct']:
-            biggest_upset = {
-                'winner': game.team2_abbrev,
-                'loser': game.team1_abbrev,
-                'winner_full': game.team2,
-                'wrong_pct': wrong_pct,
-                'total': total,
-                'pts': game.points2,
-            }
-
     countdown = _countdown(settings, games)
 
     return render(request, 'main/picks.html', {
         'settings': settings,
         'games': games,
         'picks_map': picks_map,
-        'pick_dist': pick_dist,
-        'biggest_upset': biggest_upset,
         'graded_count': sum(1 for g in games if g.winner),
         'countdown_json': countdown['milestones_json'],
         'countdown_idle': countdown['idle_label'],
-    })
-
-
-@login_required
-def allpicks(request):
-    settings = SiteSettings.get()
-    games = Game.objects.filter(week=settings.week)
-    players = User.objects.select_related('profile').all()
-
-    all_picks = Pick.objects.select_related('user', 'game').filter(game__in=games)
-    picks_map = {}
-    for pick in all_picks:
-        picks_map[(pick.user_id, pick.game_id)] = pick
-
-    games_data = []
-    for game in games:
-        player_picks = []
-        for player in players:
-            pick = picks_map.get((player.id, game.id))
-            if pick:
-                correct = pick.is_correct
-                player_picks.append({
-                    'player': player.username,
-                    'choice': pick.choice,
-                    'team_picked': pick.team_picked,
-                    'abbrev': TEAM_ABBREV.get(pick.team_picked, pick.team_picked[:3].upper()),
-                    'points': pick.points_possible,
-                    'correct': correct,
-                })
-            else:
-                player_picks.append({
-                    'player': player.username,
-                    'choice': None,
-                    'team_picked': 'No pick',
-                    'abbrev': '—',
-                    'points': 0,
-                    'correct': False,
-                })
-
-        team1_count = sum(1 for p in player_picks if p['choice'] == 'team1')
-        team2_count = sum(1 for p in player_picks if p['choice'] == 'team2')
-
-        games_data.append({
-            'game': game,
-            'team1_abbrev': game.team1_abbrev,
-            'team2_abbrev': game.team2_abbrev,
-            'player_picks': player_picks,
-            'team1_count': team1_count,
-            'team2_count': team2_count,
-        })
-
-    player_totals = sorted(
-        [{'username': p.username, 'score': round(p.profile.score, 1)} for p in players],
-        key=lambda x: x['score'], reverse=True
-    )
-
-    return render(request, 'main/allpicks.html', {
-        'games_data': games_data,
-        'players': players,
-        'player_totals': player_totals,
-        'publish': settings.publish,
-        'week': settings.week,
     })
 
 
@@ -732,7 +613,7 @@ def preseason(request):
         request.user.profile.afc_champ = form.cleaned_data['afc_champ']
         request.user.profile.superbowl_winner = form.cleaned_data['superbowl_winner']
         request.user.profile.preseason_submitted = True
-        request.user.save()
+        request.user.profile.save()
         request.session.pop('preseason_deferred', None)
         # No flash on the way out: the bar on the home page turns green and says
         # the picks are in, which is the same news in the place it belongs, and
@@ -747,11 +628,6 @@ def preseason(request):
         # page is an edit screen, and there is nothing left to put off.
         'can_defer': preseason_open and not request.user.profile.preseason_submitted,
     })
-
-
-def standings_view(request):
-    tables = scrape.standings()
-    return render(request, 'main/standings.html', {'standings': tables})
 
 
 def rules(request):
@@ -808,24 +684,6 @@ def members(request):
         'human_count': sum(1 for r in rows if not r['is_bot']),
         'bot_count': sum(1 for r in rows if r['is_bot']),
     })
-
-
-def seasons(request):
-    raw_records = SeasonRecord.objects.all()
-    season_records = []
-    for record in raw_records:
-        standings = rank_rows([
-            {'username': e.get('username', ''), 'score': e.get('score', 0)}
-            for e in record.final_standings
-        ])
-        season_records.append({
-            'year': record.year,
-            'winner_username': record.winner_username,
-            'notes': record.notes,
-            'standings': standings,
-        })
-    return render(request, 'main/seasons.html', {'season_records': season_records})
-
 
 
 @staff_member_required
@@ -1037,41 +895,10 @@ def pickdash(request):
             settings = SiteSettings.get()
             messages.success(request, 'Auto-pilot tick run.')
         except Exception as _e:
-            print(f'[auto_tick error] {_e}', flush=True)
+            log.exception('manual auto_tick failed')
             messages.error(request, f'Auto-pilot tick failed: {_e}')
 
-    if 'add_game' in request.POST:
-        form = forms.GameForm(request.POST)
-        if form.is_valid():
-            d = form.cleaned_data
-            ug_ml = d.get('underdog_moneyline') or 0
-            fav_ml = d.get('favorite_moneyline') or 0
-            points2 = _calculate_points(ug_ml, abs(fav_ml)) * settings.multiplier if ug_ml and fav_ml else settings.multiplier
-            Game.objects.create(
-                team1=d['underdog'],
-                team2=d['favorite'],
-                points1=float(settings.multiplier),
-                points2=points2,
-                team1_is_home=d['favorite_is_home'],
-                game_dt=None,
-                week=settings.week,
-            )
-            messages.success(request, 'Game added.')
-
-    elif 'delete_game' in request.POST:
-        game_id = request.POST.get('game_id')
-        Game.objects.filter(id=game_id).delete()
-        Pick.objects.filter(game_id=game_id).delete()
-
-    elif 'toggle_winner' in request.POST:
-        game_id = request.POST.get('game_id')
-        game = get_object_or_404(Game, id=game_id)
-        cycle = {'': 'team1', 'team1': 'team2', 'team2': 'tie', 'tie': 'team1'}
-        game.winner = cycle.get(game.winner, 'team1')
-        game.graded = True
-        game.save()
-
-    elif 'delete_all_games' in request.POST:
+    if 'delete_all_games' in request.POST:
         current_games = Game.objects.filter(week=settings.week)
         Pick.objects.filter(game__in=current_games).delete()
         current_games.delete()
@@ -1083,6 +910,14 @@ def pickdash(request):
         # sent nothing at all, which is the whole point of the ballot.
         was_published = settings.publish
         settings.publish = not settings.publish
+        if not settings.publish:
+            # Taking a week down has to take it off the autopilot's list too.
+            # With auto_scrape_dt left in the past, the next tick re-scraped,
+            # re-published and mailed the league again. Re-publishing is by
+            # hand from here; the autopilot resumes at the next advance.
+            settings.auto_scrape_dt = None
+            settings.auto_first_attempt_dt = None
+            settings.auto_last_issue = ''
         settings.save()
         if settings.publish and not was_published:
             from .email_utils import send_picks_published_email
@@ -1090,8 +925,6 @@ def pickdash(request):
 
     elif 'toggle_lock' in request.POST:
         settings.lock_picks = not settings.lock_picks
-        if settings.lock_picks:
-            settings.edit = False
         settings.save()
 
     elif 'cycle_multiplier' in request.POST:
@@ -1150,7 +983,7 @@ def pickdash(request):
             settings.auto_retry_window_minutes = max(0, min(2880, int(
                 request.POST.get('auto_retry_window_minutes', 360))))
 
-            from .auto import _next_weekday_hour, _this_or_next_weekday_hour
+            from .auto import _this_or_next_weekday_hour
             settings.auto_scrape_dt = _this_or_next_weekday_hour(settings.auto_scrape_weekday, settings.auto_scrape_hour, settings.auto_scrape_minute)
 
             if settings.lock_mode == 'manual':
@@ -1203,7 +1036,7 @@ def pickdash(request):
             team2 = team_from_abbrev(g[1])
             game_id = g[5]
             ml1, ml2 = g[2], g[3]
-            pts2 = (_calculate_points(ml1, abs(ml2)) * settings.multiplier
+            pts2 = (calculate_points(ml1, abs(ml2)) * settings.multiplier
                     if ml1 and ml2 else float(settings.multiplier))
 
             # Match on who is playing, unordered — team1/team2 are favorite and
@@ -1254,15 +1087,14 @@ def pickdash(request):
         if settings.publish:
             try:
                 from .email_utils import send_picks_published_email
-                print('[manual scrape] calling send_picks_published_email', flush=True)
                 send_picks_published_email(settings)
-            except Exception as _email_err:
-                print(f'[manual scrape] email error: {_email_err}', flush=True)
+            except Exception:
+                log.exception('manual scrape: picks-live email failed')
             try:
                 from .auto import make_bot_picks
                 make_bot_picks()
-            except Exception as _bot_err:
-                print(f'[manual scrape] bot picks error: {_bot_err}', flush=True)
+            except Exception:
+                log.exception('manual scrape: bot picks failed')
         msg = f'Scraped week {week}: {added} added, {dupes} updated.'
         if skipped_day:
             msg += (f' {skipped_day} skipped - not on a day this league plays.')
@@ -1286,95 +1118,28 @@ def pickdash(request):
         messages.success(request, f'Graded {graded_count} game(s) for week {week}.')
 
     elif 'nextweek' in request.POST:
-        games = list(Game.objects.filter(week=settings.week))
-        players = list(User.objects.select_related('profile').all())
-        all_picks = {(p.user_id, p.game_id): p for p in Pick.objects.filter(game__in=games)}
-
-        lb_entries = [{'username': p.username, 'score': round(p.profile.score, 1)} for p in players]
-        WeeklyLeaderboard.objects.update_or_create(week=settings.week, defaults={'entries': lb_entries})
-
-        max_score = 0
-        for g in games:
-            for p in players:
-                pick = all_picks.get((p.id, g.id))
-                if pick and pick.is_correct:
-                    p.profile.score += pick.points_earned
-            if g.winner == 'team1':
-                max_score += g.points1
-            elif g.winner == 'team2':
-                max_score += g.points2
-
-        for p in players:
-            prev_score = next((e['score'] for e in lb_entries if e['username'] == p.username), 0)
-            if round(p.profile.score - prev_score, 1) == round(max_score, 1):
-                p.profile.score += 10
-            p.save()
-
-        completed_week = settings.week
-        settings.week += 1
-        settings.scrape_week = settings.week
-        settings.publish = False
-        settings.edit = True
-        settings.lock_picks = False
-        settings.first_game_dt = None
-        settings.auto_lock_dt = None
-        settings.save()
-
-        from .auto import build_recap
-        recap = build_recap(completed_week)
-        if recap:
-            settings.refresh_from_db()
-            settings.weekly_recap = recap
-            settings.save()
-            WeeklyLeaderboard.objects.filter(week=completed_week).update(recap=recap)
-            # Recorded, not mailed - the same as the autopilot path. The recap
-            # reaches the league at the top of next week's picks-are-live email.
-            # This button used to send a standalone recap, so advancing by hand
-            # mailed the league twice for one week.
-            from .email_utils import record_recap_email
-            record_recap_email(completed_week, recap)
-
+        # One implementation, shared with the autopilot. This branch carried its
+        # own copy of the advance, and it drifted: it never cleared the intro,
+        # the grade time or the retry state, so last week's note went out again
+        # attached to this week's games.
+        from .auto import do_advance_week
+        do_advance_week(settings)
+        settings.refresh_from_db()
         messages.success(request, f'Advanced to week {settings.week}.')
 
     elif 'newseason' in request.POST:
         save_form = forms.SaveSeasonForm(request.POST)
-        if save_form.is_valid():
-            players = User.objects.select_related('profile').all()
-            standings = sorted(
-                [{'username': p.username, 'score': round(p.profile.score, 1)} for p in players],
-                key=lambda x: x['score'], reverse=True
-            )
-            winner = standings[0]['username'] if standings else ''
-            SeasonRecord.objects.create(
-                year=save_form.cleaned_data['year'],
-                winner_username=winner,
-                final_standings=standings,
-                notes=save_form.cleaned_data.get('notes', ''),
-            )
-
-        for p in User.objects.select_related('profile').all():
-            p.profile.score = 0
-            p.save()
-        Pick.objects.all().delete()
-        Game.objects.all().delete()
-        WeeklyLeaderboard.objects.all().delete()
-        # The Emails feed is league correspondence, not season data — a new
-        # season does not wipe it.
-        settings.week = 1
-        settings.scrape_week = 1
-        settings.publish = False
-        settings.edit = True
-        settings.lock_picks = False
-        settings.first_game_dt = None
-        settings.auto_lock_dt = None
-        # No season-preview mail. The league gets one scheduled email a week and
-        # the "Season opener" intro template covers the same ground, inside it.
-        settings.weekly_recap = ''
-        settings.save()
-        for p in User.objects.select_related('profile').all():
-            p.profile.preseason_submitted = False
-            p.profile.save()
-        messages.success(request, 'New season started.')
+        if not save_form.is_valid():
+            # The reset used to run whether or not the record was written - and
+            # the page posted no year, so it never was. Nothing happens now
+            # unless the season can be archived first.
+            messages.error(request, 'Season not saved: a year is required. Nothing was reset.')
+        else:
+            from .seasons import archive_and_reset
+            record = archive_and_reset(
+                settings, save_form.cleaned_data['year'],
+                save_form.cleaned_data.get('notes', ''))
+            messages.success(request, f'{record.year} season saved. New season started.')
 
     # Kickoff order, matching the player-facing list. Ordering by `graded` put
     # games in a different place depending on whether they were scored yet,
@@ -1443,26 +1208,6 @@ def pickdash(request):
 
 
 @staff_member_required
-def secret_analytics(request):
-    settings = SiteSettings.get()
-    multiplier = settings.multiplier
-    rows = []
-    for fav_ml in [-110, -150, -200, -300, -400]:
-        for dog_ml in [110, 150, 200, 300, 400]:
-            fav_pts = 1.0 * multiplier
-            dog_pts = _calculate_points(dog_ml, abs(fav_ml)) * multiplier
-            fav_prob = abs(fav_ml) / (abs(fav_ml) + 100)
-            dog_prob = 100 / (dog_ml + 100)
-            rows.append({
-                'fav_ml': fav_ml, 'dog_ml': f'+{dog_ml}',
-                'fav_pts': round(fav_pts, 1), 'dog_pts': round(dog_pts, 2),
-                'fav_prob': f'{fav_prob*100:.1f}%', 'dog_prob': f'{dog_prob*100:.1f}%',
-                'fav_ev': round(fav_pts * fav_prob, 2), 'dog_ev': round(dog_pts * dog_prob, 2),
-            })
-    return render(request, 'main/secretanalytics.html', {'rows': rows, 'multiplier': multiplier})
-
-
-@staff_member_required
 @require_POST
 def generate_recap(request):
     from .auto import build_recap
@@ -1494,106 +1239,3 @@ def send_test_email(request):
     send_picks_published_email(settings)
     messages.success(request, 'Test email queued — check logs for result.')
     return redirect('main:pickdash')
-
-
-def montecarlo_view(request):
-    """The strategy write-up, served from a saved report.
-
-    No simulation runs here. It used to: ten seasons and 2,000 trials per
-    strategy, on request, which is tens of seconds of a web worker for an answer
-    that only changes when another season finishes. `manage.py build_strategy`
-    computes it; this reads the file.
-    """
-    from . import strategy_report
-
-    report = strategy_report.load()
-    if report is None:
-        # Never built, or the file went missing. Say so rather than showing an
-        # empty page that looks like the simulation found nothing.
-        return render(request, 'main/montecarlo.html', {'report_missing': True})
-
-    return render(request, 'main/montecarlo.html', {
-        'generated_at': report['generated_at'],
-        'config': report['config'],
-        'year_counts': report['year_counts'],
-        'total_games': report['total_games'],
-        'results': report['results'],
-        'ev_results': report['ev_results'],
-        'team_ev': report['team_ev'],
-        's1_summary': report['s1_summary'],
-        's2_summary': report['s2_summary'],
-        's3_summary': report['s3_summary'],
-        'headers': ['Underdog %', 'Mean', 'Std Dev', 'P10', 'P90', 'Min', 'Max'],
-    })
-
-
-@staff_member_required
-def devtools(request):
-    if request.method == 'POST':
-        action = request.POST.get('action')
-
-        if action == 'create_bot':
-            username = request.POST.get('username', '').strip()
-            if not username:
-                import secrets
-                username = f'bot_{secrets.token_hex(3)}'
-            if User.objects.filter(username=username).exists():
-                messages.error(request, f'Username "{username}" already exists.')
-            else:
-                underdog_pct = random.randint(0, 100)
-                bot_user = User.objects.create_user(
-                    username=username,
-                    password=None,
-                    is_active=True,
-                    is_staff=False,
-                )
-                bot_user.profile.is_bot = True
-                bot_user.profile.bot_underdog_pct = underdog_pct
-                bot_user.profile.preseason_submitted = True
-                bot_user.profile.save()
-                messages.success(request, f'Created bot "{username}" — {underdog_pct}% underdog / {100 - underdog_pct}% favorite.')
-
-        elif action == 'delete_bot':
-            uid = request.POST.get('user_id')
-            try:
-                bot = User.objects.get(pk=uid, profile__is_bot=True)
-                bot.delete()
-                messages.success(request, f'Deleted bot "{bot.username}".')
-            except User.DoesNotExist:
-                messages.error(request, 'Bot not found.')
-
-        return redirect('main:devtools')
-
-    import json as _json
-    from . import sim as sim_module
-    bots = User.objects.select_related('profile').filter(profile__is_bot=True).order_by('username')
-    sim_status = sim_module.get_status()
-    return render(request, 'main/devtools.html', {
-        'bots': bots,
-        'sim_status': sim_status,
-        'sim_status_json': _json.dumps(sim_status),
-    })
-
-
-@staff_member_required
-@require_POST
-def sim_control(request):
-    from . import sim as sim_module
-    action = request.POST.get('action')
-    if action == 'start':
-        sim_module.start(
-            lock_delay=request.POST.get('lock_delay', 5),
-            grade_delay=request.POST.get('grade_delay', 5),
-            advance_delay=request.POST.get('advance_delay', 5),
-            year=request.POST.get('year', 2024),
-            tick_interval=request.POST.get('tick_interval') or None,
-        )
-    elif action == 'stop':
-        sim_module.stop()
-    return JsonResponse(sim_module.get_status())
-
-
-@staff_member_required
-def sim_status(request):
-    from . import sim as sim_module
-    return JsonResponse(sim_module.get_status())

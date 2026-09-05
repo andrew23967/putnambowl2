@@ -1,13 +1,15 @@
+import logging
 import time
 import requests
-from bs4 import BeautifulSoup
 from datetime import date
-from .teams import ABBREV_TO_TEAM, canonical_abbrev, make_game_id, team_from_abbrev
+from .teams import make_game_id, team_from_abbrev
 
 # How long a downloaded schedule stays usable. The worker is a long-lived
 # process, so without an expiry it would keep serving the schedule it fetched
 # on boot and never see newly published results or moneylines.
 SCHEDULE_TTL_SECONDS = 30 * 60
+
+log = logging.getLogger(__name__)
 
 try:
     import nfl_data_py as nfl
@@ -20,7 +22,6 @@ try:
         never blocks on a download — for request paths that merely want the data
         if it happens to be at hand.
         """
-        global _schedule_cache
         if year is None:
             year = current_season_year()
 
@@ -33,44 +34,15 @@ try:
         try:
             schedule = nfl.import_schedules([year])
         except Exception as e:
-            print(f'_get_schedule error for {year}: {e}')
+            log.warning('schedule download for %s failed: %s', year, e)
             # Fall back to a stale copy rather than failing outright.
             return cached[1] if cached else None
         _schedule_cache[year] = (time.monotonic(), schedule)
         return schedule
 
-    NFL_DATA_PY_AVAILABLE = True
 except ImportError:
-    NFL_DATA_PY_AVAILABLE = False
-
     def _get_schedule(year=None, allow_network=True):
         return None
-
-
-def standings():
-    try:
-        result = requests.get("https://www.cbssports.com/nfl/standings/", timeout=10)
-        soup = BeautifulSoup(result.content, 'html.parser')
-        tables = soup.findAll('table', {'class': 'TableBase-table'})
-        clean_tables = []
-        for table in tables:
-            rows = []
-            for tr in table.findAll('tr'):
-                cells = ''
-                for th in tr.findAll('th'):
-                    text = ''.join(th.find_all(text=True, recursive=False)).strip().replace('\n', '').replace(' ', '')
-                    if text:
-                        cells += f'<td class="tc">{text}</td>'
-                for td in tr.findAll('td'):
-                    text = ''.join(c for c in td.text if c not in ('\n', ' '))
-                    if text:
-                        cells += f'<td>{text}</td>'
-                if cells and "Projections" not in cells:
-                    rows.append(f'<tr>{cells}</tr>')
-            clean_tables.append(f'<table>{"".join(rows)}</table>')
-        return clean_tables
-    except Exception as e:
-        return [f'<p>Could not load standings: {e}</p>']
 
 
 def current_season_year():
@@ -213,7 +185,7 @@ def scrape_espn(week, year=None):
             # team1 is not the home side, which is true either way.
             games.append([away_full, home_full, 0, 0, False, game_id, game_dt])
     except Exception as e:
-        print(f"scrape_espn error: {e}")
+        log.warning('scrape_espn failed: %s', e)
     return games
 
 
@@ -243,7 +215,7 @@ def grade_nfl_data_py(week, year=None):
             outcome = 'home' if result > 0 else ('away' if result < 0 else 'tie')
             games.append([game_id, outcome, home, away])
     except Exception as e:
-        print(f"grade_nfl_data_py error: {e}")
+        log.warning('grade_nfl_data_py failed: %s', e)
     return games
 
 
@@ -278,7 +250,7 @@ def grade_espn(week, year=None):
             outcome = 'home' if diff > 0 else ('away' if diff < 0 else 'tie')
             games.append([game_id, outcome, home, away])
     except Exception as e:
-        print(f"grade_espn error: {e}")
+        log.warning('grade_espn failed: %s', e)
     return games
 
 
@@ -308,5 +280,5 @@ def get_first_game_dt(week, year=None):
                 earliest = dt
         return earliest
     except Exception as e:
-        print(f"get_first_game_dt error: {e}")
+        log.warning('get_first_game_dt failed: %s', e)
         return None

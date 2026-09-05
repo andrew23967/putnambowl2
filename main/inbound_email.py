@@ -376,10 +376,9 @@ def ingest_message(raw_bytes):
             obj, sender_email=from_email, already_copied=_addressed_to(msg),
             author_name=_decode(from_name) or author.username,
         )
-    except Exception as e:
+    except Exception:
         # The message is already on the site; a relay failure must not undo that.
         log.exception('[relay] forwarding failed')
-        print(f'[relay] forwarding failed: {e}', flush=True)
 
     return obj, f'published ({why}), relayed to {relayed}'
 
@@ -471,20 +470,19 @@ def fetch(limit=25):
                     log.exception('[inbound] ingest error')
                 if obj:
                     stored += 1
-                    print(f'[inbound] stored "{obj.subject}" from {obj.from_email} '
-                          f'— {reason}', flush=True)
+                    log.info('[inbound] stored "%s" from %s - %s',
+                             obj.subject, obj.from_email, reason)
                 else:
                     skipped += 1
-                    print(f'[inbound] skipped a message — {reason}', flush=True)
+                    log.info('[inbound] skipped a message - %s', reason)
                 if mark_seen:
                     imap.store(num, '+FLAGS', '\\Seen')
     except Exception as e:
         # Best-effort by design: this runs inside the worker tick, and a mailbox
         # outage must never stop the league from being scraped and graded.
         log.error('[inbound] poll failed: %s', e)
-        print(f'[inbound] poll failed: {e}', flush=True)
         return stored, skipped
 
     if stored or skipped:
-        print(f'[inbound] {stored} stored, {skipped} skipped', flush=True)
+        log.info('[inbound] %s stored, %s skipped', stored, skipped)
     return stored, skipped

@@ -75,7 +75,6 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
-                'main.context_processors.site_settings',
             ],
         },
     },
@@ -124,6 +123,9 @@ RESEND_API_KEY = env('RESEND_API_KEY', default='')
 RESEND_FROM = env('RESEND_FROM', default='onboarding@resend.dev')
 SITE_URL = env('SITE_URL', default='http://localhost:8000')
 GEMINI_API_KEY = env('GEMINI_API_KEY', default='')
+# One model name for everything that talks to Gemini: recaps, PutnamBot's picks
+# and reading emailed ballots. It used to be hardcoded in two places.
+GEMINI_MODEL = env('GEMINI_MODEL', default='gemini-3.5-flash')
 
 # ── Inbound email (the Emails feed) ─────────────────────────────────────────
 # Mail the commissioner sends to the league, copied to this mailbox, is polled by
@@ -164,3 +166,33 @@ SMTP_PASSWORD = env('SMTP_PASSWORD', default='') or IMAP_PASSWORD
 # flag the suite really did deliver mail to its own fixture addresses the moment
 # SMTP was configured. See email_utils.outbound_suppressed().
 TESTING = 'test' in sys.argv
+
+# ── Logging ─────────────────────────────────────────────────────────────────
+# The pipeline used to print() its progress, which the worker's log captured but
+# which produced mojibake on a cp1252 console and could not be filtered. Plain
+# console logging at INFO; Railway collects stdout.
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'plain': {'format': '%(levelname)s %(name)s: %(message)s'},
+    },
+    'handlers': {
+        'console': {'class': 'logging.StreamHandler', 'formatter': 'plain'},
+    },
+    'root': {'handlers': ['console'], 'level': 'WARNING'},
+    'loggers': {
+        'main': {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
+        'accounts': {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
+        'leagues': {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
+    },
+}
+
+# The manifest storage needs collectstatic to have run, which is true in
+# production and not in a fresh checkout - every page render in the suite failed
+# with "Missing staticfiles manifest entry" until someone happened to have a
+# stale staticfiles/ directory lying around. Tests use the plain storage.
+if TESTING:
+    STORAGES['staticfiles'] = {
+        'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage',
+    }

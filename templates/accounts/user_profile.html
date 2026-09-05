@@ -152,10 +152,6 @@
         <div class="pf-avatar">{{ request.user.username|first|upper }}</div>
         <p class="pf-name">{{ request.user.profile.real_name|default:request.user.username }}</p>
         <p class="pf-email">{{ request.user.email|default:"No email set" }}</p>
-        <p style="margin:11px 0 0;">
-          <a class="pf-link" href="{% url 'accounts:public_profile' request.user.username %}">
-            View public profile →</a>
-        </p>
       </div>
 
       <div class="pf-card">

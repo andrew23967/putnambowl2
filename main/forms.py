@@ -42,18 +42,6 @@ class PreseasonForm(forms.Form):
         return data
 
 
-class AdjustScoreForm(forms.Form):
-    username = forms.CharField(max_length=150)
-    amount = forms.FloatField(label='Points to add (use negative to subtract)')
-
-
-class BugForm(forms.Form):
-    description = forms.CharField(
-        widget=forms.Textarea(attrs={'rows': 5}),
-        label='Describe the bug'
-    )
-
-
 class SaveSeasonForm(forms.Form):
     year = forms.IntegerField(label='Season Year')
     notes = forms.CharField(widget=forms.Textarea(attrs={'rows': 3}), required=False)

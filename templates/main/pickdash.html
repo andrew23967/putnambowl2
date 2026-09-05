@@ -291,6 +291,10 @@
       <p class="dash-section">Season</p>
       <form method="post" onsubmit="return confirm('Save season and reset all scores?')">
         {% csrf_token %}
+        <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:6px;">Season year
+          <input type="number" name="year" value="{{ scrape_year }}" required min="2000" max="2100" style="width:100%;margin-top:4px;">
+        </label>
+        <input type="text" name="notes" placeholder="Notes (optional)" style="width:100%;margin-bottom:8px;">
         <button name="newseason" class="action-btn red">Save Season & Reset</button>
       </form>
 

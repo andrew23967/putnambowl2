@@ -7,7 +7,3 @@ register = template.Library()
 def get_item(dictionary, key):
     return dictionary.get(key, {})
 
-
-@register.filter
-def add_one(value):
-    return int(value) + 1

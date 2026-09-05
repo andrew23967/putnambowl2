@@ -289,54 +289,19 @@ class InboundEmailTests(TestCase):
 
 
 class RecapEmailTests(TestCase):
-    """PutnamBot's intro promises a recap by email, and for a while nothing sent
-    one — recaps only reached an inbox second-hand, inside the next "picks are
-    live" mail. Sending must also happen exactly once per recap."""
+    """Recaps are recorded to the feed. They reach the league inside the next
+    picks-are-live mail, never as a standalone send."""
 
     def setUp(self):
         from main import email_utils
         from main.models import LeagueEmail
         self.email_utils = email_utils
         self.LeagueEmail = LeagueEmail
-
-        self.calls = []
-        self.addCleanup(setattr, email_utils, 'league_recipients',
-                        email_utils.league_recipients)
-        email_utils.league_recipients = lambda: ['a@example.com', 'b@example.com']
-
         User.objects.create_user('putnambot')
-
-    def _send(self, week, text, **kw):
-        """Run send_recap_email with the transport thread stubbed out.
-
-        TESTING=False lifts the suppression guard so the send path is exercised;
-        the fake thread is what keeps it off the network. All transport settings
-        are pinned here so the result does not depend on the developer's .env.
-        """
-        import threading
-        real_thread = threading.Thread
-
-        def fake_thread(target=None, **kwargs):
-            self.calls.append(target)
-
-            class _T:
-                def start(inner):
-                    pass
-            return _T()
-
-        threading.Thread = fake_thread
-        try:
-            with self.settings(TESTING=False, RESEND_API_KEY='re_test',
-                               SMTP_HOST='smtp.example.com', SMTP_USER='u',
-                               SMTP_PASSWORD='p',
-                               LEAGUE_LIST_ADDRESS='league@example.com'):
-                return self.email_utils.send_recap_email(week, text, **kw)
-        finally:
-            threading.Thread = real_thread
 
     def test_outbound_is_suppressed_while_testing(self):
         """The suite talks to Resend and smtplib directly, so Django's locmem
-        backend does not protect it — it really did mail fixture addresses once
+        backend does not protect it - it really did mail fixture addresses once
         SMTP was configured."""
         self.assertTrue(self.email_utils.outbound_suppressed())
         self.assertFalse(self.email_utils.smtp_ready())
@@ -344,86 +309,45 @@ class RecapEmailTests(TestCase):
         self.assertFalse(ok)
         self.assertIn('suppressed', why)
 
-    def test_recap_is_recorded_and_a_send_is_started(self):
-        self.assertTrue(self._send(3, 'Week 3 belonged to the underdogs.'))
+    def test_recap_is_recorded(self):
+        obj, created = self.email_utils.record_recap_email(3, 'Week 3 belonged to the underdogs.')
+        self.assertTrue(created)
         row = self.LeagueEmail.objects.get(subject='Week 3 recap')
-        self.assertEqual(row.recipient_count, 2)
         self.assertIn('PutnamBowl', row.body)
-        self.assertEqual(len(self.calls), 1, 'one send should have been queued')
+        self.assertEqual(row.source, self.LeagueEmail.SOURCE_SITE)
 
     def test_league_mail_is_not_signed_by_a_bot(self):
         """Recaps used to append an "I'm PutnamBot, the AI commissioner" signoff
-        and be credited to the `putnambot` account, which gave the league two
-        commissioners — one of them a bot that also competed in the standings.
-        PutnamBot is a player; the mailbox is the commissioner."""
-        self._send(3, 'Week 3 belonged to the underdogs.')
+        and be credited to the `putnambot` account. PutnamBot is a player; the
+        mailbox is the commissioner."""
+        self.email_utils.record_recap_email(3, 'Week 3 belonged to the underdogs.')
         row = self.LeagueEmail.objects.get(subject='Week 3 recap')
         self.assertNotIn('PutnamBot', row.body)
         self.assertIsNone(row.author, "a recap is the league's own mail")
 
-    def test_recap_goes_to_members_not_the_group(self):
-        """Most of the league is not in the Google Group — it is only how the
-        commissioner's own mail reaches the site. A recap posted there would miss
-        most of the people it is for."""
-        sent_to = []
-        self.addCleanup(setattr, self.email_utils, 'send_via_mailbox',
-                        self.email_utils.send_via_mailbox)
-        self.email_utils.send_via_mailbox = lambda to, subject, body, **kw: (
-            sent_to.append(to) or (True, 'sent'))
-
-        self._send(4, 'Week 4 went to the favourites.')
-        # _send stubs the thread, so run the queued target directly.
-        self.calls[0]()
-
-        self.assertEqual(sorted(sent_to), ['a@example.com', 'b@example.com'])
-        self.assertNotIn('league@example.com', sent_to)
-
-    def test_calling_it_sends_every_time(self):
-        """It used to send only when the feed row was new, to avoid a hypothetical
-        duplicate. That guard swallowed real emails instead — a new season's
-        preview, and week 1 of any second season — so it is gone. Called, it
-        sends."""
-        self.assertTrue(self._send(3, 'Week 3 belonged to the underdogs.'))
-        self.assertTrue(self._send(3, 'Week 3 belonged to the underdogs.'),
-                        'a second call must still send')
-        self.assertEqual(len(self.calls), 2)
-
     def test_a_weekly_recap_keeps_one_row_per_week(self):
-        """Sending always, but the feed should not fill up with versions of the
-        same week — regenerating replaces week 3's entry."""
-        self._send(3, 'first write-up', year=2026)
-        self._send(3, 'a better write-up', year=2026)
+        """Regenerating replaces week 3's entry rather than adding a version."""
+        self.email_utils.record_recap_email(3, 'first write-up', year=2026)
+        self.email_utils.record_recap_email(3, 'a better write-up', year=2026)
         rows = self.LeagueEmail.objects.filter(subject='Week 3 recap')
         self.assertEqual(rows.count(), 1)
         self.assertIn('a better write-up', rows.first().body)
 
-    def test_each_season_preview_is_its_own_row(self):
-        """Every start of a season is its own event, so there is no natural "one
-        per" to key it on — starting two in a calendar year must not collide."""
-        self._send(None, 'Welcome to the season.', subject='Season preview')
-        self._send(None, 'Welcome again.', subject='Season preview')
+    def test_an_unkeyed_record_is_its_own_row(self):
+        self.email_utils.record_recap_email(None, 'Welcome to the season.', subject='Season preview')
+        self.email_utils.record_recap_email(None, 'Welcome again.', subject='Season preview')
         self.assertEqual(
             self.LeagueEmail.objects.filter(subject='Season preview').count(), 2)
-        self.assertEqual(len(self.calls), 2)
 
-    def test_next_season_week_one_sends(self):
-        self.assertTrue(self._send(1, 'Week 1 of 2026.', year=2026))
-        self.assertTrue(self._send(1, 'Week 1 of 2027.', year=2027))
+    def test_next_season_week_one_is_a_new_row(self):
+        self.email_utils.record_recap_email(1, 'Week 1 of 2026.', year=2026)
+        self.email_utils.record_recap_email(1, 'Week 1 of 2027.', year=2027)
         self.assertEqual(
             self.LeagueEmail.objects.filter(subject='Week 1 recap').count(), 2)
 
     def test_empty_recap_does_nothing(self):
-        self.assertFalse(self._send(3, '   '))
+        self.assertEqual(self.email_utils.record_recap_email(3, '   '), (None, False))
         self.assertEqual(self.LeagueEmail.objects.count(), 0)
-        self.assertEqual(self.calls, [])
-
-    def test_regenerating_records_without_sending(self):
-        self._send(3, 'first attempt')
-        before = len(self.calls)
-        self.email_utils.record_recap_email(3, 'a corrected write-up')
-        row = self.LeagueEmail.objects.get(subject='Week 3 recap')
-        self.assertIn('a corrected write-up', row.body)
-        self.assertEqual(len(self.calls), before, 'a correction must not re-mail')
 
 
 class PickEmailHandleTests(TestCase):
@@ -561,19 +485,6 @@ class EmailSwitchTests(TestCase):
         self.settings_obj.week = 4
         self.settings_obj.save()
         User.objects.create_user('putnambot')
-
-    def test_recap_switch_off_records_but_does_not_send(self):
-        self.settings_obj.email_recap = False
-        self.settings_obj.save()
-        sent = []
-        self.addCleanup(setattr, self.email_utils, 'league_recipients',
-                        self.email_utils.league_recipients)
-        self.email_utils.league_recipients = lambda: sent or ['a@example.com']
-
-        self.assertFalse(self.email_utils.send_recap_email(3, 'Week 3 recap text.'))
-        from main.models import LeagueEmail
-        # Still on the site, just not mailed.
-        self.assertTrue(LeagueEmail.objects.filter(subject='Week 3 recap').exists())
 
     def test_relay_switch_off_forwards_to_nobody(self):
         from main.models import LeagueEmail
@@ -736,8 +647,7 @@ class RelayTests(TestCase):
         ]).encode()
 
     def test_group_email_is_forwarded_to_every_member(self):
-        with self.settings(LEAGUE_LIST_ADDRESS='league@putnambowl.com',
-                           SMTP_USER='mailbox@gmail.com'):
+        with self.settings(SMTP_USER='mailbox@gmail.com'):
             obj, reason = self.ingest(self._raw('league@putnambowl.com'))
 
         self.assertIsNotNone(obj, reason)
@@ -747,14 +657,13 @@ class RelayTests(TestCase):
         self.assertIn('relayed to 4', reason)
 
     def test_the_sender_and_the_mailbox_are_not_forwarded_to(self):
-        with self.settings(LEAGUE_LIST_ADDRESS='league@putnambowl.com',
-                           SMTP_USER='boss@example.com'):
+        with self.settings(SMTP_USER='boss@example.com'):
             self.ingest(self._raw('league@putnambowl.com'))
         self.assertNotIn('boss@example.com', [to for to, *_ in self.forwarded])
 
     def test_already_copied_members_are_not_forwarded_to(self):
         """Nobody gets it twice when some are copied directly."""
-        with self.settings(LEAGUE_LIST_ADDRESS='league@putnambowl.com'):
+        with self.settings():
             self.ingest(self._raw(
                 'league@putnambowl.com, m0@example.com, m1@example.com'))
         got = sorted(to for to, *_ in self.forwarded)
@@ -762,13 +671,13 @@ class RelayTests(TestCase):
 
     def test_replies_go_to_the_commissioner_not_the_mailbox(self):
         """A reply landing in our mailbox would be parsed as a pick submission."""
-        with self.settings(LEAGUE_LIST_ADDRESS='league@putnambowl.com'):
+        with self.settings():
             self.ingest(self._raw('league@putnambowl.com'))
         for _, _, _, reply_to in self.forwarded:
             self.assertEqual(reply_to, 'boss@example.com')
 
     def test_the_forward_says_who_sent_it(self):
-        with self.settings(LEAGUE_LIST_ADDRESS='league@putnambowl.com'):
+        with self.settings():
             self.ingest(self._raw('league@putnambowl.com'))
         body = self.forwarded[0][2]
         self.assertIn('Picks are open, get them in.', body)
@@ -1209,39 +1118,6 @@ class ApiSplitTests(TestCase):
         self.assertEqual(seen['api_type'], 'espn')
 
 
-class BiggestUpsetTests(TestCase):
-    """team2 is the underdog, so an upset is a team2 win — the view had the two
-    sides reversed. Computed on /picks/, which owns the week's slate."""
-
-    def setUp(self):
-        self.user = User.objects.create_user('player', password='pw')
-        self.user.profile.preseason_submitted = True
-        self.user.profile.save()
-        settings = SiteSettings.get()
-        settings.week = 2
-        settings.publish = True
-        settings.save()
-
-    def test_upset_reports_the_underdog_as_winner(self):
-        game = make_game(week=2, team1='Kansas City Chiefs', team2='Carolina Panthers',
-                         points1=1.0, points2=4.5, winner='team2', graded=True)
-        Pick.objects.create(user=self.user, game=game, choice='team1')
-
-        self.client.login(username='player', password='pw')
-        upset = self.client.get('/picks/').context['biggest_upset']
-
-        self.assertIsNotNone(upset)
-        self.assertEqual(upset['winner_full'], 'Carolina Panthers')
-        self.assertEqual(upset['pts'], 4.5)
-
-    def test_favorite_win_is_not_an_upset(self):
-        game = make_game(week=2, winner='team1', graded=True)
-        Pick.objects.create(user=self.user, game=game, choice='team1')
-
-        self.client.login(username='player', password='pw')
-        self.assertIsNone(self.client.get('/picks/').context['biggest_upset'])
-
-
 class ScheduleCacheTests(TestCase):
     """The schedule cache never expired, so the long-running worker kept
     serving whatever it downloaded at boot."""
@@ -1270,42 +1146,6 @@ class ScheduleCacheTests(TestCase):
         self.assertEqual(scrape.get_week_type(5, allow_network=False), 'regular')
         self.assertEqual(scrape.get_week_type(20, allow_network=False), 'playoffs')
         self.assertEqual(scrape.get_week_type(22, allow_network=False), 'superbowl')
-
-
-class HistoryImportTests(TestCase):
-    """Both archive encodings must land on the same team order."""
-
-    def test_legacy_zero_one_encoding(self):
-        from .history_import import normalise_game
-        t1, t2, p1, p2, winner, picks = normalise_game({
-            'team1': 'Tampa Bay Buccaneers', 'team2': 'Atlanta Falcons',
-            'points1': 1.0, 'points2': 1.24, 'winner': 'team1',
-            'player_picks': {
-                'mrfavorite': {'pick': '0', 'correct': True},
-                'mrunderdog': {'pick': '1', 'correct': False},
-            },
-        })
-        self.assertEqual((t1, t2, p1, p2, winner),
-                         ('Tampa Bay Buccaneers', 'Atlanta Falcons', 1.0, 1.24, 'team1'))
-        self.assertEqual(picks, {'mrfavorite': 'team1', 'mrunderdog': 'team2'})
-
-    def test_current_team_encoding_passes_through(self):
-        from .history_import import normalise_game
-        _, _, _, _, winner, picks = normalise_game({
-            'team1': 'A', 'team2': 'B', 'points1': 1.0, 'points2': 3.0,
-            'winner': 'team2',
-            'player_picks': {'sam': {'choice': 'team2', 'correct': True}},
-        })
-        self.assertEqual(winner, 'team2')
-        self.assertEqual(picks, {'sam': 'team2'})
-
-    def test_missing_pick_is_dropped(self):
-        from .history_import import normalise_game
-        *_, picks = normalise_game({
-            'team1': 'A', 'team2': 'B', 'points1': 1.0, 'points2': 2.0, 'winner': '',
-            'player_picks': {'nobody': {'pick': None}, 'blank': {'pick': 'none'}},
-        })
-        self.assertEqual(picks, {})
 
 
 class ConferenceSplitTests(TestCase):
@@ -1427,10 +1267,9 @@ class NavPageRenderTests(TestCase):
     """
 
     PAGES = ['main:home', 'main:picks', 'main:rules', 'main:analytics',
-             'main:pick_history', 'main:seasons', 'main:allpicks',
-             'main:standings', 'main:montecarlo', 'main:preseason',
-             'main:members',
-             'main:pickdash', 'main:emaildash', 'accounts:user_profile']
+             'main:pick_history', 'main:preseason', 'main:members',
+             'main:pickdash', 'main:emaildash', 'main:accountdash',
+             'accounts:user_profile']
 
     def setUp(self):
         self.user = User.objects.create_user('nav_tester', password='pw', email='n@x.com')
@@ -1469,10 +1308,6 @@ class NavPageRenderTests(TestCase):
         # The branch that used to raise: ProfileForm.bio is a Textarea.
         self.client.force_login(self.user)
         self.assertIn('<textarea', self._ok('accounts:user_profile').content.decode())
-
-    def test_public_profile_renders(self):
-        self.client.force_login(self.user)
-        self._ok('accounts:public_profile', username=self.user.username)
 
     def test_every_template_compiles(self):
         """Catches the malformed-tag half without needing a route for each page."""
@@ -2212,19 +2047,6 @@ class WeeklyEmailShapeTests(TestCase):
         body = self._body()
         self.assertNotIn('RECAP TEXT HERE', body)
         self.assertIn('INTRO TEXT HERE', body)
-
-    def test_advancing_no_longer_mails_a_standalone_recap(self):
-        from . import auto
-        sent = []
-        self.addCleanup(setattr, self.email_utils, 'send_recap_email',
-                        self.email_utils.send_recap_email)
-        self.email_utils.send_recap_email = lambda *a, **kw: sent.append(1)
-        self.addCleanup(setattr, auto, 'build_recap', auto.build_recap)
-        auto.build_recap = lambda week: 'A RECAP'
-        make_game(week=3, team1='Buffalo Bills', team2='Miami Dolphins',
-                  graded=True, winner='team1')
-        auto.do_advance_week(self.settings)
-        self.assertEqual(sent, [], 'the recap rides along with the picks email now')
 
     def test_advancing_clears_the_intro(self):
         from . import auto
@@ -3299,7 +3121,7 @@ class ManualAdvanceDoesNotDoubleMailTests(TestCase):
 
     The autopilot was changed to record-only — the recap reaches the league at
     the top of next week's picks-are-live email — but the dashboard's own
-    "next week" button kept calling `send_recap_email`, so advancing by hand
+    "next week" button kept mailing a standalone recap, so advancing by hand
     mailed the league twice for the same week.
     """
 
@@ -3314,17 +3136,21 @@ class ManualAdvanceDoesNotDoubleMailTests(TestCase):
         make_game(week=3, winner='team1', graded=True)
 
         from . import email_utils, auto
-        self.sent = []
-        self.addCleanup(setattr, email_utils, 'send_recap_email',
-                        email_utils.send_recap_email)
-        email_utils.send_recap_email = lambda *a, **k: self.sent.append(a)
+        self.delivered = []
+        self.addCleanup(setattr, email_utils, 'send_via_mailbox',
+                        email_utils.send_via_mailbox)
+        email_utils.send_via_mailbox = lambda *a, **k: (
+            self.delivered.append(a), (True, 'stubbed'))[1]
         self.addCleanup(setattr, auto, 'build_recap', auto.build_recap)
         auto.build_recap = lambda week: f'RECAP FOR WEEK {week}'
 
     def test_no_standalone_recap_email(self):
+        from main.models import LeagueEmail
         self.client.post('/dashboard/picks/', {'nextweek': '1'})
-        self.assertEqual(self.sent, [],
+        self.assertEqual(self.delivered, [],
                          "the recap goes out inside next week's email, not on its own")
+        self.assertEqual(LeagueEmail.objects.filter(subject='Week 3 recap').count(), 1,
+                         'recorded to the feed exactly once')
 
     def test_the_recap_is_still_recorded(self):
         self.client.post('/dashboard/picks/', {'nextweek': '1'})
@@ -3380,12 +3206,6 @@ class NoTransportSendsNothingTests(TestCase):
         with self._no_transport():
             self.assertEqual(self.eu.send_pick_reminder_email(self.settings), 0)
         self.assertEqual(self.delivered, [])
-
-    def test_a_recap_is_recorded_but_not_mailed(self):
-        with self._no_transport():
-            self.eu.send_recap_email(2, 'RECAP TEXT')
-        self.assertEqual(self.delivered, [],
-                         'the write-up is kept; it just does not go out')
 
     def test_smtp_ready_is_false_without_credentials(self):
         with self._no_transport():
@@ -3552,3 +3372,194 @@ class CopyLeagueAddressesTests(TestCase):
         resp = self.client.get('/dashboard/emails/')
         self.assertIn(resp.status_code, (302, 403),
                       "the roster's addresses are staff-only")
+
+
+class ManualLockModeSurvivesAdvanceTests(TestCase):
+    """A manual lock is a weekly clock. do_advance_week cleared auto_lock_dt and
+    only then checked it, so the "+7 days" never ran: from the second week on
+    there was no lock time and the season silently stalled."""
+
+    def setUp(self):
+        from . import auto
+        self.auto = auto
+        self.addCleanup(setattr, auto, 'build_recap', auto.build_recap)
+        auto.build_recap = lambda week: None
+        self.settings = SiteSettings.get()
+        self.settings.week = 3
+        self.settings.lock_mode = 'manual'
+        self.settings.save()
+        make_game(week=3, graded=True, winner='team1')
+
+    def _advance_with_lock(self, lock):
+        self.settings.auto_lock_dt = lock
+        self.settings.save()
+        self.auto.do_advance_week(self.settings)
+        self.settings.refresh_from_db()
+        return self.settings.auto_lock_dt
+
+    def test_the_lock_rolls_forward_one_week(self):
+        lock = datetime.now(timezone.utc) + timedelta(days=1)
+        self.assertEqual(self._advance_with_lock(lock), lock + timedelta(days=7))
+
+    def test_a_stale_lock_rolls_forward_until_it_is_ahead(self):
+        lock = datetime.now(timezone.utc) - timedelta(days=10)
+        self.assertEqual(self._advance_with_lock(lock), lock + timedelta(days=14))
+
+    def test_offset_mode_still_clears_the_lock(self):
+        self.settings.lock_mode = 'offset'
+        lock = datetime.now(timezone.utc) + timedelta(days=1)
+        self.assertIsNone(self._advance_with_lock(lock),
+                          'offset mode derives the lock from the next slate')
+
+
+class NewSeasonTests(TestCase):
+    """Save season & reset must archive before it wipes, and must not wipe
+    without archiving. It used to do the opposite: the form never validated
+    (the page posted no year) and the reset ran regardless."""
+
+    def setUp(self):
+        self.admin = User.objects.create_user('boss', password='pw', email='b@x.com')
+        self.admin.is_staff = self.admin.is_superuser = True
+        self.admin.save()
+        self.client.force_login(self.admin)
+        self.alice = User.objects.create_user('alice')
+        self.alice.profile.score = 40
+        self.alice.profile.preseason_submitted = True
+        self.alice.profile.save()
+        self.bob = User.objects.create_user('bob')
+        self.bob.profile.score = 25.5
+        self.bob.profile.save()
+        settings = SiteSettings.get()
+        settings.week = 5
+        settings.publish = True
+        settings.save()
+        game = make_game(week=4, graded=True, winner='team2')
+        Pick.objects.create(user=self.alice, game=game, choice='team2')
+        Pick.objects.create(user=self.bob, game=game, choice='team1')
+        WeeklyLeaderboard.objects.create(week=4, entries=[
+            {'username': 'alice', 'score': 37.5}, {'username': 'bob', 'score': 25.5}])
+
+    def test_without_a_year_nothing_is_reset(self):
+        from .models import SeasonRecord
+        self.client.post('/dashboard/picks/', {'newseason': '1'})
+        self.assertEqual(SeasonRecord.objects.count(), 0)
+        self.alice.profile.refresh_from_db()
+        self.assertEqual(self.alice.profile.score, 40)
+        self.assertEqual(Game.objects.count(), 1)
+        self.assertEqual(WeeklyLeaderboard.objects.count(), 1)
+        self.assertEqual(SiteSettings.get().week, 5)
+
+    def test_with_a_year_the_season_is_archived_then_reset(self):
+        from .models import SeasonRecord
+        self.client.post('/dashboard/picks/',
+                         {'newseason': '1', 'year': '2025', 'notes': 'a good one'})
+        rec = SeasonRecord.objects.get(year=2025)
+        self.assertEqual(rec.winner_username, 'alice')
+        self.assertEqual(rec.notes, 'a good one')
+        self.assertEqual([e['username'] for e in rec.final_standings][:2], ['alice', 'bob'])
+        alice, bob = rec.final_standings[0], rec.final_standings[1]
+        self.assertEqual((alice['rank'], alice['correct'], alice['graded']), (1, 1, 1))
+        self.assertIsNotNone(alice['preseason'])
+        self.assertEqual((bob['rank'], bob['correct'], bob['graded']), (2, 0, 1))
+        self.assertIsNone(bob['preseason'], 'never submitted, so no picks to show')
+        self.assertEqual(rec.weeks, 1)
+        self.assertEqual([w['week'] for w in rec.weekly], [4, 5])
+        self.assertEqual(rec.weekly[-1]['entries'][0], {'username': 'alice', 'score': 40.0})
+
+        self.alice.profile.refresh_from_db()
+        self.assertEqual(self.alice.profile.score, 0)
+        self.assertFalse(self.alice.profile.preseason_submitted)
+        self.assertEqual(Game.objects.count(), 0)
+        self.assertEqual(Pick.objects.count(), 0)
+        self.assertEqual(WeeklyLeaderboard.objects.count(), 0)
+        settings = SiteSettings.get()
+        self.assertEqual((settings.week, settings.publish), (1, False))
+
+    def test_finishes_read_newest_first_and_cope_with_old_records(self):
+        from .models import SeasonRecord
+        from .seasons import finishes_by_username
+        SeasonRecord.objects.create(year=2024, winner_username='bob', final_standings=[
+            {'username': 'bob', 'score': 50}, {'username': 'alice', 'score': 30}])
+        self.client.post('/dashboard/picks/', {'newseason': '1', 'year': '2025'})
+        fin = finishes_by_username()
+        self.assertEqual([f['year'] for f in fin['alice']], [2025, 2024])
+        self.assertEqual(fin['alice'][0]['rank'], 1)
+        self.assertEqual(fin['alice'][1]['rank'], 2, 'recomputed for an old-shape record')
+        self.assertEqual(fin['alice'][1]['players'], 2)
+
+
+class DashboardNextWeekTests(TestCase):
+    """The dashboard's Next week button is the autopilot's advance, not a copy
+    of it. The copy forgot to clear the intro, the grade time and the retry
+    state, so last week's note went out again with this week's games."""
+
+    def setUp(self):
+        admin = User.objects.create_user('boss', password='pw', email='b@x.com')
+        admin.is_staff = admin.is_superuser = True
+        admin.save()
+        self.client.force_login(admin)
+        now = datetime.now(timezone.utc)
+        self.settings = SiteSettings.get()
+        self.settings.week = 3
+        self.settings.publish = True
+        self.settings.lock_picks = True
+        self.settings.weekly_intro = 'OLD INTRO'
+        self.settings.auto_grade_dt = now - timedelta(hours=1)
+        self.settings.auto_first_attempt_dt = now - timedelta(hours=2)
+        self.settings.auto_last_issue = 'sources disagreed'
+        self.settings.reminder_sent_week = 3
+        self.settings.save()
+        make_game(week=3, graded=True, winner='team1')
+        from . import auto
+        self.addCleanup(setattr, auto, 'build_recap', auto.build_recap)
+        auto.build_recap = lambda week: None
+
+    def test_advancing_by_hand_clears_the_weekly_state(self):
+        self.client.post('/dashboard/picks/', {'nextweek': '1'})
+        s = SiteSettings.get()
+        self.assertEqual(s.week, 4)
+        self.assertEqual(s.weekly_intro, '')
+        self.assertIsNone(s.auto_grade_dt)
+        self.assertIsNone(s.auto_first_attempt_dt)
+        self.assertEqual(s.auto_last_issue, '')
+        self.assertEqual(s.reminder_sent_week, 0)
+        self.assertFalse(s.publish)
+        self.assertFalse(s.lock_picks)
+        self.assertTrue(WeeklyLeaderboard.objects.filter(week=3).exists())
+
+
+class UnpublishStopsAutopilotTests(TestCase):
+    """Taking a week down must not have the next tick put it straight back up.
+    auto_scrape_dt was left in the past, so the worker re-scraped, re-published
+    and mailed the league again within five minutes."""
+
+    def setUp(self):
+        admin = User.objects.create_user('boss', password='pw', email='b@x.com')
+        admin.is_staff = admin.is_superuser = True
+        admin.save()
+        self.client.force_login(admin)
+        self.settings = SiteSettings.get()
+        self.settings.auto_enabled = True
+        self.settings.week = 3
+        self.settings.publish = True
+        self.settings.auto_scrape_dt = datetime.now(timezone.utc) - timedelta(hours=1)
+        self.settings.auto_last_issue = 'stale'
+        self.settings.save()
+        from . import auto
+        self.auto = auto
+        self.scrapes = []
+        self.addCleanup(setattr, auto, 'do_scrape_and_publish', auto.do_scrape_and_publish)
+        auto.do_scrape_and_publish = lambda s, **kw: self.scrapes.append(1)
+
+    def test_unpublishing_clears_the_scrape_time(self):
+        self.client.post('/dashboard/picks/', {'toggle_publish': '1'})
+        s = SiteSettings.get()
+        self.assertFalse(s.publish)
+        self.assertIsNone(s.auto_scrape_dt)
+        self.assertEqual(s.auto_last_issue, '')
+
+    def test_the_next_tick_does_not_republish(self):
+        self.client.post('/dashboard/picks/', {'toggle_publish': '1'})
+        self.auto.auto_tick()
+        self.assertEqual(self.scrapes, [])
+        self.assertFalse(SiteSettings.get().publish)

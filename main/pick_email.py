@@ -93,7 +93,7 @@ def _ask_model(text, games):
         return None
     try:
         from google import genai
-        from .ai_picks import MODEL
+        from .ai_picks import model_name
         client = genai.Client(api_key=api_key)
     except Exception as e:
         log.error('[pick_email] could not build Gemini client: %s', e)
@@ -106,7 +106,7 @@ def _ask_model(text, games):
     )
     prompt = PROMPT.format(listing=listing, message=text[:8000])
     try:
-        return client.models.generate_content(model=MODEL, contents=prompt).text
+        return client.models.generate_content(model=model_name(), contents=prompt).text
     except Exception as e:
         log.error('[pick_email] Gemini call failed: %s', e)
         return None
@@ -196,8 +196,8 @@ def send_reply(to_email, subject, body, in_reply_to=None):
                               send_via_mailbox, smtp_ready)
 
     if not SiteSettings.get().email_confirmations:
-        print(f'[pick_email] confirmations switched off on the Emails page — '
-              f'{to_email} not told what was recorded', flush=True)
+        log.info('[pick_email] confirmations switched off - %s not told what was recorded',
+                 to_email)
         return False
 
     if smtp_ready():
@@ -211,12 +211,11 @@ def send_reply(to_email, subject, body, in_reply_to=None):
 
     api_key = getattr(django_settings, 'RESEND_API_KEY', '')
     if outbound_suppressed():
-        print(f'[pick_email] outbound suppressed — reply to {to_email} not sent',
-              flush=True)
+        log.info('[pick_email] outbound suppressed - reply to %s not sent', to_email)
         return False
     if not api_key:
-        print(f'[pick_email] no SMTP and no RESEND_API_KEY — reply to {to_email} '
-              f'not sent', flush=True)
+        log.warning('[pick_email] no SMTP and no RESEND_API_KEY - reply to %s not sent',
+                    to_email)
         return False
     from_email = getattr(django_settings, 'RESEND_FROM', 'onboarding@resend.dev')
     inbox = picks_address() or ''
@@ -233,11 +232,10 @@ def send_reply(to_email, subject, body, in_reply_to=None):
         if inbox:
             payload['reply_to'] = [inbox]
         resend.Emails.send(payload)
-        print(f'[pick_email] replied to {to_email} via Resend', flush=True)
+        log.info('[pick_email] replied to %s via Resend', to_email)
         return True
     except Exception as e:
         log.error('[pick_email] reply to %s failed: %s', to_email, e)
-        print(f'[pick_email] reply to {to_email} FAILED: {e}', flush=True)
         return False
 
 

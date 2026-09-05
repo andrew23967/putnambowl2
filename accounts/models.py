@@ -2,7 +2,7 @@ from django.db import models
 from django.contrib.auth.models import User
 from django.db.models.signals import post_save
 from django.dispatch import receiver
-from main.teams import TEAMS, NFC_TEAMS, AFC_TEAMS
+from main.teams import TEAMS
 
 
 class Profile(models.Model):
@@ -16,7 +16,6 @@ class Profile(models.Model):
     nfc_champ = models.CharField(max_length=50, choices=TEAMS, default='Arizona Cardinals')
     afc_champ = models.CharField(max_length=50, choices=TEAMS, default='Buffalo Bills')
     superbowl_winner = models.CharField(max_length=50, choices=TEAMS, default='Arizona Cardinals')
-    unread_messages = models.IntegerField(default=0)
     is_bot = models.BooleanField(default=False)
     BOT_STRATEGY_CHOICES = [
         ('random', 'Random (uses underdog %)'),
@@ -64,8 +63,3 @@ def create_profile(sender, instance, created, **kwargs):
     if created:
         Profile.objects.create(user=instance)
 
-
-@receiver(post_save, sender=User)
-def save_profile(sender, instance, **kwargs):
-    if hasattr(instance, 'profile'):
-        instance.profile.save()

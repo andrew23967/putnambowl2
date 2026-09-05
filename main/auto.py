@@ -2,29 +2,18 @@ import logging
 from datetime import datetime, timezone, timedelta
 
 from django.contrib.auth.models import User
-from django.db.models import Q, Prefetch, Min
+from django.db.models import Min
 
 from .models import SiteSettings, Game, Pick, WeeklyLeaderboard
-from .teams import (ABBREV_TO_TEAM, TEAM_ABBREV, canonical_abbrev,
-                    canonical_game_id as _canon_game_id, make_game_id,
-                    team_from_abbrev)
+from .scoring import calculate_points
+from .teams import (TEAM_ABBREV, canonical_abbrev,
+                    canonical_game_id as _canon_game_id, team_from_abbrev)
 from . import scrape as scrape_module
 
 log = logging.getLogger(__name__)
 
 WEEKDAY_NAMES = {0: 'Monday', 1: 'Tuesday', 2: 'Wednesday', 3: 'Thursday',
                  4: 'Friday', 5: 'Saturday', 6: 'Sunday'}
-
-
-def _calculate_points(underdog_ml, favorite_ml):
-    u = abs(float(underdog_ml))
-    f = abs(float(favorite_ml))
-    if u == 0 or f == 0:
-        return 1.0
-    u_ratio = u / 100
-    f_ratio = 100 / f
-    hp = ((1 / (u_ratio * f_ratio)) ** 0.5) - 1
-    return round((hp + 1) * u_ratio, 2)
 
 
 def _current_season_year():
@@ -120,16 +109,16 @@ def build_recap(week):
             api_key = getattr(django_settings, 'GEMINI_API_KEY', '')
             if api_key:
                 from google import genai
+                from .ai_picks import model_name
                 client = genai.Client(api_key=api_key)
                 response = client.models.generate_content(
-                    model='gemini-3.5-flash',
+                    model=model_name(),
                     contents=prompt,
                 )
                 log.info('Gemini recap generated for week %s', week)
                 return response.text.strip()
         except Exception as e:
             log.error('Gemini recap failed: %s', e)
-            print(f'[recap] Gemini failed: {e}', flush=True)
 
     # Fallback, when Gemini is unavailable or errors.
     league_avg = round(sum(pts for _, pts in ranked) / len(ranked), 1)
@@ -215,23 +204,6 @@ def _game_day_allowed(game_dt, day_set, tz_str='UTC'):
     return game_dt.astimezone(tz).weekday() in day_set
 
 
-def _game_day_in_filter(game_dt, from_day, to_day, tz_str='UTC'):
-    """Deprecated contiguous-range filter, kept for the old dashboard path."""
-    if from_day is None or to_day is None:
-        return True
-    if game_dt is None:
-        return True
-    try:
-        from zoneinfo import ZoneInfo
-        tz = ZoneInfo(tz_str or 'UTC')
-    except Exception:
-        tz = timezone.utc
-    day = game_dt.astimezone(tz).weekday()
-    if from_day <= to_day:
-        return from_day <= day <= to_day
-    return day >= from_day or day <= to_day
-
-
 def scrape_week_games(settings, year=None):
     """Pull the week's slate into the database. Does not publish.
 
@@ -277,7 +249,7 @@ def scrape_week_games(settings, year=None):
             # league for that game.
             unpriced.append('%s vs %s' % (team1, team2))
 
-        pts2 = (_calculate_points(ml1, abs(ml2)) * settings.multiplier
+        pts2 = (calculate_points(ml1, abs(ml2)) * settings.multiplier
                 if priced else float(settings.multiplier))
 
         # Scope to this week - games persist across weeks, and division rivals
@@ -377,7 +349,6 @@ def publish_week(settings, year=None):
     if settings.lock_mode == 'offset' and first_dt and settings.auto_lock_offset_minutes:
         settings.auto_lock_dt = first_dt - timedelta(minutes=settings.auto_lock_offset_minutes)
     settings.publish = True
-    settings.edit = False
     # Grading starts at the first kickoff. Nothing can be graded before then, so
     # there is nothing to poll for; and deriving it from the slate means a flexed
     # game moves it automatically, where a configured weekday and time would sit
@@ -391,10 +362,8 @@ def publish_week(settings, year=None):
 
     try:
         from .email_utils import send_picks_published_email
-        print('[auto] calling send_picks_published_email', flush=True)
         send_picks_published_email(settings)
     except Exception as e:
-        print('[auto] email error: %s' % e, flush=True)
         log.error('Email send failed: %s', e)
 
 
@@ -510,16 +479,26 @@ def do_advance_week(settings):
         prev_score = next((e['score'] for e in lb_entries if e['username'] == p.username), 0)
         if round(p.profile.score - prev_score, 1) == round(max_score, 1):
             p.profile.score += 10
-        p.save()
+        p.profile.save()
 
     completed_week = settings.week
+    prev_lock_dt = settings.auto_lock_dt
     settings.week += 1
     settings.scrape_week = settings.week
     settings.publish = False
-    settings.edit = True
     settings.lock_picks = False
     settings.first_game_dt = None
     settings.auto_lock_dt = None
+    if settings.lock_mode == 'manual' and prev_lock_dt:
+        # A manual lock is a weekly clock, not a one-off. This used to read
+        # auto_lock_dt *after* the line above had cleared it, so it never ran:
+        # from the second week on there was no lock time, and the season
+        # silently stalled - no lock, no reminder, no grading, no advance.
+        next_lock = prev_lock_dt + timedelta(days=7)
+        now = datetime.now(timezone.utc)
+        while next_lock <= now:
+            next_lock += timedelta(days=7)
+        settings.auto_lock_dt = next_lock
     settings.auto_scrape_dt = _next_weekday_hour(settings.auto_scrape_weekday, settings.auto_scrape_hour, settings.auto_scrape_minute)
     # Clear the new week's grading and retry state too. Left set, the old
     # auto_grade_dt is already in the past, so grading would start the moment the
@@ -533,8 +512,6 @@ def do_advance_week(settings):
     # reminder has to be able to fire again.
     settings.weekly_intro = ''
     settings.reminder_sent_week = 0
-    if settings.lock_mode == 'manual' and settings.auto_lock_dt:
-        settings.auto_lock_dt += timedelta(days=7)
     settings.save()
 
     recap = build_recap(completed_week)
@@ -552,7 +529,6 @@ def do_advance_week(settings):
         except Exception as e:
             # A recap that fails to record must not abort the advance.
             log.error('Recording the recap failed: %s', e)
-            print(f'[recap] record failed: {e}', flush=True)
 
     log.info('Auto: advanced to week %s', settings.week)
 
@@ -567,10 +543,10 @@ def auto_tick():
     def _fmt(dt):
         return dt.strftime('%m/%d %H:%M') if dt else '-'
 
-    print('[auto_tick] %s UTC | week=%s publish=%s lock=%s scrape=%s lock_dt=%s grade=%s'
-          % (now.strftime('%H:%M'), settings.week, settings.publish, settings.lock_picks,
+    log.info('tick %s UTC | week=%s publish=%s lock=%s scrape=%s lock_dt=%s grade=%s',
+             now.strftime('%H:%M'), settings.week, settings.publish, settings.lock_picks,
              _fmt(settings.auto_scrape_dt), _fmt(settings.auto_lock_dt),
-             _fmt(settings.auto_grade_dt)), flush=True)
+             _fmt(settings.auto_grade_dt))
 
     # 0. Stop at the end of the season. Advancing used to be a bare `week += 1`,
     #    so after the Super Bowl the autopilot rolled into week 23, scraped an

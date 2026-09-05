@@ -15,7 +15,11 @@ import re
 
 log = logging.getLogger(__name__)
 
-MODEL = 'gemini-3.5-flash'
+
+def model_name():
+    """The Gemini model every caller uses - one setting, GEMINI_MODEL."""
+    from django.conf import settings as django_settings
+    return getattr(django_settings, 'GEMINI_MODEL', '') or 'gemini-3.5-flash'
 
 
 def _client():
@@ -107,7 +111,7 @@ def choose_picks(games):
 
     try:
         response = client.models.generate_content(
-            model=MODEL, contents=_build_prompt(games)
+            model=model_name(), contents=_build_prompt(games)
         )
         picks = _parse(response.text, {g.id for g in games})
     except Exception as e:

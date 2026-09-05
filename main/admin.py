@@ -1,10 +1,10 @@
 from django.contrib import admin
-from .models import Game, Pick, SiteSettings, WeeklyLeaderboard, LeagueEmail, Bug, SeasonRecord
+from .models import Game, Pick, SiteSettings, WeeklyLeaderboard, LeagueEmail, SeasonRecord
 
 
 @admin.register(SiteSettings)
 class SiteSettingsAdmin(admin.ModelAdmin):
-    list_display = ['week', 'publish', 'edit', 'lock_picks', 'multiplier', 'scrape_api', 'grade_api']
+    list_display = ['week', 'publish', 'lock_picks', 'multiplier', 'scrape_api', 'grade_api']
 
 
 @admin.register(Game)
@@ -33,12 +33,6 @@ class LeagueEmailAdmin(admin.ModelAdmin):
     list_filter = ['published', 'source']
     search_fields = ['subject', 'body', 'from_email', 'author__username']
     readonly_fields = ['received_at', 'message_id']
-
-
-@admin.register(Bug)
-class BugAdmin(admin.ModelAdmin):
-    list_display = ['finder', 'description', 'resolved', 'created_at']
-    list_filter = ['resolved']
 
 
 @admin.register(SeasonRecord)
