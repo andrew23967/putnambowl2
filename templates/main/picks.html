@@ -27,7 +27,7 @@
   .res-time { font: 400 12px var(--mono); color: var(--muted-3); width: 108px; flex-shrink: 0; white-space: nowrap; }
   .res-teams { display: flex; align-items: baseline; gap: 8px; flex: 1; min-width: 0; flex-wrap: wrap; }
   .res-team { font-size: 18px; color: var(--muted); }
-  .res-team.won { color: var(--ink); font-weight: 600; }
+  .res-team.won { color: var(--pos); font-weight: 600; }
   .res-pts { font: 400 12px var(--mono); color: var(--dim); }
   .res-at { font: 400 12px var(--mono); color: var(--placeholder); }
   .res-took { font: 400 12.5px var(--mono); color: var(--muted-3); flex-shrink: 0; white-space: nowrap; }
@@ -95,10 +95,6 @@
 </div>
 
 <div style="padding:18px 0 26px;">
-  <div class="section-head">
-    <p class="eyebrow">{{ games|length }} game{{ games|length|pluralize }}</p>
-    <p class="n" style="font-size:10.5px;color:var(--muted-3);">number beside a team is what it scores</p>
-  </div>
   {% if not games %}
   <p class="empty">No games this week.</p>
   {% else %}

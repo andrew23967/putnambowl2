@@ -78,9 +78,9 @@
 <div id="picks-content"></div>
 <div class="ph-foot">
   <div class="legend">
-    <span><i class="swatch-sq" style="background:var(--pos-fill);"></i>right</span>
-    <span><i class="swatch-sq" style="background:var(--neg-fill);"></i>wrong</span>
-    <span><i class="swatch-sq" style="background:var(--fill);"></i>not graded</span>
+    <span><i class="swatch-sq" style="border:1.5px solid var(--pos);"></i>right</span>
+    <span><i class="swatch-sq" style="border:1.5px solid var(--neg);"></i>wrong or no pick</span>
+    <span><i class="swatch-sq" style="border:1.5px solid var(--rule-strong);"></i>not graded</span>
   </div>
   <span class="n" style="margin-left:auto;font-size:10.5px;color:var(--muted-3);">league row shows the split, left team first</span>
 </div>
@@ -227,7 +227,8 @@ function renderTable() {
     h += '<td class="ph-stat ph-rec">' + (p.total ? p.correct + '/' + p.total : '–') + '</td>';
     shown.forEach(g => {
       const pick = p.picks[String(g.id)];
-      if (!pick || !weekData.picks_locked) { h += '<td class="ph-cell"><span class="chip chip-open">–</span></td>'; return; }
+      if (!weekData.picks_locked) { h += '<td class="ph-cell"><span class="chip chip-open">–</span></td>'; return; }
+      if (!pick) { h += '<td class="ph-cell"><span class="chip chip-neg" aria-label="no pick"></span></td>'; return; }
       const abbrev = pick.choice === 'team1' ? g.team1_abbrev : g.team2_abbrev;
       const cls = pick.correct === true ? 'chip-pos' : pick.correct === false ? 'chip-neg' : 'chip-open';
       h += '<td class="ph-cell"><span class="chip ' + cls + '">' + esc(abbrev) + '</span></td>';
