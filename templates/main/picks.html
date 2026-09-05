@@ -11,24 +11,28 @@
   .pk-save { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
   .pk-save .bar { width: 150px; }
   .pk-list { display: grid; grid-template-columns: 1fr 1fr; gap: 0 26px; }
-  .game { display: flex; align-items: center; gap: 14px; padding: 10px 0; border-top: 1px solid var(--rule-2); }
-  .game-time { font: 400 10.5px var(--mono); color: var(--muted-3); width: 90px; flex-shrink: 0; white-space: nowrap; }
-  .game-sides { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; flex: 1; min-width: 0; position: relative; }
-  .game-at { font: 400 10.5px var(--mono); color: var(--placeholder); width: 34px; text-align: right; flex-shrink: 0; }
+  .game { padding: 14px 0 16px; border-top: 1px solid var(--rule-2); }
+  .game-meta { display: flex; gap: 8px; margin: 0 0 9px; font: 400 11.5px var(--mono); color: var(--muted-3); white-space: nowrap; }
+  .game-meta b { font-weight: 500; color: var(--muted); }
+  .game-sides { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; position: relative; }
+  .game .side { padding: 14px 10px; }
+  .game .side-team { font-size: 16px; }
+  .game .side-pts { font-size: 12px; }
   .pick-radio { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
   .pick-radio:checked + .side { background: var(--fill); border-color: var(--ink); }
   .pick-radio:checked + .side .side-team { color: var(--ink); }
   .pick-radio:checked + .side .side-pts { color: var(--muted); }
   .pick-radio:focus-visible + .side { outline: 2px solid var(--ink); outline-offset: 2px; }
-  .res-time { font: 400 10.5px var(--mono); color: var(--muted-3); width: 90px; flex-shrink: 0; white-space: nowrap; }
-  .res-teams { display: flex; align-items: baseline; gap: 7px; flex: 1; min-width: 0; flex-wrap: wrap; }
-  .res-team { font-size: 13.5px; color: var(--muted); }
+  .pk-list .res { padding: 19px 0; gap: 18px; }
+  .res-time { font: 400 12px var(--mono); color: var(--muted-3); width: 108px; flex-shrink: 0; white-space: nowrap; }
+  .res-teams { display: flex; align-items: baseline; gap: 8px; flex: 1; min-width: 0; flex-wrap: wrap; }
+  .res-team { font-size: 18px; color: var(--muted); }
   .res-team.won { color: var(--ink); font-weight: 600; }
-  .res-pts { font: 400 10.5px var(--mono); color: var(--dim); }
-  .res-at { font: 400 10.5px var(--mono); color: var(--placeholder); }
-  .res-took { font: 400 10.5px var(--mono); color: var(--muted-3); flex-shrink: 0; white-space: nowrap; }
+  .res-pts { font: 400 12px var(--mono); color: var(--dim); }
+  .res-at { font: 400 12px var(--mono); color: var(--placeholder); }
+  .res-took { font: 400 12.5px var(--mono); color: var(--muted-3); flex-shrink: 0; white-space: nowrap; }
   .res-took b { color: var(--ink); font-weight: 600; }
-  .res-result { font: 600 11px var(--mono); width: 34px; text-align: right; flex-shrink: 0; }
+  .res-result { font: 600 14px var(--mono); width: 44px; text-align: right; flex-shrink: 0; }
   .last-week .res { opacity: .72; }
   #pick-error { position: fixed; left: 50%; transform: translateX(-50%); bottom: 20px; z-index: 200; }
   @media (max-width: 900px) {
@@ -39,9 +43,8 @@
     .pk-list { grid-template-columns: 1fr; }
   }
   @media (max-width: 640px) {
-    .game-time { width: 84px; }
-    .game-at { display: none; }
     .res-took { display: none; }
+    .res-team { font-size: 15px; }
   }
 </style>
 {% endblock %}
@@ -90,9 +93,15 @@
     <div class="res">
       <span class="res-mark {{ g.mark }}"></span>
       <div class="res-teams">
+        {% if g.home1 %}
+        <span class="res-team{% if g.winner == 'team2' %} won{% endif %}">{{ g.t2 }}</span>
+        <span class="res-at">at</span>
+        <span class="res-team{% if g.winner == 'team1' %} won{% endif %}">{{ g.t1 }}</span>
+        {% else %}
         <span class="res-team{% if g.winner == 'team1' %} won{% endif %}">{{ g.t1 }}</span>
         <span class="res-at">at</span>
         <span class="res-team{% if g.winner == 'team2' %} won{% endif %}">{{ g.t2 }}</span>
+        {% endif %}
       </div>
       <span class="res-took">{% if g.took %}took <b>{{ g.took }}</b>{% else %}no pick{% endif %}</span>
       <span class="res-result {{ g.mark }}">{{ g.result }}</span>
@@ -133,7 +142,7 @@
     {% for game in games %}
     {% with pick=picks_map|get_item:game.id %}
     <div class="game">
-      <span class="game-time">{% if game.game_dt_iso %}<span data-utc-daytime="{{ game.game_dt_iso }}">{{ game.game_dt|date:"D g:i" }}</span>{% endif %}</span>
+      <p class="game-meta">{% if game.game_dt_iso %}<span data-utc-daytime="{{ game.game_dt_iso }}">{{ game.game_dt|date:"D g:i" }}</span><span>·</span>{% endif %}<span>{% if game.team1_is_home %}{{ game.team2_abbrev }} at <b>{{ game.team1_abbrev }}</b>{% else %}{{ game.team1_abbrev }} at <b>{{ game.team2_abbrev }}</b>{% endif %}</span></p>
       <div class="game-sides" role="radiogroup" aria-label="{{ game.team1_abbrev }} versus {{ game.team2_abbrev }}">
         <input class="pick-radio" type="radio" name="game-{{ game.id }}" id="g{{ game.id }}-t1"
                value="team1" data-game="{{ game.id }}"{% if pick and pick.choice == 'team1' %} checked{% endif %}>
@@ -148,7 +157,6 @@
           <span class="side-pts">{{ game.points2 }}</span>
         </label>
       </div>
-      <span class="game-at">@{% if game.team1_is_home %}{{ game.team1_abbrev }}{% else %}{{ game.team2_abbrev }}{% endif %}</span>
       <span id="pick-had-{{ game.id }}" hidden>{% if pick %}1{% else %}0{% endif %}</span>
     </div>
     {% endwith %}
@@ -193,11 +201,19 @@
       <span class="res-mark {% if game.graded and pick %}{% if pick.choice == game.winner %}pos{% else %}neg{% endif %}{% endif %}"></span>
       <span class="res-time">{% if game.game_dt_iso %}<span data-utc-daytime="{{ game.game_dt_iso }}">{{ game.game_dt|date:"D g:i" }}</span>{% endif %}</span>
       <div class="res-teams">
+        {% if game.team1_is_home %}
+        <span class="res-team{% if game.winner == 'team2' %} won{% endif %}">{{ game.team2_abbrev }}</span>
+        <span class="res-pts">{{ game.points2 }}</span>
+        <span class="res-at">at</span>
+        <span class="res-team{% if game.winner == 'team1' %} won{% endif %}">{{ game.team1_abbrev }}</span>
+        <span class="res-pts">{{ game.points1 }}</span>
+        {% else %}
         <span class="res-team{% if game.winner == 'team1' %} won{% endif %}">{{ game.team1_abbrev }}</span>
         <span class="res-pts">{{ game.points1 }}</span>
         <span class="res-at">at</span>
         <span class="res-team{% if game.winner == 'team2' %} won{% endif %}">{{ game.team2_abbrev }}</span>
         <span class="res-pts">{{ game.points2 }}</span>
+        {% endif %}
       </div>
       <span class="res-took">{% if pick %}took <b>{% if pick.choice == 'team1' %}{{ game.team1_abbrev }}{% else %}{{ game.team2_abbrev }}{% endif %}</b>{% else %}no pick{% endif %}</span>
       <span class="res-result {% if game.graded and pick %}{% if pick.choice == game.winner %}pos{% else %}neg{% endif %}{% else %}dim{% endif %}">{% if not game.graded or not pick %}—{% elif pick.choice == game.winner %}+{{ pick.points_earned }}{% else %}0{% endif %}</span>

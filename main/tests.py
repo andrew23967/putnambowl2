@@ -1465,10 +1465,10 @@ class HomeSideAndGameIdTests(TestCase):
                 game_id='2025_01_DAL_PHI',
                 game_dt=_dt(2025, 9, 5, 0, 20, tzinfo=_tz.utc))
             body = self.client.get('/picks/').content.decode().split('</style>')[-1]
-            found = re.findall(r'@\s*([A-Z]{2,4})', body)
+            found = re.findall(r'at <b>([A-Z]{2,4})</b>', body)
             self.assertTrue(found, 'no venue rendered')
             self.assertEqual(found[0], expected,
-                             f'team1_is_home={flag} should show @{expected}')
+                             f'team1_is_home={flag} should read "at {expected}"')
 
 
 class SlateValidationTests(TestCase):

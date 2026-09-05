@@ -98,6 +98,9 @@ for phones. `aria-current="page"` comes from `request.resolver_match.url_name`.
 - Home: the `.home` grid (defined in `home.html`) — status block, standings (`main/_standings.html`: podium, chart, table), mail.
   The status block is one status word, one fraction with its label, opens, locks, one action.
 - Lists of games use two columns (`.pk-list`, in `picks.html`) above 900px, one below.
+  An open game is one mono line of context (kickoff · away at home) above two full-width
+  sides; a locked or graded game is one tall row, teams at 18px, away at home. Venue order
+  always follows `team1_is_home`.
 - The same markup is never written twice. If JavaScript needs to insert a row, the server
   renders the partial and returns it (`ajax_leaderboard` → `_standings.html`,
   `ajax_add_game` → `_game_row.html`).

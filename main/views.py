@@ -444,6 +444,7 @@ def _last_week_summary(league, settings, user):
         right = bool(pick and g.graded and pick.choice == g.winner)
         out_games.append({
             't1': g.team1_abbrev, 't2': g.team2_abbrev, 'winner': g.winner,
+            'home1': g.team1_is_home,
             'took': (g.team1_abbrev if pick.choice == 'team1' else g.team2_abbrev) if pick else '',
             'mark': '' if not (pick and g.graded) else ('pos' if right else 'neg'),
             'result': '—' if not (pick and g.graded) else (f'+{pick.points_earned}' if right else '0'),
