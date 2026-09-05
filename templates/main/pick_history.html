@@ -37,7 +37,6 @@
   .ph-lose { color: var(--muted-3); }
   .ph-open { color: var(--muted); }
   .ph-cell .chip { display: flex; width: 100%; }   /* block, so an empty chip sits where a full one does */
-  .ph-foot { display: flex; align-items: center; gap: 16px; padding: 12px 0 16px; border-top: 1px solid var(--rule-strong); }
   .ph-empty { padding: 20px 0; }
   .ph-col-player { width: 19%; }
   .ph-col-rank { width: 66px; }
@@ -49,7 +48,6 @@
     .ph-ctl + .ph-ctl { padding-left: 12px; }
     .ph-col-player { width: 30%; }
     .ph-col-rank, .ph-col-week, .ph-col-rec { width: 52px; }
-    .ph-foot { flex-wrap: wrap; gap: 10px; }
   }
 </style>
 {% endblock %}
@@ -76,14 +74,6 @@
 
 {% if completed_weeks %}
 <div id="picks-content"></div>
-<div class="ph-foot">
-  <div class="legend">
-    <span><i class="swatch-sq" style="border:1.5px solid var(--pos);"></i>right</span>
-    <span><i class="swatch-sq" style="border:1.5px solid var(--neg);"></i>wrong or no pick</span>
-    <span><i class="swatch-sq" style="border:1.5px solid var(--rule-strong);"></i>not graded</span>
-  </div>
-  <span class="n" style="margin-left:auto;font-size:10.5px;color:var(--muted-3);">league row shows the split, left team first</span>
-</div>
 {% else %}
 <p class="empty ph-empty">No graded weeks yet.</p>
 {% endif %}
