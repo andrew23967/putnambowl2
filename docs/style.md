@@ -21,7 +21,7 @@ All colours are CSS custom properties on `:root`. Use the token, never the hex.
 | `--rule` / `--rule-2` / `--rule-3` / `--rule-strong` | `#e8e7e3` / `#ecece8` / `#e4e3df` / `#d9d7d2` | dividers: page, table rows, form borders, table head |
 | `--fill` / `--fill-2` / `--fill-me` / `--fill-hover` | `#eceae5` / `#dedcd7` / `#eeeeea` / `#f4f3f0` | selected side, podium steps, your row, hover |
 | `--track` | `#d6d4cf` | toggle off, average line, not-graded mark |
-| `--accent` / `--accent-hover` | `#0f7a6c` / `#0b5c52` | links, "Open", the leader line, the unread dot |
+| `--accent` / `--accent-hover` | `#0f7a6c` / `#0b5c52` | links, "Open", the leader line |
 | `--pos` / `--pos-fill` | `#167a4b` / `#dcece2` | right, gained, climbed |
 | `--neg` / `--neg-fill` / `--neg-soft` / `--neg-text` | `#a83232` / `#f2dede` / `#f7ecec` / `#8e2b2b` | wrong, fell, errors |
 
@@ -80,9 +80,12 @@ with `showModal()`, close on backdrop click, return focus to the opener.
 
 Chips `.chip-pos` / `.chip-neg` / `.chip-open`; legend `.legend` with `.swatch`
 (line) or `.swatch-sq`; `.avatar` (`.is-me` inverts it); `.podium` with `.pod-1/2/3`
-(display order 2, 1, 3; the number on the block is the rank); `.mail-row` with
-`.mail-dot.is-new` on the newest; `.side` (a pick side, `:checked + .side` selects it);
-`.res` / `.res-mark` (a graded row with a 3px left bar).
+(display order 2, 1, 3; the blocks touch and share a 2px floor, the rank sits at the top of each step, names hang under the floor); `.mail-row` (on the home page the list is
+clipped to the standings' height, never mid-row; eight rows when stacked); `.side` (a pick side, `:checked + .side` selects it);
+`.res` / `.res-mark` (a graded row with a 3px left bar); the points graph is `main/_chart.html`
+(`.chart-plot` holds one stretched SVG with an ink axis and two dashed gridlines; `.chart-dot`
+end markers, the `.chart-ymax` scale label and the `.chart-x` week ticks are HTML placed by
+percentage so they never distort).
 
 Nav: `.nav` > `.nav-in` > `.nav-brand` (the league name), `.nav-links`, `.nav-right`
 (`.nav-week`, `<details class="nav-menu">` menus), `<details class="nav-burger">`

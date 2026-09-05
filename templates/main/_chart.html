@@ -1,0 +1,22 @@
+{% comment %}
+The points-by-week graph. Expects `chart` from charts.points_chart or
+charts.season_chart and an optional `height` in px. Lines are one stretched SVG;
+the markers and labels are HTML positioned by percentage so they never distort.
+{% endcomment %}
+<div class="chart-plot" style="height:{{ height|default:92 }}px;">
+  <svg width="100%" height="100%" viewBox="0 0 430 92" preserveAspectRatio="none" style="display:block;overflow:visible;" aria-label="Points by week">
+    <line class="chart-grid" x1="3" y1="31.7" x2="427" y2="31.7"></line>
+    <line class="chart-grid" x1="3" y1="60.3" x2="427" y2="60.3"></line>
+    <line class="chart-axis" x1="3" y1="89" x2="427" y2="89"></line>
+    <polyline points="{{ chart.avg }}" fill="none" stroke="#d6d4cf" stroke-width="1.5" vector-effect="non-scaling-stroke"></polyline>
+    <polyline points="{{ chart.leader }}" fill="none" stroke="#0f7a6c" stroke-width="1.5" vector-effect="non-scaling-stroke"></polyline>
+    {% if chart.in_it %}<polyline points="{{ chart.me }}" fill="none" stroke="#14161a" stroke-width="2" vector-effect="non-scaling-stroke"></polyline>{% endif %}
+  </svg>
+  {% if chart.avg_end %}<i class="chart-dot" style="left:{{ chart.avg_end.x }}%;top:{{ chart.avg_end.y }}%;background:var(--track);"></i>{% endif %}
+  {% if chart.leader_end %}<i class="chart-dot" style="left:{{ chart.leader_end.x }}%;top:{{ chart.leader_end.y }}%;background:var(--accent);"></i>{% endif %}
+  {% if chart.in_it and chart.me_end %}<i class="chart-dot" style="left:{{ chart.me_end.x }}%;top:{{ chart.me_end.y }}%;background:var(--ink);"></i>{% endif %}
+  <span class="chart-ymax">{{ chart.vmax }}</span>
+</div>
+<div class="chart-x">
+  {% for t in chart.ticks %}<span style="left:{{ t.x }}%;">{{ t.label }}</span>{% endfor %}
+</div>

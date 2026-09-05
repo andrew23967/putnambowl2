@@ -244,7 +244,7 @@ def home(request):
         opens_text, locks_text = 'Opened', 'Locked'
         cta_text, cta_url = 'See my picks', reverse('main:picks')
 
-    feed = _email_feed(league)
+    feed = _email_feed(league, limit=40)
 
     return render(request, 'main/home.html', {
         'settings': settings,
@@ -257,7 +257,7 @@ def home(request):
         'opens_dt': opens_dt, 'opens_text': opens_text,
         'locks_dt': locks_dt, 'locks_text': locks_text,
         'cta_text': cta_text, 'cta_url': cta_url,
-        'mail': feed[:8], 'mail_more': feed[8:], 'mail_all': feed,
+        'mail': feed,
         'preseason_open': preseason_open,
         'preseason_done': request.user.profile.preseason_submitted,
         # Kept for the tests and the JSON refresh.

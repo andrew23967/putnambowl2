@@ -310,6 +310,15 @@ dialog.dialog::backdrop { background: rgba(20,22,26,.28); }
 .chip-pos { background: var(--pos-fill); color: var(--pos); }
 .chip-neg { background: var(--neg-fill); color: var(--neg); }
 .chip-open { background: var(--fill); color: var(--muted-2); }
+/* ── Points graph ─────────────────────────────────────────────────────── */
+.chart-plot { position: relative; }
+.chart-grid { stroke: var(--rule-strong); stroke-width: 1; stroke-dasharray: 2 3; vector-effect: non-scaling-stroke; }
+.chart-axis { stroke: var(--ink); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.chart-dot { position: absolute; width: 7px; height: 7px; border-radius: 50%; transform: translate(-50%, -50%); box-shadow: 0 0 0 1.5px var(--panel); }
+.chart-ymax { position: absolute; left: 0; top: 0; font: 400 9.5px var(--mono); color: var(--muted-3); }
+.chart-x { position: relative; height: 13px; margin-top: 4px; }
+.chart-x span { position: absolute; transform: translateX(-50%); font: 400 9.5px var(--mono); color: var(--muted-3); }
+
 .legend { display: flex; flex-wrap: wrap; gap: 14px; }
 .legend span { display: inline-flex; align-items: center; gap: 5px; font: 400 10.5px var(--mono); color: var(--muted); }
 .swatch { display: inline-block; width: 9px; height: 2px; background: var(--ink); }
@@ -395,14 +404,16 @@ dialog.dialog::backdrop { background: rgba(20,22,26,.28); }
 }
 
 /* ── Podium ───────────────────────────────────────────────────────────── */
-.podium { display: flex; align-items: flex-end; gap: 4px; flex-shrink: 0; }
-.pod { display: flex; flex-direction: column; align-items: center; width: 52px; }
-.pod-score { font: 600 11.5px var(--mono); }
-.pod-block { display: flex; align-items: center; justify-content: center; width: 36px; font: 600 10px var(--mono); margin: 3px 0 4px; }
-.pod-1 .pod-block { height: 68px; background: var(--ink); color: #fff; }
-.pod-2 .pod-block { height: 40px; background: var(--fill-2); color: var(--muted); }
-.pod-3 .pod-block { height: 26px; background: var(--fill); color: var(--muted-2); }
-.pod-name { font-size: 10.5px; color: var(--muted); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Three steps on one floor: the blocks touch, the rank sits at the top of each
+   step, and the names hang under the floor line. */
+.podium { display: flex; align-items: flex-end; flex-shrink: 0; }
+.pod { display: flex; flex-direction: column; align-items: center; width: 58px; }
+.pod-score { font: 600 11.5px var(--mono); margin-bottom: 4px; }
+.pod-block { display: flex; align-items: flex-start; justify-content: center; width: 100%; padding-top: 6px; font: 600 10px var(--mono); }
+.pod-1 .pod-block { height: 72px; background: var(--ink); color: #fff; }
+.pod-2 .pod-block { height: 46px; background: var(--fill-2); color: var(--ink-3); }
+.pod-3 .pod-block { height: 30px; background: var(--fill); color: var(--muted); }
+.pod-name { width: 100%; padding-top: 5px; border-top: 2px solid var(--ink); text-align: center; font-size: 10.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ── Mail list ────────────────────────────────────────────────────────── */
 .mail-row {
@@ -410,8 +421,7 @@ dialog.dialog::backdrop { background: rgba(20,22,26,.28); }
   padding: 10px 0; border: 0; border-top: 1px solid var(--rule-3); background: none; cursor: pointer;
 }
 .mail-row:hover { background: var(--fill-hover); }
-.mail-dot { width: 5px; height: 5px; border-radius: 50%; background: transparent; flex-shrink: 0; }
-.mail-dot.is-new { background: var(--accent); }
+.mail-row[hidden] { display: none; }
 .mail-subject { font-size: 12.5px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mail-when { font: 400 11px var(--mono); color: var(--muted-3); flex-shrink: 0; }
 

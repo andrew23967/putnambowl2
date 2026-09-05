@@ -2,7 +2,8 @@
 
 The home page and the season page draw the same picture: cumulative points by
 week for you, the leader and the league average. Three polylines in a fixed
-viewBox, scaled by the caller's width, no charting library.
+viewBox, stretched to the caller's width; the markers and labels are HTML placed
+by percentage so they keep their shape. Drawn by templates/main/_chart.html.
 """
 from django.contrib.auth.models import User
 
@@ -11,16 +12,42 @@ from .models import WeeklyLeaderboard
 W, H, PAD = 430, 92, 3
 
 
+def _xy(i, v, n, vmax, w=W, h=H, pad=PAD):
+    """Plot coordinates of point i of n with value v on a 0..vmax scale."""
+    step = (w - 2 * pad) / (n - 1)
+    return pad + i * step, h - pad - (v / (vmax or 1)) * (h - 2 * pad)
+
+
 def polyline(values, vmax, w=W, h=H, pad=PAD):
     """SVG `points` for a series, or '' when there is nothing to draw."""
     n = len(values)
     if n < 2:
         return ''
-    vmax = vmax or 1
-    step = (w - 2 * pad) / (n - 1)
-    return ' '.join(
-        f'{pad + i * step:.1f},{h - pad - (v / vmax) * (h - 2 * pad):.1f}'
-        for i, v in enumerate(values))
+    return ' '.join(f'{x:.1f},{y:.1f}' for x, y in
+                    (_xy(i, v, n, vmax, w, h, pad) for i, v in enumerate(values)))
+
+
+def _end(values, vmax):
+    """The last point as percentages of the plot, for an HTML marker that does
+    not distort when the SVG is stretched."""
+    n = len(values)
+    if n < 2:
+        return None
+    x, y = _xy(n - 1, values[-1], n, vmax)
+    return {'x': round(x / W * 100, 2), 'y': round(y / H * 100, 2)}
+
+
+def _ticks(weeks):
+    """Week labels along the x axis, thinned to every other week past 12."""
+    n = len(weeks) + 1                      # the series starts at an origin point
+    every = 1 if len(weeks) <= 12 else 2
+    return [{'x': round(_xy(i, 0, n, 1)[0] / W * 100, 2), 'label': wk}
+            for i, wk in enumerate(weeks, start=1)
+            if i % every == 0 or i == n - 1]
+
+
+def _label(v):
+    return str(int(v)) if float(v).is_integer() else f'{v:.1f}'
 
 
 def _series(tables_after, me):
@@ -47,6 +74,9 @@ def _series(tables_after, me):
         'leader': polyline(lead_s, vmax),
         'avg': polyline(avg_s, vmax),
         'me_last': me_s[-1], 'leader_last': lead_s[-1], 'avg_last': avg_s[-1],
+        'me_end': _end(me_s, vmax), 'leader_end': _end(lead_s, vmax), 'avg_end': _end(avg_s, vmax),
+        'vmax': _label(vmax),
+        'ticks': _ticks(weeks),
         'in_it': me in tables_after[weeks[-1]],
     }
 

@@ -7,18 +7,19 @@
   .home-main { grid-area: main; padding: 24px 28px 30px 0; min-width: 0; }
   .home-status, .home-mail { border-left: 1px solid var(--rule); padding-left: 26px; min-width: 0; }
   .home-status { grid-area: status; padding-top: 24px; }
-  .home-mail { grid-area: mail; padding-top: 28px; padding-bottom: 30px; align-self: start; }
+  /* The mail block takes whatever height the standings leave: min-height 0 keeps
+     the row from growing with its content, the list clips, and the script below
+     hides any row that would be cut in half. */
+  .home-mail { grid-area: mail; padding-top: 28px; padding-bottom: 30px; min-height: 0; display: flex; flex-direction: column; }
+  .mail-list { flex: 1; min-height: 120px; overflow: hidden; }
   .home-top { display: flex; align-items: flex-end; justify-content: space-between; gap: 32px; }
-  .chart { flex: 1; min-width: 0; max-width: 560px; }
+  .chart { flex: 1; min-width: 0; max-width: 680px; }
   .status-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
   .status-head .status { font-size: 10px; letter-spacing: .12em; }
   .home-status .rows { margin-top: 10px; }
   .home-status .btn { margin-top: 14px; }
   .home-status .btn .frac { display: none; }
   .phone-line { display: none; justify-content: space-between; margin-top: 11px; font: 400 11.5px var(--mono); color: var(--muted-3); }
-  .mail-more > summary { list-style: none; cursor: pointer; padding: 10px 0; font: 400 11px var(--mono); color: var(--muted-3); border-top: 1px solid var(--rule-3); }
-  .mail-more > summary::-webkit-details-marker { display: none; }
-  .mail-more[open] > summary { display: none; }
   @media (max-width: 999px) {
     .home { grid-template-columns: 1fr; grid-template-areas: "status" "main" "mail"; }
     .home-main { padding-right: 0; }
@@ -29,7 +30,9 @@
     .home-status .row-v { text-align: left; font-size: 14px; }
     .home-status .row-k { font-size: 10.5px; }
     .home-status .btn { margin-top: 0; }
-    .home-mail { border-top: 1px solid var(--rule); padding-top: 20px; }
+    .home-mail { border-top: 1px solid var(--rule); padding-top: 20px; display: block; }
+    .mail-list { min-height: 0; overflow: visible; }
+    .mail-list > .mail-row:nth-child(n+9) { display: none; }
     .home-top .chart { max-width: 460px; }
   }
   @media (max-width: 640px) {
@@ -89,31 +92,22 @@
 
   <section class="home-mail">
     <p class="eyebrow" style="margin-bottom:4px;">Mail</p>
-    {% for msg in mail %}
-    <button type="button" class="mail-row" data-id="{{ msg.id }}" data-from="{{ msg.display_name }}" data-subject="{{ msg.subject }}">
-      <span class="mail-dot{% if forloop.first %} is-new{% endif %}"></span>
-      <span class="mail-subject">{{ msg.subject }}</span>
-      <span class="mail-when" data-utc-date="{{ msg.sent_at|date:'c' }}">{{ msg.sent_at|date:"M j" }}</span>
-    </button>
-    {% empty %}
-    <p class="empty" style="padding-top:8px;">No mail yet.</p>
-    {% endfor %}
-    {% if mail_more %}
-    <details class="mail-more">
-      <summary>{{ mail_more|length }} older</summary>
-      {% for msg in mail_more %}
+    {% if mail %}
+    <div class="mail-list">
+      {% for msg in mail %}
       <button type="button" class="mail-row" data-id="{{ msg.id }}" data-from="{{ msg.display_name }}" data-subject="{{ msg.subject }}">
-        <span class="mail-dot"></span>
         <span class="mail-subject">{{ msg.subject }}</span>
         <span class="mail-when" data-utc-date="{{ msg.sent_at|date:'c' }}">{{ msg.sent_at|date:"M j" }}</span>
       </button>
       {% endfor %}
-    </details>
+    </div>
+    {% else %}
+    <p class="empty" style="padding-top:8px;">No mail yet.</p>
     {% endif %}
   </section>
 </div>
 
-{% for msg in mail_all %}<template id="mail-{{ msg.id }}">{{ msg.body|linebreaks }}</template>{% endfor %}
+{% for msg in mail %}<template id="mail-{{ msg.id }}">{{ msg.body|linebreaks }}</template>{% endfor %}
 
 <dialog id="mail-dialog" class="dialog" aria-labelledby="mail-dialog-title">
   <div class="dialog-head">
@@ -147,6 +141,22 @@
   document.getElementById('mail-dialog-close').addEventListener('click',function(){dlg.close();});
   dlg.addEventListener('click',function(e){if(e.target===dlg)dlg.close();});
   dlg.addEventListener('close',function(){if(opener){opener.focus();opener=null;}});
+})();
+(function(){
+  // Show as many rows as fit beside the standings; never a half row.
+  var list=document.querySelector('.mail-list'); if(!list)return;
+  var rows=Array.prototype.slice.call(list.querySelectorAll('.mail-row'));
+  var wide=window.matchMedia('(min-width: 1000px)');
+  function fit(){
+    rows.forEach(function(r){r.hidden=false;});
+    if(!wide.matches)return;
+    var limit=list.clientHeight;
+    rows.forEach(function(r,i){if(i>=3&&r.offsetTop+r.offsetHeight>limit)r.hidden=true;});
+  }
+  fit();
+  window.addEventListener('resize',fit);
+  var main=document.querySelector('.home-main');
+  if(window.ResizeObserver&&main){new ResizeObserver(fit).observe(main);}
 })();
 {% if settings.lock_picks %}
 (function(){
