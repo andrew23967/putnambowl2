@@ -271,12 +271,12 @@ img, svg { max-width: 100%; }
 
 /* toggle switch: <label class="toggle"><input type=checkbox><span class="toggle-track"><span class="toggle-knob"></span></span><span class="toggle-text">…</span></label> */
 .toggle { display: flex; align-items: center; gap: 11px; width: 100%; padding: 10px 0; border-top: 1px solid var(--rule-2); cursor: pointer; position: relative; }
-.toggle input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.toggle > input[type="checkbox"] { position: absolute; opacity: 0; width: 1px; height: 1px; }
 .toggle-track { width: 34px; height: 19px; border-radius: 99px; background: var(--track); display: flex; align-items: center; padding: 2px; flex-shrink: 0; transition: background .12s; }
 .toggle-knob { width: 15px; height: 15px; border-radius: 50%; background: #fff; transition: transform .12s; }
-.toggle input:checked + .toggle-track { background: var(--ink); }
-.toggle input:checked + .toggle-track .toggle-knob { transform: translateX(15px); }
-.toggle input:focus-visible + .toggle-track { outline: 2px solid var(--ink); outline-offset: 2px; }
+.toggle > input:checked + .toggle-track { background: var(--ink); }
+.toggle > input:checked + .toggle-track .toggle-knob { transform: translateX(15px); }
+.toggle > input:focus-visible + .toggle-track { outline: 2px solid var(--ink); outline-offset: 2px; }
 .toggle-text { flex: 1; min-width: 0; }
 .toggle-text b { display: block; font-size: 13px; font-weight: 500; }
 .toggle-text small { display: block; font-size: 11.5px; color: var(--muted-3); margin-top: 1px; }

@@ -12,7 +12,7 @@
   .pk-save .bar { width: 150px; }
   .pk-list { display: grid; grid-template-columns: 1fr 1fr; gap: 0 26px; }
   .game { display: flex; align-items: center; gap: 14px; padding: 10px 0; border-top: 1px solid var(--rule-2); }
-  .game-time { font: 400 10.5px var(--mono); color: var(--muted-3); width: 64px; flex-shrink: 0; }
+  .game-time { font: 400 10.5px var(--mono); color: var(--muted-3); width: 90px; flex-shrink: 0; white-space: nowrap; }
   .game-sides { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; flex: 1; min-width: 0; position: relative; }
   .game-at { font: 400 10.5px var(--mono); color: var(--placeholder); width: 34px; text-align: right; flex-shrink: 0; }
   .pick-radio { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
@@ -20,7 +20,7 @@
   .pick-radio:checked + .side .side-team { color: var(--ink); }
   .pick-radio:checked + .side .side-pts { color: var(--muted); }
   .pick-radio:focus-visible + .side { outline: 2px solid var(--ink); outline-offset: 2px; }
-  .res-time { font: 400 10.5px var(--mono); color: var(--muted-3); width: 58px; flex-shrink: 0; }
+  .res-time { font: 400 10.5px var(--mono); color: var(--muted-3); width: 90px; flex-shrink: 0; white-space: nowrap; }
   .res-teams { display: flex; align-items: baseline; gap: 7px; flex: 1; min-width: 0; flex-wrap: wrap; }
   .res-team { font-size: 13.5px; color: var(--muted); }
   .res-team.won { color: var(--ink); font-weight: 600; }
@@ -39,7 +39,7 @@
     .pk-list { grid-template-columns: 1fr; }
   }
   @media (max-width: 640px) {
-    .game-time { width: 52px; }
+    .game-time { width: 84px; }
     .game-at { display: none; }
     .res-took { display: none; }
   }
