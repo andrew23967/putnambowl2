@@ -218,7 +218,7 @@ function renderTable() {
     shown.forEach(g => {
       const pick = p.picks[String(g.id)];
       if (!weekData.picks_locked) { h += '<td class="ph-cell"><span class="chip chip-open">–</span></td>'; return; }
-      if (!pick) { h += '<td class="ph-cell"><span class="chip chip-neg" aria-label="no pick"></span></td>'; return; }
+      if (!pick) { h += '<td class="ph-cell"><span class="chip chip-neg chip-none">none</span></td>'; return; }
       const abbrev = pick.choice === 'team1' ? g.team1_abbrev : g.team2_abbrev;
       const cls = pick.correct === true ? 'chip-pos' : pick.correct === false ? 'chip-neg' : 'chip-open';
       h += '<td class="ph-cell"><span class="chip ' + cls + '">' + esc(abbrev) + '</span></td>';
