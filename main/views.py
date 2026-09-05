@@ -780,10 +780,6 @@ def emaildash(request):
             settings.recap_prompt = request.POST.get('recap_prompt', '').strip()
             settings.save()
             messages.success(request, 'Prompts saved.')
-        elif 'reset_prompts' in request.POST:
-            settings.recap_prompt = ''
-            settings.save()
-            messages.success(request, 'Prompts reset to the built-in defaults.')
         return redirect('main:emaildash')
 
     # Preview the data block against the most recently completed week, so what is
@@ -1239,31 +1235,6 @@ def pickdash(request):
         'display_auto_lock_computed_dt': display_auto_lock_computed_dt,
         'scrape_day_choices': scrape_day_choices,
     })
-
-
-@league_manager_required
-@require_POST
-def generate_recap(request):
-    from .auto import build_recap
-    settings = current_settings(request)
-    league = settings.league
-    last_week = settings.week - 1
-    if last_week < 1:
-        return JsonResponse(
-            {'error': 'Week 1 has no previous week to recap.'}, status=400)
-    recap = build_recap(league, last_week)
-    if recap is None:
-        return JsonResponse({'error': f'No history saved for week {last_week}.'}, status=404)
-    settings.weekly_recap = recap
-    settings.save()
-    # Keep the archive in step with the live copy, the same way do_advance_week
-    # does. Without this the feed would keep serving the superseded text.
-    WeeklyLeaderboard.objects.filter(league=league, week=last_week).update(recap=recap)
-    # Record but deliberately do not send: regenerating is a correction, and the
-    # league has already had this week's recap in their inbox.
-    from .email_utils import record_recap_email
-    record_recap_email(league, last_week, recap)
-    return JsonResponse({'recap': recap})
 
 
 @league_manager_required

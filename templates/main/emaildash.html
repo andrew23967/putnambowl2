@@ -97,13 +97,9 @@
 
 {{ format_rules }}</pre>
     </details>
-    <div style="display:flex;gap:8px;margin-top:12px;align-items:center;">
+    <div style="margin-top:12px;">
       <button name="save_prompts" class="btn btn-primary btn-sm">Save prompt</button>
-      <button name="reset_prompts" class="btn btn-secondary btn-sm" onclick="return confirm('Reset the recap prompt to the built-in default?');">Reset</button>
-      <span style="flex:1;"></span>
-      <button type="button" class="btn btn-secondary btn-sm" id="regen">Regenerate last week's recap</button>
     </div>
-    <p class="n" id="regen-note" style="margin-top:8px;font-size:11px;color:var(--muted-3);"></p>
   </form>
 </div>
 
@@ -173,15 +169,6 @@
   document.getElementById('tpl-cancel').addEventListener('click',function(){
     document.getElementById('tpl-id').value=''; document.getElementById('tpl-name').value=''; document.getElementById('tpl-body').value='';
     document.getElementById('tpl-title').textContent='New intro'; this.hidden=true;
-  });
-  var regen=document.getElementById('regen'), rnote=document.getElementById('regen-note');
-  regen.addEventListener('click',function(){
-    if(!confirm('Regenerate last week\'s recap? It replaces the one on the site; nothing is mailed.'))return;
-    regen.disabled=true; rnote.textContent='working';
-    fetch("{% url 'main:generate_recap' %}",{method:'POST',headers:{'X-CSRFToken':'{{ csrf_token }}'}})
-      .then(function(r){return r.json();}).then(function(d){
-        regen.disabled=false; rnote.textContent=d.error?d.error:'recap replaced';
-      }).catch(function(){regen.disabled=false; rnote.textContent='failed';});
   });
 })();
 </script>

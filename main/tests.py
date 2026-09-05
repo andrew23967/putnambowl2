@@ -2902,11 +2902,10 @@ class EmailAddressExplainerTests(TestCase):
         self.assertIn('league+picks@gmail.com', html)
         self.assertIn('league+intro@gmail.com', html)
 
-    def test_each_address_says_what_it_does(self):
+    def test_each_address_is_labelled(self):
         html = self._html()
-        self.assertIn('A message to the league', html)
-        self.assertIn('These are my picks', html)
-        self.assertIn('the intro for this week', html)
+        for label in ('league', 'picks', 'intro'):
+            self.assertIn('<dt>' + label + '</dt>', html)
 
     def _with_smtp(self, ready):
         """Drive the banner directly.

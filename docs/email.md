@@ -98,8 +98,8 @@ Written at advance by `build_recap(league, week)`: Gemini with
 the instructions are editable on the Emails page, so no edit can remove the data
 or the plain-text rule. `recap_stats` emits *angles* — best week, biggest mover,
 the game nobody got, a tight race — only when they fire; a quiet week gives a
-short list. Recaps are recorded to the feed (`{slug}-recap-{year}-w{week}`, so
-regenerating replaces the row) and reach the league inside the next weekly
+short list. Recaps are recorded to the feed (`{slug}-recap-{year}-w{week}`, one row
+per week) and reach the league inside the next weekly
 mail. Nothing mails a recap on its own.
 
 ### Relay
