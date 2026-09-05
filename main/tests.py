@@ -1725,15 +1725,20 @@ class AutoSettingsFormTests(TestCase):
         self.settings.refresh_from_db()
         self.assertFalse(self.settings.auto_advance)
 
-    def test_season_length_and_retry_window_round_trip(self):
+    def test_season_length_round_trips(self):
         self._post()
         self.assertEqual(self.settings.season_last_week, 18)
-        self.assertEqual(self.settings.auto_retry_window_minutes, 120)
 
     def test_out_of_range_values_are_clamped_not_stored(self):
-        self._post(season_last_week='999', auto_retry_window_minutes='-5')
+        self._post(season_last_week='999')
         self.assertEqual(self.settings.season_last_week, 30)
-        self.assertEqual(self.settings.auto_retry_window_minutes, 0)
+
+    def test_the_worker_settings_are_not_on_the_form(self):
+        """The tick and the retry window came off the dashboard; posting them
+        changes nothing."""
+        before = (self.settings.tick_interval, self.settings.auto_retry_window_minutes)
+        self._post(tick_interval='5', auto_retry_window_minutes='0')
+        self.assertEqual((self.settings.tick_interval, self.settings.auto_retry_window_minutes), before)
 
     def test_the_form_renders_the_saved_state_back(self):
         self._post()
@@ -3681,7 +3686,7 @@ class WorkerTicksEveryLeagueTests(TestCase):
         closed.save()
         interval = self.auto.tick_all_leagues()
         self.assertEqual(sorted(self.ticked), ['broken', 'putnambowl', 'quiet'])
-        self.assertEqual(interval, 300)
+        self.assertEqual(interval, 60)
 
     def test_the_interval_is_the_shortest_leagues(self):
         fast = make_league('fast')

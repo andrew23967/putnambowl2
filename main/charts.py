@@ -50,6 +50,16 @@ def _label(v):
     return str(int(v)) if float(v).is_integer() else f'{v:.1f}'
 
 
+def empty_chart():
+    """The axes with nothing on them: what the home page shows in week 1."""
+    return {
+        'weeks': [], 'label': '', 'me': '', 'leader': '', 'avg': '',
+        'me_last': 0.0, 'leader_last': 0.0, 'avg_last': 0.0,
+        'me_end': None, 'leader_end': None, 'avg_end': None,
+        'vmax': '', 'ticks': [], 'in_it': False, 'empty': True,
+    }
+
+
 def _series(tables_after, me):
     """Build me / leader / average lists from {week: {username: score_after}}.
 
@@ -102,7 +112,7 @@ def points_chart(league, settings, me, live_rows=None):
             after[k] = table
     if live_rows and settings.lock_picks:
         after[settings.week] = {r['username']: r['score'] for r in live_rows}
-    return _series(after, me)
+    return _series(after, me) or empty_chart()
 
 
 def season_chart(record, me):

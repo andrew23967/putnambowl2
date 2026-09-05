@@ -970,7 +970,6 @@ def pickdash(request):
         try:
             from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
             settings.auto_lock_offset_minutes = int(request.POST.get('auto_lock_offset_minutes', 10))
-            settings.tick_interval = max(10, int(request.POST.get('tick_interval', 300)))
             lock_mode = request.POST.get('lock_mode', 'offset')
             settings.lock_mode = lock_mode if lock_mode in ('offset', 'manual') else 'offset'
 
@@ -1003,8 +1002,6 @@ def pickdash(request):
             settings.auto_advance = 'auto_advance' in request.POST
             settings.season_last_week = max(1, min(30, int(
                 request.POST.get('season_last_week', 22))))
-            settings.auto_retry_window_minutes = max(0, min(2880, int(
-                request.POST.get('auto_retry_window_minutes', 360))))
 
             from .auto import _this_or_next_weekday_hour
             settings.auto_scrape_dt = _this_or_next_weekday_hour(settings.auto_scrape_weekday, settings.auto_scrape_hour, settings.auto_scrape_minute)

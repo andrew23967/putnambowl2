@@ -1,8 +1,8 @@
 # The autopilot
 
 `python manage.py run_auto` loops forever: `auto.tick_all_leagues()`, then
-sleep for the shortest `tick_interval` any active league asked for (default 300s,
-floor 10s). Railway runs one worker; run one locally too.
+sleep for the shortest `tick_interval` any active league has (60s; the field is
+not on the dashboard, only in the Django admin). Railway runs one worker; run one locally too.
 
 `tick_all_leagues()` polls the mailbox once (see docs/email.md) — deliberately
 outside `auto_tick`, which returns immediately when a league's autopilot is off,
@@ -43,7 +43,7 @@ only way to notice a source quietly returning a short slate, and free because
 ESPN is the other source.
 
 A failure records `auto_last_issue`, stamps `auto_first_attempt_dt` and waits
-for the next tick. Once `auto_retry_window_minutes` (default 6h) has elapsed it
+for the next tick. Once `auto_retry_window_minutes` (6h; admin-only) has elapsed it
 publishes anyway with the issue recorded, so a degraded source cannot stall the
 season. The dashboard's Scrape button is `force=True`: a person is looking at
 the result. One manually added game will always trip the cross-check, because

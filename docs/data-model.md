@@ -16,7 +16,7 @@ the rename was hand-written in `0028`. Fields, by job:
 
 - week state: `week`, `publish`, `lock_picks`, `multiplier`, `scrape_week`, `first_game_dt`
 - sources: `scrape_api`, `grade_api` (`nfl_data_py` | `espn`), `scrape_days` (set of weekdays, blank = all; read via `scrape_day_set()`)
-- autopilot: `auto_enabled`, `auto_scrape_weekday/hour/minute` (UTC), `auto_scrape_dt`, `lock_mode` (`offset` | `manual`), `auto_lock_offset_minutes`, `auto_lock_dt`, `auto_grade_dt`, `auto_tz`, `tick_interval`, `auto_advance`, `season_last_week`, `auto_retry_window_minutes`, `auto_first_attempt_dt`, `auto_last_issue`
+- autopilot: `auto_enabled`, `auto_scrape_weekday/hour/minute` (UTC), `auto_scrape_dt`, `lock_mode` (`offset` | `manual`), `auto_lock_offset_minutes`, `auto_lock_dt`, `auto_grade_dt`, `auto_tz`, `auto_advance`, `season_last_week`, `auto_first_attempt_dt`, `auto_last_issue`; `tick_interval` (60) and `auto_retry_window_minutes` (360) are admin-only
 - mail switches: `email_picks_live`, `email_ballot`, `email_recap`, `email_reminder`, `email_confirmations`, `email_relay`, `reminder_hours_before_lock`, `reminder_sent_week`
 - content: `weekly_intro`, `weekly_recap`, `recap_prompt`
 

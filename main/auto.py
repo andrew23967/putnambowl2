@@ -635,7 +635,7 @@ def tick_all_leagues():
 
     if getattr(django_settings, 'EMAIL_PAUSED', False):
         log.warning('[run_auto] EMAIL_PAUSED is set: mailbox not polled, no league ticked, nothing sent')
-        return 300
+        return 60
 
     # One mailbox for every league, and deliberately outside auto_tick(): that
     # returns immediately when a league's autopilot is off, and mail should
@@ -648,4 +648,4 @@ def tick_all_leagues():
         except Exception:
             log.exception('tick failed for %s', league.slug)
     intervals = [LeagueSettings.for_league(l).tick_interval for l in leagues]
-    return min((i for i in intervals if i), default=300)
+    return min((i for i in intervals if i), default=60)

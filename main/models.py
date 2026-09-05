@@ -28,7 +28,7 @@ class LeagueSettings(models.Model):
     lock_mode = models.CharField(max_length=10, default='offset')  # 'offset' or 'manual'
     auto_tz = models.CharField(max_length=50, default='UTC')
     first_game_dt = models.DateTimeField(null=True, blank=True)
-    tick_interval = models.IntegerField(default=300)        # seconds between ticks
+    tick_interval = models.IntegerField(default=60)         # seconds between ticks; admin-only
     auto_scrape_dt = models.DateTimeField(null=True, blank=True)  # exact UTC time to scrape+publish
     auto_lock_dt = models.DateTimeField(null=True, blank=True)    # exact UTC time to lock picks
 

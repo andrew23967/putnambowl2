@@ -20,7 +20,7 @@ charts.points_chart).
   {% if chart %}
   <div class="chart">
     <div class="section-head" style="margin-bottom:6px;">
-      <p class="eyebrow">Points · {{ chart.label }}</p>
+      <p class="eyebrow">Points{% if chart.label %} · {{ chart.label }}{% endif %}</p>
       <div class="legend">
         <span><i class="swatch" style="background:var(--ink);"></i>you</span>
         <span><i class="swatch" style="background:var(--accent);"></i>leader</span>

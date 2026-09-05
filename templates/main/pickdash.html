@@ -173,18 +173,6 @@
       </div>
       </div>
 
-      <p class="eyebrow">Worker</p>
-      <div class="two field">
-        <div>
-          <label class="label" for="arw">Retry window (min)</label>
-          <input class="input n" name="auto_retry_window_minutes" id="arw" type="number" min="0" max="2880" value="{{ settings.auto_retry_window_minutes }}">
-        </div>
-        <div>
-          <label class="label" for="ati">Tick (sec)</label>
-          <input class="input n" name="tick_interval" id="ati" type="number" min="10" max="3600" value="{{ settings.tick_interval }}">
-        </div>
-      </div>
-      <p class="hint" style="margin:-6px 0 14px;">A bad scrape is retried for the window, then published anyway and flagged.</p>
       <button name="save_auto" class="btn btn-primary btn-block">Save auto-pilot settings</button>
     </form>
   </aside>
