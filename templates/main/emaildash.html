@@ -7,7 +7,7 @@
   .ed-section { padding: 20px 0; border-top: 1px solid var(--rule); }
   .ed-section:first-of-type { border-top: 0; }
   .ed-section > .eyebrow { margin-bottom: 12px; letter-spacing: .12em; }
-  .addr { display: grid; grid-template-columns: 110px 1fr; gap: 8px 16px; align-items: baseline; font-size: 13px; }
+  .addr { display: grid; grid-template-columns: 64px 1fr; gap: 6px 14px; align-items: baseline; font-size: 13px; }
   .addr dt { font: 400 11px var(--mono); color: var(--muted-3); }
   .addr dd { margin: 0; }
   .addr code { font: 500 12.5px var(--mono); color: var(--ink); }
@@ -43,22 +43,18 @@
 {% endif %}
 
 <div class="ed-section">
-  <p class="eyebrow">Addresses</p>
   <dl class="addr">
-    <dt>league mail</dt>
-    <dd><code>{{ mailbox|default:"—" }}</code><small>A message to the league. From a member set to publish, it goes on the home page and is forwarded to everyone.{% if not viewer_can_publish_by_email %} Your account is not set to publish by email, so your mail here is read as picks.{% endif %}</small></dd>
-    <dt>picks</dt>
-    <dd><code>{{ picks_address|default:"—" }}</code><small>These are my picks. Replies to the ballot land here and are read as picks, whoever sends them.</small></dd>
-    <dt>intro</dt>
-    <dd><code>{{ intro_address|default:"—" }}</code><small>From a member set to publish, this becomes the intro for this week's email.</small></dd>
+    <dt>league</dt><dd><code>{{ mailbox|default:"—" }}</code></dd>
+    <dt>picks</dt><dd><code>{{ picks_address|default:"—" }}</code></dd>
+    <dt>intro</dt><dd><code>{{ intro_address|default:"—" }}</code></dd>
   </dl>
-  <div style="display:flex;gap:8px;margin-top:14px;align-items:center;flex-wrap:wrap;">
+  {% if not viewer_can_publish_by_email %}<p class="hint">Your account is not set to publish by email, so your mail to the league address is read as picks.</p>{% endif %}
+  <div style="display:flex;gap:8px;margin-top:12px;align-items:center;flex-wrap:wrap;">
     <button type="button" class="btn btn-secondary btn-sm" data-copy="{{ mailbox }}">Copy league address</button>
-    {% if mailbox %}<a class="btn btn-secondary btn-sm" href="mailto:{{ mailbox|urlencode }}">Open in mail app</a>{% endif %}
     <button type="button" class="btn btn-secondary btn-sm" data-copy="{{ recipient_list }}">Copy {{ recipients|length }} member address{{ recipients|length|pluralize:"es" }}</button>
     <span class="n" id="copy-note" style="font-size:11px;color:var(--pos);"></span>
   </div>
-  <p class="hint">Copy one or the other. The site forwards league mail to every member, so anyone also on your BCC list gets it a second time.</p>
+  <p class="hint">One or the other: the site forwards league mail to every member, so a BCC list gets it a second time.</p>
 </div>
 
 <div class="ed-section">
@@ -69,31 +65,10 @@
     {% if intro_preview and settings.weekly_intro != intro_preview %}<p class="preview"><b>Reads as:</b> {{ intro_preview }}</p>{% endif %}
     <div style="display:flex;gap:8px;margin-top:10px;">
       <button name="save_intro" class="btn btn-primary btn-sm">Save intro</button>
+      <button type="button" class="btn btn-secondary btn-sm" id="open-intros">Saved intros…</button>
     </div>
   </form>
 
-  <p class="eyebrow" style="margin:20px 0 4px;letter-spacing:.12em;">Saved intros</p>
-  {% for t in intro_templates %}
-  <div class="tpl">
-    <span class="name ellipsis" title="{{ t.body }}">{{ t.name }}</span>
-    <form method="post">{% csrf_token %}<button name="use_intro" value="{{ t.pk }}" class="btn btn-secondary btn-xs">Use</button></form>
-    <button type="button" class="btn btn-secondary btn-xs" data-edit-id="{{ t.pk }}" data-edit-name="{{ t.name }}" data-edit-body="{{ t.body }}">Edit</button>
-    <form method="post" onsubmit="return confirm('Delete this intro?');">{% csrf_token %}<button name="delete_template" value="{{ t.pk }}" class="btn btn-danger btn-xs">Delete</button></form>
-  </div>
-  {% empty %}
-  <p class="empty" style="padding:8px 0;">No saved intros.</p>
-  {% endfor %}
-  <form method="post" id="tpl-form" style="margin-top:14px;padding-top:14px;border-top:1px solid var(--rule-2);">
-    {% csrf_token %}
-    <input type="hidden" name="tpl_id" id="tpl-id" value="">
-    <p class="eyebrow" id="tpl-title" style="margin-bottom:10px;letter-spacing:.12em;">New intro</p>
-    <div class="field"><label class="label" for="tpl-name">Name</label><input class="input" name="tpl_name" id="tpl-name" maxlength="60"></div>
-    <div class="field"><label class="label" for="tpl-body">Text</label><textarea class="textarea" name="tpl_body" id="tpl-body" rows="3"></textarea></div>
-    <div style="display:flex;gap:8px;">
-      <button name="save_template" class="btn btn-primary btn-sm">Save intro</button>
-      <button type="button" class="btn btn-secondary btn-sm" id="tpl-cancel" hidden>Cancel</button>
-    </div>
-  </form>
 </div>
 
 <div class="ed-section">
@@ -131,6 +106,36 @@
     <p class="n" id="regen-note" style="margin-top:8px;font-size:11px;color:var(--muted-3);"></p>
   </form>
 </div>
+
+<dialog id="intros-dialog" class="dialog">
+  <div class="dialog-head">
+    <div class="grow"><p class="eyebrow">Saved intros</p></div>
+    <button type="button" class="icon-btn" data-close aria-label="Close">×</button>
+  </div>
+  <div class="dialog-body">
+    {% for t in intro_templates %}
+    <div class="tpl">
+      <span class="name ellipsis" title="{{ t.body }}">{{ t.name }}</span>
+      <form method="post">{% csrf_token %}<button name="use_intro" value="{{ t.pk }}" class="btn btn-secondary btn-xs">Use</button></form>
+      <button type="button" class="btn btn-secondary btn-xs" data-edit-id="{{ t.pk }}" data-edit-name="{{ t.name }}" data-edit-body="{{ t.body }}">Edit</button>
+      <form method="post" onsubmit="return confirm('Delete this intro?');">{% csrf_token %}<button name="delete_template" value="{{ t.pk }}" class="btn btn-danger btn-xs">Delete</button></form>
+    </div>
+    {% empty %}
+    <p class="empty" style="padding:8px 0;">No saved intros.</p>
+    {% endfor %}
+    <form method="post" id="tpl-form" style="margin-top:14px;padding-top:14px;border-top:1px solid var(--rule-2);">
+      {% csrf_token %}
+      <input type="hidden" name="tpl_id" id="tpl-id" value="">
+      <p class="eyebrow" id="tpl-title" style="margin-bottom:10px;letter-spacing:.12em;">New intro</p>
+      <div class="field"><label class="label" for="tpl-name">Name</label><input class="input" name="tpl_name" id="tpl-name" maxlength="60"></div>
+      <div class="field"><label class="label" for="tpl-body">Text</label><textarea class="textarea" name="tpl_body" id="tpl-body" rows="3"></textarea></div>
+      <div style="display:flex;gap:8px;">
+        <button name="save_template" class="btn btn-primary btn-sm">Save intro</button>
+        <button type="button" class="btn btn-secondary btn-sm" id="tpl-cancel" hidden>Cancel</button>
+      </div>
+    </form>
+  </div>
+</dialog>
 {% endblock %}
 
 {% block extra_js %}
@@ -148,6 +153,12 @@
       copyText(b.dataset.copy||'').then(function(){note.textContent='copied'; setTimeout(function(){note.textContent='';},2000);});
     });
   });
+  var dlg=document.getElementById('intros-dialog'), opener=document.getElementById('open-intros');
+  if(dlg&&typeof dlg.showModal==='function'){
+    opener.addEventListener('click',function(){dlg.showModal();});
+    dlg.querySelectorAll('[data-close]').forEach(function(b){b.addEventListener('click',function(){dlg.close();});});
+    dlg.addEventListener('click',function(e){if(e.target===dlg)dlg.close();});
+  }
   var form=document.getElementById('tpl-form');
   document.querySelectorAll('[data-edit-id]').forEach(function(b){
     b.addEventListener('click',function(){
