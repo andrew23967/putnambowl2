@@ -88,7 +88,7 @@ clipped to the standings' height, never mid-row; eight rows when stacked); `.sid
 end markers, the `.chart-ymax` scale label and the `.chart-x` week ticks are HTML placed by
 percentage so they never distort).
 
-Nav: `.nav` > `.nav-in` > `.nav-brand` (the league name), `.nav-links`, `.nav-right`
+Nav: `.nav` > `.nav-in` > `.nav-brand` (the 40px mark only; the league name is its aria-label), `.nav-links`, `.nav-right`
 (`<details class="nav-menu">` menus), `<details class="nav-burger">`
 for phones. `aria-current="page"` comes from `request.resolver_match.url_name`.
 
