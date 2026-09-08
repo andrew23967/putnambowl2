@@ -721,7 +721,7 @@ def emaildash(request):
 
     from . import auto
     from .email_utils import (intro_address, league_recipients, picks_address,
-                              smtp_ready)
+                              transport_ready)
 
     settings = current_settings(request)
     league = settings.league
@@ -817,7 +817,7 @@ def emaildash(request):
         'mailbox': getattr(django_settings, 'SMTP_USER', '') or '',
         'picks_address': picks_address(),
         'intro_address': intro_address(),
-        'smtp_ready': smtp_ready(),
+        'smtp_ready': transport_ready(),
         'recap_prompt': settings.recap_prompt or auto.DEFAULT_RECAP_PROMPT,
         'recap_is_default': not settings.recap_prompt,
         'preview_week': preview_week,

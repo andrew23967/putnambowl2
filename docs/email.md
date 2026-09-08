@@ -13,6 +13,15 @@ Resend's sandbox sender reaches nobody but the account owner. `SITE_URL` is
 the link in every mail; set it on the worker, which is what sends.
 `INBOUND_REQUIRE_AUTH` stays on in production.
 
+**Railway blocks outbound SMTP (25, 465, 587) on every plan below Pro**; the
+sends fail with `[Errno 101] Network is unreachable`. So production sends over
+Resend's HTTPS API: `EMAIL_TRANSPORT=resend`, `RESEND_API_KEY`, and `RESEND_FROM`
+on a domain verified in Resend (`league@putnambowl.com`), set on **both**
+services. `email_utils.transport()` decides (`auto` = the mailbox when its
+credentials are set, else Resend); `deliver()` is the one function every send
+path calls, and it falls back to Resend if an SMTP send fails. Replies still
+carry the Gmail picks address in `Reply-To`, so inbound picks keep working.
+
 `EMAIL_PAUSED=true` is the kill switch: `outbound_suppressed()` is true for every
 transport, and `tick_all_leagues()` returns without polling the mailbox or
 ticking a league. Managers see a red line at the top of every page while it
@@ -67,7 +76,8 @@ would broadcast someone's picks. `weekly=True` honours the member's
 `email_weekly` opt-out; relayed league correspondence does not. Sends run on
 daemon threads that never touch the ORM.
 
-`outbound_suppressed()` is `settings.TESTING` and every transport checks it.
+`outbound_suppressed()` is `settings.TESTING` (or `EMAIL_PAUSED`) and every transport checks it;
+the suite also blanks `RESEND_API_KEY` so a developer's `.env` cannot change which path runs.
 The suite drives smtplib and Resend directly, so Django's locmem backend is no
 protection; it really did mail fixture addresses once. Tests that exercise a
 send path override `TESTING=False` and stub the transport.

@@ -84,8 +84,7 @@ def relay_to_league(league_email, sender_email, already_copied=(), author_name='
 
     def _send():
         sent = sum(1 for a in recipients
-                   if send_via_mailbox(a, league_email.subject, body,
-                                       reply_to=sender_email)[0])
+                   if deliver(a, league_email.subject, body, reply_to=sender_email))
         log.info(f'[relay] "{league_email.subject}" forwarded to '
               f'{sent}/{len(recipients)} member(s)')
 
@@ -227,15 +226,54 @@ def outbound_suppressed():
                 or getattr(django_settings, 'EMAIL_PAUSED', False))
 
 
-def smtp_ready():
-    """Whether the league mailbox can send."""
+def transport():
+    """Which way outbound mail goes: 'smtp', 'resend' or '' for nowhere.
+
+    EMAIL_TRANSPORT picks: 'auto' (the mailbox when its credentials are set,
+    otherwise Resend), 'resend' or 'smtp'. Railway blocks SMTP ports on every
+    plan below Pro - the sends fail with "Network is unreachable" - so the
+    production setting is 'resend' with a verified domain.
+    """
     if outbound_suppressed():
-        return False
-    return all((
+        return ''
+    forced = (getattr(django_settings, 'EMAIL_TRANSPORT', 'auto') or 'auto').lower()
+    have_smtp = all((
         getattr(django_settings, 'SMTP_HOST', ''),
         getattr(django_settings, 'SMTP_USER', ''),
         getattr(django_settings, 'SMTP_PASSWORD', ''),
     ))
+    have_resend = bool(getattr(django_settings, 'RESEND_API_KEY', ''))
+    if forced == 'resend':
+        return 'resend' if have_resend else ''
+    if forced == 'smtp':
+        return 'smtp' if have_smtp else ''
+    return 'smtp' if have_smtp else ('resend' if have_resend else '')
+
+
+def smtp_ready():
+    """Whether the league mailbox is the way out."""
+    return transport() == 'smtp'
+
+
+def transport_ready():
+    """Whether anything at all can be sent."""
+    return smtp_ready() or bool(getattr(django_settings, 'RESEND_API_KEY', ''))
+
+
+def deliver(to, subject, body, in_reply_to=None, reply_to=None):
+    """One message to one address over whichever transport is configured.
+
+    The mailbox first when it is the transport; if that send fails and Resend is
+    configured, Resend. Returns True when something was accepted for delivery.
+    """
+    have_resend = bool(getattr(django_settings, 'RESEND_API_KEY', ''))
+    if smtp_ready() or not have_resend:
+        ok, _ = send_via_mailbox(to, subject, body, in_reply_to=in_reply_to,
+                                 reply_to=reply_to)
+        if ok or not have_resend:
+            return ok
+    return _send_via_resend(to, subject, body, reply_to=reply_to,
+                            in_reply_to=in_reply_to)
 
 
 def send_via_mailbox(to, subject, body, in_reply_to=None, reply_to=None):
@@ -446,32 +484,32 @@ def send_pick_reminder_email(site_settings):
     def _send_each():
         sent = 0
         for address, body in messages:
-            if smtp_ready():
-                ok = send_via_mailbox(address, subject, body,
-                                      reply_to=inbox or None)[0]
-            else:
-                ok = _send_via_resend(address, subject, body)
-            sent += 1 if ok else 0
+            sent += 1 if deliver(address, subject, body, reply_to=inbox or None) else 0
         log.info(f'[email] reminder sent to {sent}/{len(messages)} for week {week}')
 
     threading.Thread(target=_send_each, daemon=True).start()
     return len(messages)
 
 
-def _send_via_resend(address, subject, body):
+def _send_via_resend(address, subject, body, reply_to=None, in_reply_to=None):
     """Single-recipient Resend send. Returns True on success."""
     api_key = getattr(django_settings, 'RESEND_API_KEY', '')
-    if not api_key:
+    if not api_key or outbound_suppressed():
         return False
     try:
         import resend
         resend.api_key = api_key
-        resend.Emails.send({
+        payload = {
             'from': getattr(django_settings, 'RESEND_FROM', 'onboarding@resend.dev'),
             'to': [address],
             'subject': subject,
             'text': body,
-        })
+        }
+        if reply_to:
+            payload['reply_to'] = [reply_to]
+        if in_reply_to:
+            payload['headers'] = {'In-Reply-To': in_reply_to, 'References': in_reply_to}
+        resend.Emails.send(payload)
         return True
     except Exception as e:
         log.error(f'[email] resend failed for {address}: {e}')
@@ -480,13 +518,11 @@ def _send_via_resend(address, subject, body):
 
 def send_picks_published_email(site_settings):
     """Send weekly picks-live notification to all non-bot users with an email address."""
-    api_key = getattr(django_settings, 'RESEND_API_KEY', '')
     log.info(f'[email] send_picks_published_email called, week={site_settings.week}')
     if not site_settings.email_picks_live:
         log.info('[email] picks-live email switched off on the Emails page.')
         return
-    # Either transport will do; the mailbox is preferred further down.
-    if outbound_suppressed() or (not api_key and not smtp_ready()):
+    if not transport_ready():
         log.info('[email] no transport available - skipping.')
         return
 
@@ -499,7 +535,6 @@ def send_picks_published_email(site_settings):
 
     week = site_settings.week
     site_url = getattr(django_settings, 'SITE_URL', 'http://localhost:8000')
-    from_email = getattr(django_settings, 'RESEND_FROM', 'onboarding@resend.dev')
     picks_url = f'{site_url.rstrip("/")}/picks/'
 
     # Replies go to the tagged picks address, so an edited ballot is unambiguously
@@ -573,43 +608,14 @@ def send_picks_published_email(site_settings):
     # list would be one send: this mail carries the ballot, and a member hitting
     # reply on a group message could broadcast their picks to the whole league.
     # Sent individually, a reply can only go back to the mailbox.
-    if smtp_ready():
-        def _send_each():
-            # Reply-To is the tagged picks address, so replying to the ballot
-            # submits picks rather than being read as an announcement.
-            sent = sum(1 for a in recipients
-                       if send_via_mailbox(a, subject, body,
-                                           reply_to=inbox or None)[0])
-            log.info(f'[email] picks-live sent to {sent}/{len(recipients)} '
-                  f'for week {week}')
-        threading.Thread(target=_send_each, daemon=True).start()
-        return
+    def _send_each():
+        # One message per recipient - the whole league in a single `to` would
+        # disclose every address to everyone. Reply-To is the tagged picks
+        # address, so replying to the ballot submits picks rather than being
+        # read as an announcement.
+        sent = sum(1 for a in recipients
+                   if deliver(a, subject, body, reply_to=inbox or None))
+        log.info(f'[email] picks-live sent to {sent}/{len(recipients)} '
+                 f'for week {week}')
 
-    def _send():
-        # One message per recipient. Putting the whole league in a single `to`
-        # would disclose every member's address to everyone else.
-        try:
-            import resend
-            resend.api_key = api_key
-        except Exception as e:
-            log.error(f'[email] could not init resend: {e}')
-            return
-
-        sent = 0
-        for address in recipients:
-            try:
-                payload = {
-                    'from': from_email,
-                    'to': [address],
-                    'subject': subject,
-                    'text': body,
-                }
-                if inbox:
-                    payload['reply_to'] = [inbox]
-                resend.Emails.send(payload)
-                sent += 1
-            except Exception as e:
-                log.error(f'[email] send failed for one recipient: {e}')
-        log.info(f'[email] sent OK to {sent}/{len(recipients)} recipients for week {week}')
-
-    threading.Thread(target=_send, daemon=True).start()
+    threading.Thread(target=_send_each, daemon=True).start()

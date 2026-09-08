@@ -4027,3 +4027,56 @@ class EmailPausedTests(TestCase):
         with self.settings(EMAIL_PAUSED=True):
             resp = self.client.get(reverse('main:rules'))
         self.assertNotContains(resp, 'Email is paused')
+
+
+class TransportChoiceTests(TestCase):
+    """EMAIL_TRANSPORT picks the way out. Railway blocks SMTP below the Pro
+    plan, so production forces Resend even though the mailbox credentials are
+    still set for IMAP."""
+
+    def setUp(self):
+        from . import email_utils
+        self.eu = email_utils
+        self.addCleanup(setattr, email_utils, 'outbound_suppressed',
+                        email_utils.outbound_suppressed)
+        email_utils.outbound_suppressed = lambda: False
+
+    def test_resend_is_forced_over_a_configured_mailbox(self):
+        with self.settings(EMAIL_TRANSPORT='resend', SMTP_USER='u', SMTP_PASSWORD='p',
+                           RESEND_API_KEY='re_x'):
+            self.assertEqual(self.eu.transport(), 'resend')
+            self.assertFalse(self.eu.smtp_ready())
+            self.assertTrue(self.eu.transport_ready())
+
+    def test_auto_prefers_the_mailbox(self):
+        with self.settings(EMAIL_TRANSPORT='auto', SMTP_USER='u', SMTP_PASSWORD='p',
+                           RESEND_API_KEY='re_x'):
+            self.assertEqual(self.eu.transport(), 'smtp')
+
+    def test_forced_resend_without_a_key_sends_nowhere(self):
+        with self.settings(EMAIL_TRANSPORT='resend', SMTP_USER='u', SMTP_PASSWORD='p',
+                           RESEND_API_KEY=''):
+            self.assertEqual(self.eu.transport(), '')
+            self.assertFalse(self.eu.transport_ready())
+
+    def test_deliver_falls_back_to_resend_when_the_mailbox_fails(self):
+        calls = []
+        self.addCleanup(setattr, self.eu, 'send_via_mailbox', self.eu.send_via_mailbox)
+        self.addCleanup(setattr, self.eu, '_send_via_resend', self.eu._send_via_resend)
+        self.eu.send_via_mailbox = lambda *a, **k: (calls.append('smtp'), (False, 'unreachable'))[1]
+        self.eu._send_via_resend = lambda *a, **k: (calls.append('resend'), True)[1]
+        with self.settings(EMAIL_TRANSPORT='auto', SMTP_USER='u', SMTP_PASSWORD='p',
+                           RESEND_API_KEY='re_x'):
+            self.assertTrue(self.eu.deliver('a@x.com', 's', 'b'))
+        self.assertEqual(calls, ['smtp', 'resend'])
+
+    def test_deliver_goes_straight_to_resend_when_forced(self):
+        calls = []
+        self.addCleanup(setattr, self.eu, 'send_via_mailbox', self.eu.send_via_mailbox)
+        self.addCleanup(setattr, self.eu, '_send_via_resend', self.eu._send_via_resend)
+        self.eu.send_via_mailbox = lambda *a, **k: (calls.append('smtp'), (True, 'ok'))[1]
+        self.eu._send_via_resend = lambda *a, **k: (calls.append('resend'), True)[1]
+        with self.settings(EMAIL_TRANSPORT='resend', SMTP_USER='u', SMTP_PASSWORD='p',
+                           RESEND_API_KEY='re_x'):
+            self.assertTrue(self.eu.deliver('a@x.com', 's', 'b'))
+        self.assertEqual(calls, ['resend'])

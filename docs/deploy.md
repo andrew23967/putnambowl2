@@ -20,7 +20,9 @@ On both services: `SECRET_KEY`, `DEBUG=False`, `ALLOWED_HOSTS`,
 On the **worker** as well — it is the process that sends and scrapes:
 `GEMINI_API_KEY`, `GEMINI_MODEL`, `SITE_URL`, `IMAP_HOST/PORT/USER/PASSWORD`,
 `INBOUND_REQUIRE_AUTH=true`, optional `PICKS_ADDRESS_TAG`, `INTRO_ADDRESS_TAG`,
-`RESEND_*`. A missing `GEMINI_API_KEY` on the worker degrades PutnamBot to
+`EMAIL_TRANSPORT=resend`, `RESEND_API_KEY`, `RESEND_FROM`. Railway blocks SMTP
+below the Pro plan (docs/email.md), so without the Resend variables nothing is
+mailed. A missing `GEMINI_API_KEY` on the worker degrades PutnamBot to
 random picks silently; look for `[ai_picks]` in the logs.
 
 The Railway-generated domain returns 400 (DisallowedHost); only the custom

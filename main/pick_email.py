@@ -192,8 +192,7 @@ def send_reply(to_email, subject, body, in_reply_to=None, settings=None):
     the mailbox it is a genuine reply — same address they wrote to, threaded — so
     it lands in the conversation they started.
     """
-    from .email_utils import (outbound_suppressed, picks_address,
-                              send_via_mailbox, smtp_ready)
+    from .email_utils import deliver, picks_address, transport_ready
 
     if settings is None:
         raise TypeError('send_reply needs the league settings')
@@ -202,44 +201,17 @@ def send_reply(to_email, subject, body, in_reply_to=None, settings=None):
                  to_email)
         return False
 
-    if smtp_ready():
-        # Corrections come back to the tagged address, so a follow-up is read as
-        # picks and never as something to publish.
-        ok, _ = send_via_mailbox(to_email, subject, body, in_reply_to=in_reply_to,
-                                 reply_to=picks_address() or None)
-        if ok:
-            return True
-        # Fall through to Resend rather than losing the confirmation entirely.
-
-    api_key = getattr(django_settings, 'RESEND_API_KEY', '')
-    if outbound_suppressed():
-        log.info('[pick_email] outbound suppressed - reply to %s not sent', to_email)
-        return False
-    if not api_key:
-        log.warning('[pick_email] no SMTP and no RESEND_API_KEY - reply to %s not sent',
+    if not transport_ready():
+        log.warning('[pick_email] no email transport configured - reply to %s not sent',
                     to_email)
         return False
-    from_email = getattr(django_settings, 'RESEND_FROM', 'onboarding@resend.dev')
-    inbox = picks_address() or ''
-    try:
-        import resend
-        resend.api_key = api_key
-        payload = {
-            'from': from_email,
-            'to': [to_email],
-            'subject': subject,
-            'text': body,
-        }
-        # So a correction comes back to the mailbox we poll, not to RESEND_FROM.
-        if inbox:
-            payload['reply_to'] = [inbox]
-        resend.Emails.send(payload)
-        log.info('[pick_email] replied to %s via Resend', to_email)
-        return True
-    except Exception as e:
-        log.error('[pick_email] reply to %s failed: %s', to_email, e)
-        return False
-
+    # Corrections come back to the tagged address, so a follow-up is read as
+    # picks and never as something to publish.
+    ok = deliver(to_email, subject, body, in_reply_to=in_reply_to,
+                 reply_to=picks_address() or None)
+    if not ok:
+        log.warning('[pick_email] reply to %s failed', to_email)
+    return ok
 
 def handle(user, text, reply_to=None, message_id=None, subject=None,
            notify_unavailable=True):

@@ -121,6 +121,9 @@ LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/login/'
 
 # ── Email (Resend) ──────────────────────────────────────────────────────────
+# 'auto' uses the mailbox over SMTP when its credentials are set, else Resend.
+# Railway blocks SMTP ports below the Pro plan, so production is 'resend'.
+EMAIL_TRANSPORT = env('EMAIL_TRANSPORT', default='auto')
 RESEND_API_KEY = env('RESEND_API_KEY', default='')
 RESEND_FROM = env('RESEND_FROM', default='onboarding@resend.dev')
 SITE_URL = env('SITE_URL', default='http://localhost:8000')
@@ -202,6 +205,10 @@ LOGGING = {
 # with "Missing staticfiles manifest entry" until someone happened to have a
 # stale staticfiles/ directory lying around. Tests use the plain storage.
 if TESTING:
+    # The suite must not inherit a developer's .env: with a Resend key present,
+    # every send path would route to Resend instead of the stubbed mailbox.
+    RESEND_API_KEY = ''
+    EMAIL_TRANSPORT = 'auto'
     STORAGES['staticfiles'] = {
         'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage',
     }

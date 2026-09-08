@@ -29,7 +29,7 @@
 <div class="page-head">
   <div class="page-head-title">
     <p class="eyebrow">Emails</p>
-    <p class="meta">{{ recipients|length }} member{{ recipients|length|pluralize }} with an address{% if not smtp_ready %} · <span class="neg">mailbox not configured</span>{% endif %}</p>
+    <p class="meta">{{ recipients|length }} member{{ recipients|length|pluralize }} with an address{% if not smtp_ready %} · <span class="neg">email not configured</span>{% endif %}</p>
   </div>
   <div class="page-head-end">
     <form method="post" action="{% url 'main:send_test_email' %}" onsubmit="return confirm('Send the picks-are-live email to every member now?');">{% csrf_token %}
@@ -39,7 +39,7 @@
 </div>
 
 {% if not smtp_ready %}
-<p class="alert" style="margin-top:16px;">Set IMAP_USER and IMAP_PASSWORD (a Gmail app password) on the worker to send from the league mailbox. Until then nothing is sent.</p>
+<p class="alert" style="margin-top:16px;">No way to send: set RESEND_API_KEY and RESEND_FROM (a verified domain) on both Railway services, with EMAIL_TRANSPORT=resend. Railway blocks SMTP below the Pro plan. Until then nothing is sent.</p>
 {% endif %}
 
 <div class="ed-section">

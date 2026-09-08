@@ -221,9 +221,9 @@ def _confirm_intro(author, reply_to, message_id, subject, site_settings):
     Same reasoning as the pick confirmations: without a reply there is no way to
     notice that the wrong thing was saved until the whole league has read it.
     """
-    from .email_utils import send_via_mailbox, smtp_ready
+    from .email_utils import deliver, transport_ready
 
-    if not site_settings.email_confirmations or not smtp_ready():
+    if not site_settings.email_confirmations or not transport_ready():
         return
     preview = site_settings.weekly_intro.replace(
         '{week}', str(site_settings.week))
@@ -232,8 +232,7 @@ def _confirm_intro(author, reply_to, message_id, subject, site_settings):
             f'below it.\n\n'
             f'--- what the league will see ---\n{preview}\n')
     try:
-        send_via_mailbox(reply_to, f'Re: {subject or "Intro"}', body,
-                         in_reply_to=message_id)
+        deliver(reply_to, f'Re: {subject or "Intro"}', body, in_reply_to=message_id)
     except Exception as e:
         # A confirmation that fails must not undo the intro that was saved.
         log.error('[inbound] intro confirmation failed: %s', e)
