@@ -121,9 +121,13 @@ LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/login/'
 
 # ── Email (Resend) ──────────────────────────────────────────────────────────
-# 'auto' uses the mailbox over SMTP when its credentials are set, else Resend.
-# Railway blocks SMTP ports below the Pro plan, so production is 'resend'.
+# How mail leaves: 'gmail' (the mailbox over the Gmail API - HTTPS, so it works
+# on Railway, which blocks SMTP below the Pro plan), 'smtp' (the mailbox over
+# SMTP), 'resend', or 'auto' (whichever of those is configured, in that order).
 EMAIL_TRANSPORT = env('EMAIL_TRANSPORT', default='auto')
+GMAIL_CLIENT_ID = env('GMAIL_CLIENT_ID', default='')
+GMAIL_CLIENT_SECRET = env('GMAIL_CLIENT_SECRET', default='')
+GMAIL_REFRESH_TOKEN = env('GMAIL_REFRESH_TOKEN', default='')
 RESEND_API_KEY = env('RESEND_API_KEY', default='')
 RESEND_FROM = env('RESEND_FROM', default='onboarding@resend.dev')
 SITE_URL = env('SITE_URL', default='http://localhost:8000')
@@ -208,6 +212,7 @@ if TESTING:
     # The suite must not inherit a developer's .env: with a Resend key present,
     # every send path would route to Resend instead of the stubbed mailbox.
     RESEND_API_KEY = ''
+    GMAIL_REFRESH_TOKEN = ''
     EMAIL_TRANSPORT = 'auto'
     STORAGES['staticfiles'] = {
         'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage',

@@ -227,27 +227,27 @@ def outbound_suppressed():
 
 
 def transport():
-    """Which way outbound mail goes: 'smtp', 'resend' or '' for nowhere.
+    """Which way outbound mail goes: 'gmail', 'smtp', 'resend' or '' for nowhere.
 
-    EMAIL_TRANSPORT picks: 'auto' (the mailbox when its credentials are set,
-    otherwise Resend), 'resend' or 'smtp'. Railway blocks SMTP ports on every
-    plan below Pro - the sends fail with "Network is unreachable" - so the
-    production setting is 'resend' with a verified domain.
+    EMAIL_TRANSPORT forces one; 'auto' takes the first that is configured, in
+    that order. Railway blocks SMTP ports on every plan below Pro - the sends
+    fail with "Network is unreachable" - so production uses the mailbox over
+    the Gmail API (main/gmail_api.py), which is HTTPS.
     """
     if outbound_suppressed():
         return ''
+    from . import gmail_api
     forced = (getattr(django_settings, 'EMAIL_TRANSPORT', 'auto') or 'auto').lower()
-    have_smtp = all((
-        getattr(django_settings, 'SMTP_HOST', ''),
-        getattr(django_settings, 'SMTP_USER', ''),
-        getattr(django_settings, 'SMTP_PASSWORD', ''),
-    ))
-    have_resend = bool(getattr(django_settings, 'RESEND_API_KEY', ''))
-    if forced == 'resend':
-        return 'resend' if have_resend else ''
-    if forced == 'smtp':
-        return 'smtp' if have_smtp else ''
-    return 'smtp' if have_smtp else ('resend' if have_resend else '')
+    have = {
+        'gmail': gmail_api.configured(),
+        'smtp': all((getattr(django_settings, 'SMTP_HOST', ''),
+                     getattr(django_settings, 'SMTP_USER', ''),
+                     getattr(django_settings, 'SMTP_PASSWORD', ''))),
+        'resend': bool(getattr(django_settings, 'RESEND_API_KEY', '')),
+    }
+    if forced in have:
+        return forced if have[forced] else ''
+    return next((t for t in ('gmail', 'smtp', 'resend') if have[t]), '')
 
 
 def smtp_ready():
@@ -257,16 +257,23 @@ def smtp_ready():
 
 def transport_ready():
     """Whether anything at all can be sent."""
-    return smtp_ready() or bool(getattr(django_settings, 'RESEND_API_KEY', ''))
+    return smtp_ready() or transport() == 'gmail' or bool(getattr(django_settings, 'RESEND_API_KEY', ''))
 
 
 def deliver(to, subject, body, in_reply_to=None, reply_to=None):
     """One message to one address over whichever transport is configured.
 
-    The mailbox first when it is the transport; if that send fails and Resend is
-    configured, Resend. Returns True when something was accepted for delivery.
+    The mailbox first when it is the transport (Gmail API or SMTP); if that
+    send fails and Resend is configured, Resend. Returns True when something
+    was accepted for delivery.
     """
     have_resend = bool(getattr(django_settings, 'RESEND_API_KEY', ''))
+    if transport() == 'gmail':
+        from . import gmail_api
+        ok, _ = gmail_api.send(to, subject, body, in_reply_to=in_reply_to, reply_to=reply_to)
+        if ok or not have_resend:
+            return ok
+        return _send_via_resend(to, subject, body, reply_to=reply_to, in_reply_to=in_reply_to)
     if smtp_ready() or not have_resend:
         ok, _ = send_via_mailbox(to, subject, body, in_reply_to=in_reply_to,
                                  reply_to=reply_to)

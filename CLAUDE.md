@@ -13,7 +13,7 @@ the relevant one before changing that area.
 - Django 6, Python 3.13. SQLite locally, Postgres on Railway (`dj-database-url`), WhiteNoise.
 - `nfl-data-py` (schedule + money lines), ESPN public API (live scores).
 - Gemini (`google-genai`, model from `GEMINI_MODEL`) for recaps, PutnamBot's picks and reading emailed picks.
-- One Gmail mailbox for every league: IMAP in. Out goes over Resend's API in production (Railway blocks SMTP below Pro); `EMAIL_TRANSPORT` chooses.
+- One Gmail mailbox for every league: IMAP in, the Gmail API out (Railway blocks SMTP below Pro); `EMAIL_TRANSPORT` chooses, `email_utils.deliver()` is the one send.
 - One stylesheet, `main/static/main/app.css`; one script, `app.js`. No CSS framework, no build step.
 
 ## Layout
@@ -38,7 +38,8 @@ main/
   pick_email.py            picks out of an email, via Gemini
   ai_picks.py              PutnamBot's picks
   teams.py                 TEAMS, conferences, abbreviations, game ids
-  management/commands/     run_auto (the worker), fetch_emails, create_putnambot
+  gmail_api.py             the mailbox over HTTPS: token refresh, send, the one-time grant
+  management/commands/     run_auto (the worker), fetch_emails, create_putnambot, gmail_authorize
 accounts/                  Profile (league, role, score, preseason, mail opt-outs), auth views
 templates/                 base.html + one template per page; _standings.html, _game_row.html partials
 docs/                      the why — see the index at the bottom

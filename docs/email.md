@@ -14,13 +14,31 @@ the link in every mail; set it on the worker, which is what sends.
 `INBOUND_REQUIRE_AUTH` stays on in production.
 
 **Railway blocks outbound SMTP (25, 465, 587) on every plan below Pro**; the
-sends fail with `[Errno 101] Network is unreachable`. So production sends over
-Resend's HTTPS API: `EMAIL_TRANSPORT=resend`, `RESEND_API_KEY`, and `RESEND_FROM`
-on a domain verified in Resend (`league@putnambowl.com`), set on **both**
-services. `email_utils.transport()` decides (`auto` = the mailbox when its
-credentials are set, else Resend); `deliver()` is the one function every send
-path calls, and it falls back to Resend if an SMTP send fails. Replies still
-carry the Gmail picks address in `Reply-To`, so inbound picks keep working.
+sends fail with `[Errno 101] Network is unreachable`. So production sends from
+the same mailbox over the **Gmail API** (`main/gmail_api.py`), which is HTTPS:
+same From, same Sent folder, same threading. `email_utils.transport()` decides
+(`EMAIL_TRANSPORT` = `gmail` | `smtp` | `resend` | `auto`, which takes the first
+configured in that order); `deliver()` is the one function every send path
+calls, and it falls back to Resend if the mailbox send fails and a key is set.
+
+### Authorizing the Gmail API (one time)
+
+1. Google Cloud Console, signed in as the mailbox: create a project, enable the
+   **Gmail API**.
+2. **OAuth consent screen**: External; add the scope
+   `https://www.googleapis.com/auth/gmail.send`; then **publish to production**.
+   Leave it unverified (the consent page shows a warning; click through). In
+   *Testing* status the refresh token expires after seven days; in production
+   it does not.
+3. **Credentials → OAuth client ID → Desktop app**. Note the id and secret.
+4. Locally: `python manage.py gmail_authorize --client-id ... --client-secret ...`,
+   sign in as the mailbox, approve. It prints `GMAIL_REFRESH_TOKEN`.
+5. Set `EMAIL_TRANSPORT=gmail`, `GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`,
+   `GMAIL_REFRESH_TOKEN` on **both** Railway services. Check with
+   `python manage.py gmail_authorize --test-to you@example.com`.
+
+If the mailbox's password changes or the grant is revoked at
+myaccount.google.com/permissions, run step 4 again.
 
 `EMAIL_PAUSED=true` is the kill switch: `outbound_suppressed()` is true for every
 transport, and `tick_all_leagues()` returns without polling the mailbox or

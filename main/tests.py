@@ -4070,6 +4070,25 @@ class TransportChoiceTests(TestCase):
             self.assertTrue(self.eu.deliver('a@x.com', 's', 'b'))
         self.assertEqual(calls, ['smtp', 'resend'])
 
+    def test_auto_prefers_the_gmail_api_when_it_is_authorized(self):
+        with self.settings(EMAIL_TRANSPORT='auto', SMTP_USER='u', SMTP_PASSWORD='p',
+                           GMAIL_CLIENT_ID='c', GMAIL_CLIENT_SECRET='s', GMAIL_REFRESH_TOKEN='r'):
+            self.assertEqual(self.eu.transport(), 'gmail')
+            self.assertFalse(self.eu.smtp_ready())
+            self.assertTrue(self.eu.transport_ready())
+
+    def test_deliver_uses_the_gmail_api_when_configured(self):
+        from . import gmail_api
+        calls = []
+        self.addCleanup(setattr, gmail_api, 'send', gmail_api.send)
+        gmail_api.send = lambda *a, **k: (calls.append(('gmail', a[0], k.get('reply_to'))), (True, 'sent'))[1]
+        self.addCleanup(setattr, self.eu, 'send_via_mailbox', self.eu.send_via_mailbox)
+        self.eu.send_via_mailbox = lambda *a, **k: (calls.append('smtp'), (True, 'ok'))[1]
+        with self.settings(EMAIL_TRANSPORT='gmail', SMTP_USER='u', SMTP_PASSWORD='p',
+                           GMAIL_CLIENT_ID='c', GMAIL_CLIENT_SECRET='s', GMAIL_REFRESH_TOKEN='r'):
+            self.assertTrue(self.eu.deliver('a@x.com', 's', 'b', reply_to='u+picks@x.com'))
+        self.assertEqual(calls, [('gmail', 'a@x.com', 'u+picks@x.com')])
+
     def test_deliver_goes_straight_to_resend_when_forced(self):
         calls = []
         self.addCleanup(setattr, self.eu, 'send_via_mailbox', self.eu.send_via_mailbox)

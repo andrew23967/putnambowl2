@@ -39,7 +39,7 @@
 </div>
 
 {% if not smtp_ready %}
-<p class="alert" style="margin-top:16px;">No way to send: set RESEND_API_KEY and RESEND_FROM (a verified domain) on both Railway services, with EMAIL_TRANSPORT=resend. Railway blocks SMTP below the Pro plan. Until then nothing is sent.</p>
+<p class="alert" style="margin-top:16px;">No way to send. Railway blocks SMTP below the Pro plan, so authorize the mailbox for the Gmail API (manage.py gmail_authorize) and set EMAIL_TRANSPORT=gmail with the three GMAIL_* variables on both services. Until then nothing is sent.</p>
 {% endif %}
 
 <div class="ed-section">
