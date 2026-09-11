@@ -14,9 +14,12 @@ the link in every mail; set it on the worker, which is what sends.
 `INBOUND_REQUIRE_AUTH` stays on in production.
 
 **Railway blocks outbound SMTP (25, 465, 587) on every plan below Pro**; the
-sends fail with `[Errno 101] Network is unreachable`. So production sends from
-the same mailbox over the **Gmail API** (`main/gmail_api.py`), which is HTTPS:
-same From, same Sent folder, same threading. `email_utils.transport()` decides
+sends fail with `[Errno 101] Network is unreachable`. The project is on Pro
+(since 2026-09-11) and sends from the mailbox over SMTP, the plain way. After a
+plan change, **redeploy both services**: the network rules are applied when a
+container starts, and the first test after upgrading still failed until then.
+The **Gmail API** transport (`main/gmail_api.py`, HTTPS) is the fallback if the
+plan ever drops: same From, same Sent folder, same threading. `email_utils.transport()` decides
 (`EMAIL_TRANSPORT` = `gmail` | `smtp` | `resend` | `auto`, which takes the first
 configured in that order); `deliver()` is the one function every send path
 calls, and it falls back to Resend if the mailbox send fails and a key is set.

@@ -13,7 +13,7 @@ the relevant one before changing that area.
 - Django 6, Python 3.13. SQLite locally, Postgres on Railway (`dj-database-url`), WhiteNoise.
 - `nfl-data-py` (schedule + money lines), ESPN public API (live scores).
 - Gemini (`google-genai`, model from `GEMINI_MODEL`) for recaps, PutnamBot's picks and reading emailed picks.
-- One Gmail mailbox for every league: IMAP in, the Gmail API out (Railway blocks SMTP below Pro); `EMAIL_TRANSPORT` chooses, `email_utils.deliver()` is the one send.
+- One Gmail mailbox for every league: IMAP in, SMTP out (needs Railway Pro; the Gmail API is the fallback). `EMAIL_TRANSPORT` chooses, `email_utils.deliver()` is the one send.
 - One stylesheet, `main/static/main/app.css`; one script, `app.js`. No CSS framework, no build step.
 
 ## Layout

@@ -20,9 +20,9 @@ On both services: `SECRET_KEY`, `DEBUG=False`, `ALLOWED_HOSTS`,
 On the **worker** as well — it is the process that sends and scrapes:
 `GEMINI_API_KEY`, `GEMINI_MODEL`, `SITE_URL`, `IMAP_HOST/PORT/USER/PASSWORD`,
 `INBOUND_REQUIRE_AUTH=true`, optional `PICKS_ADDRESS_TAG`, `INTRO_ADDRESS_TAG`,
-`EMAIL_TRANSPORT=gmail`, `GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`,
-`GMAIL_REFRESH_TOKEN`. Railway blocks SMTP below the Pro plan (docs/email.md),
-so without the Gmail API variables nothing is mailed. A missing `GEMINI_API_KEY` on the worker degrades PutnamBot to
+Mail goes out over SMTP from the mailbox; that needs the Pro plan (Railway
+blocks SMTP below it) and a redeploy after any plan change. `EMAIL_TRANSPORT`
+and the `GMAIL_*` variables are only for the Gmail API fallback (docs/email.md). A missing `GEMINI_API_KEY` on the worker degrades PutnamBot to
 random picks silently; look for `[ai_picks]` in the logs.
 
 The Railway-generated domain returns 400 (DisallowedHost); only the custom
@@ -52,5 +52,10 @@ os.environ['DATABASE_URL'] = os.environ['DATABASE_PUBLIC_URL']
 ```bash
 railway status --json
 railway logs --service web --deployment
-railway run --service Postgres <cmd>
+railway run --service Postgres <cmd>          # local command with that service's variables
+railway ssh -s web -- /opt/venv/bin/python /app/manage.py shell -c "..."   # inside the container
 ```
+
+`railway ssh` needs `ssh.railway.com` in `~/.ssh/known_hosts` (`ssh-keyscan`)
+and, from Git Bash, `MSYS_NO_PATHCONV=1` so `/opt/venv` is not rewritten to a
+Windows path. The container's `python` is not the app's; use `/opt/venv/bin/python`.
