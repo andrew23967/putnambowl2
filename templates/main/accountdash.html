@@ -45,6 +45,7 @@
       <th class="hide-phone">Email</th>
       <th style="width:90px;">Role</th>
       <th class="r" style="width:70px;">Points</th>
+      <th class="r" style="width:64px;" title="Picks in for week {{ week }}">Picks</th>
     </tr>
   </thead>
   <tbody>
@@ -64,6 +65,7 @@
       <td class="hide-phone n muted" style="font-size:12px;">{{ p.email|default:"—" }}</td>
       <td>{% if p.profile.role == 'manager' %}<span class="role">manager</span>{% elif p.is_superuser %}<span class="role">site admin</span>{% else %}<span class="muted-3" style="font-size:12px;">member</span>{% endif %}</td>
       <td class="n r" style="font-weight:600;">{{ p.profile.score_display }}</td>
+      <td class="n r">{% if not games_total %}<span class="dim">—</span>{% elif p.picks_made >= games_total %}<span class="pos pk-yes" title="all {{ games_total }} in">✓</span>{% else %}<span class="neg pk-no" title="{{ p.picks_made }} of {{ games_total }} in">✗</span>{% endif %}</td>
     </tr>
     {% endfor %}
   </tbody>

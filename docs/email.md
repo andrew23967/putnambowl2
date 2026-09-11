@@ -159,6 +159,13 @@ purpose (people edit inside the quoted ballot). "Model unavailable" is retried
 for 30 minutes (`ProcessedEmail.deferred`) before the sender is told. Every
 submission gets a reply saying exactly what was recorded; keep it.
 
+## The delivery log
+
+`deliver()` records every attempt as a `SentMail` row - address, result, transport,
+batch - and the Emails page lists them under **Sent**, one line per send with the
+addresses behind a disclosure. That is the answer to "did the reminder reach
+Sean"; the feed only knows a recipient count.
+
 ## The feed
 
 The home page's mail list is `LeagueEmail` only, newest first, one source so

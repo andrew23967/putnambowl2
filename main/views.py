@@ -708,6 +708,27 @@ def members(request):
     rows.sort(key=lambda r: (r['bot'], r['display_name'].lower(), r['username']))
     return render(request, 'main/members.html', {'members': rows})
 
+def _sent_batches(league, limit=400):
+    """The delivery log grouped into sends: newest first, one entry per batch
+    with its addresses and results, for the Emails page."""
+    from .models import SentMail
+    rows = list(SentMail.objects.filter(league=league)[:limit])
+    batches, order = {}, []
+    for r in rows:
+        key = r.batch or f'{r.kind}|{r.subject}|{r.sent_at:%Y-%m-%d %H:%M}'
+        if key not in batches:
+            batches[key] = {'when': r.sent_at, 'subject': r.subject, 'kind': r.kind,
+                            'total': 0, 'ok': 0, 'rows': []}
+            order.append(key)
+        b = batches[key]
+        b['total'] += 1
+        b['ok'] += 1 if r.ok else 0
+        b['rows'].append(r)
+        if r.sent_at < b['when']:
+            b['when'] = r.sent_at
+    return [batches[k] for k in order]
+
+
 
 @league_manager_required
 def emaildash(request):
@@ -820,6 +841,7 @@ def emaildash(request):
         'smtp_ready': transport_ready(),
         'recap_prompt': settings.recap_prompt or auto.DEFAULT_RECAP_PROMPT,
         'recap_is_default': not settings.recap_prompt,
+        'sent_batches': _sent_batches(league),
         'preview_week': preview_week,
         'data_block': data_block,
         'format_rules': auto.RECAP_FORMAT_RULES,
@@ -838,9 +860,20 @@ def accountdash(request):
         User.objects.select_related('profile').filter(profile__league=league),
         key=lambda u: u.profile.score, reverse=True
     )
+    # Who has picked this week - not what. A ballot counts only when it is
+    # complete, the same rule the reminder uses.
+    settings = current_settings(request)
+    games_total = Game.objects.filter(league=league, week=settings.week).count()
+    made = {}
+    for uid in Pick.objects.filter(game__league=league, game__week=settings.week).values_list('user_id', flat=True):
+        made[uid] = made.get(uid, 0) + 1
+    for p in players:
+        p.picks_made = made.get(p.id, 0)
     return render(request, 'main/accountdash.html', {
         'players': players,
         'teams': [t[0] for t in TEAMS],
+        'games_total': games_total,
+        'week': settings.week,
     })
 
 

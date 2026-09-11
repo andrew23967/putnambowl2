@@ -434,3 +434,33 @@ class IntroTemplate(models.Model):
         """
         return ((self.body or '').replace('{week}', str(week))
                 .replace('{league}', self.league.name))
+
+
+class SentMail(models.Model):
+    """One row per message the site handed to a transport, success or not.
+
+    The feed (`LeagueEmail`) records what the league was told; this records who
+    actually got it and when, which is the only way to answer "did the
+    reminder reach Sean" without reading the worker's log. Written by
+    `email_utils.deliver()`, never by hand. `batch` groups one send - the feed
+    slug for the weekly mail and the reminder, the message id for a relay or a
+    confirmation - so the Emails page can show a send as one line.
+    """
+    KINDS = ('weekly', 'reminder', 'relay', 'confirmation', 'test')
+
+    league = models.ForeignKey('leagues.League', on_delete=models.CASCADE,
+                               null=True, blank=True, related_name='sent_mail')
+    batch = models.CharField(max_length=120, blank=True, default='')
+    kind = models.CharField(max_length=20, blank=True, default='')
+    subject = models.CharField(max_length=200)
+    to_address = models.CharField(max_length=254)
+    ok = models.BooleanField(default=False)
+    detail = models.CharField(max_length=200, blank=True, default='')
+    transport = models.CharField(max_length=10, blank=True, default='')
+    sent_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ['-sent_at', '-id']
+
+    def __str__(self):
+        return f'{self.sent_at:%Y-%m-%d %H:%M} {self.to_address} {"ok" if self.ok else "failed"}'

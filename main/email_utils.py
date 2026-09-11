@@ -84,9 +84,11 @@ def relay_to_league(league_email, sender_email, already_copied=(), author_name='
 
     def _send():
         sent = sum(1 for a in recipients
-                   if deliver(a, league_email.subject, body, reply_to=sender_email))
+                   if deliver(a, league_email.subject, body, reply_to=sender_email, league=league,
+                              kind='relay', batch=league_email.message_id))
         log.info(f'[relay] "{league_email.subject}" forwarded to '
               f'{sent}/{len(recipients)} member(s)')
+        _close_db()
 
     threading.Thread(target=_send, daemon=True).start()
     return len(recipients)
@@ -260,27 +262,59 @@ def transport_ready():
     return smtp_ready() or transport() == 'gmail' or bool(getattr(django_settings, 'RESEND_API_KEY', ''))
 
 
-def deliver(to, subject, body, in_reply_to=None, reply_to=None):
+def deliver(to, subject, body, in_reply_to=None, reply_to=None,
+            league=None, kind='', batch=''):
     """One message to one address over whichever transport is configured.
 
     The mailbox first when it is the transport (Gmail API or SMTP); if that
-    send fails and Resend is configured, Resend. Returns True when something
-    was accepted for delivery.
+    send fails and Resend is configured, Resend. Every attempt is recorded as a
+    `SentMail` row so the Emails page can show who got what. Returns True when
+    something was accepted for delivery.
     """
     have_resend = bool(getattr(django_settings, 'RESEND_API_KEY', ''))
-    if transport() == 'gmail':
+    t = transport()
+    if t == 'gmail':
         from . import gmail_api
-        ok, _ = gmail_api.send(to, subject, body, in_reply_to=in_reply_to, reply_to=reply_to)
-        if ok or not have_resend:
-            return ok
-        return _send_via_resend(to, subject, body, reply_to=reply_to, in_reply_to=in_reply_to)
-    if smtp_ready() or not have_resend:
-        ok, _ = send_via_mailbox(to, subject, body, in_reply_to=in_reply_to,
-                                 reply_to=reply_to)
-        if ok or not have_resend:
-            return ok
-    return _send_via_resend(to, subject, body, reply_to=reply_to,
-                            in_reply_to=in_reply_to)
+        used = 'gmail'
+        ok, why = gmail_api.send(to, subject, body, in_reply_to=in_reply_to, reply_to=reply_to)
+    elif smtp_ready() or not have_resend:
+        used = 'smtp'
+        ok, why = send_via_mailbox(to, subject, body, in_reply_to=in_reply_to, reply_to=reply_to)
+    else:
+        used, ok, why = 'resend', False, ''
+    if not ok and have_resend and used != 'resend':
+        used = 'resend'
+        ok = _send_via_resend(to, subject, body, reply_to=reply_to, in_reply_to=in_reply_to)
+        why = 'sent' if ok else f'resend failed after {why}'
+    elif used == 'resend':
+        ok = _send_via_resend(to, subject, body, reply_to=reply_to, in_reply_to=in_reply_to)
+        why = 'sent' if ok else 'resend failed'
+    _record_delivery(league, kind, batch, subject, to, ok, why, used)
+    return ok
+
+
+def _record_delivery(league, kind, batch, subject, to, ok, detail, used):
+    """A `SentMail` row; a failure to write it must never fail the send."""
+    try:
+        from .models import SentMail
+        SentMail.objects.create(
+            league=league, kind=(kind or '')[:20], batch=(batch or '')[:120],
+            subject=(subject or '')[:200], to_address=(to or '')[:254], ok=bool(ok),
+            detail=(detail or '')[:200], transport=(used or '')[:10])
+    except Exception as e:
+        log.warning('[email] could not record the delivery to %s: %s', to, e)
+
+
+def _close_db():
+    """Send threads open their own database connection to record deliveries;
+    close it when the thread is done. Never in the main thread - under the test
+    runner that would close the in-memory database."""
+    if threading.current_thread() is not threading.main_thread():
+        try:
+            from django.db import connection
+            connection.close()
+        except Exception:
+            pass
 
 
 def send_via_mailbox(to, subject, body, in_reply_to=None, reply_to=None):
@@ -491,8 +525,10 @@ def send_pick_reminder_email(site_settings):
     def _send_each():
         sent = 0
         for address, body in messages:
-            sent += 1 if deliver(address, subject, body, reply_to=inbox or None) else 0
+            sent += 1 if deliver(address, subject, body, reply_to=inbox or None, league=league,
+                                 kind='reminder', batch=f'{league.slug}-reminder-w{week}') else 0
         log.info(f'[email] reminder sent to {sent}/{len(messages)} for week {week}')
+        _close_db()
 
     threading.Thread(target=_send_each, daemon=True).start()
     return len(messages)
@@ -621,8 +657,10 @@ def send_picks_published_email(site_settings):
         # address, so replying to the ballot submits picks rather than being
         # read as an announcement.
         sent = sum(1 for a in recipients
-                   if deliver(a, subject, body, reply_to=inbox or None))
+                   if deliver(a, subject, body, reply_to=inbox or None, league=league,
+                              kind='weekly', batch=f'{league.slug}-picks-live-w{week}'))
         log.info(f'[email] picks-live sent to {sent}/{len(recipients)} '
                  f'for week {week}')
+        _close_db()
 
     threading.Thread(target=_send_each, daemon=True).start()

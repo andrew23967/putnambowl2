@@ -40,6 +40,11 @@ current week's row does not exist yet, and "score after week k" is entry k+1.
 **ProcessedEmail** — message ids the poller has acted on, with `deferred` and
 `attempts` for retries. Dedupe reads this, never the feed.
 
+**SentMail** — the delivery log: `league`, `batch` (the feed slug or message
+id that groups one send), `kind` (weekly · reminder · relay · confirmation ·
+test), `subject`, `to_address`, `ok`, `detail`, `transport`, `sent_at`. Written
+only by `email_utils.deliver()`; the Emails page shows it grouped by batch.
+
 **IntroTemplate** — `league`, `name` (unique per league), `body`;
 `render(week)` substitutes `{week}` and `{league}` with `replace()`.
 `main/intro_seeds.py` holds the starter set a new league gets.

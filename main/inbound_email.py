@@ -232,7 +232,8 @@ def _confirm_intro(author, reply_to, message_id, subject, site_settings):
             f'below it.\n\n'
             f'--- what the league will see ---\n{preview}\n')
     try:
-        deliver(reply_to, f'Re: {subject or "Intro"}', body, in_reply_to=message_id)
+        deliver(reply_to, f'Re: {subject or "Intro"}', body, in_reply_to=message_id,
+                league=site_settings.league, kind='confirmation', batch=message_id or '')
     except Exception as e:
         # A confirmation that fails must not undo the intro that was saved.
         log.error('[inbound] intro confirmation failed: %s', e)

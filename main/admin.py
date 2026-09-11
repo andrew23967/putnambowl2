@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Game, IntroTemplate, Pick, LeagueSettings, WeeklyLeaderboard, LeagueEmail, SeasonRecord
+from .models import Game, IntroTemplate, Pick, LeagueSettings, WeeklyLeaderboard, LeagueEmail, SeasonRecord, SentMail
 
 
 @admin.register(LeagueSettings)
@@ -47,3 +47,11 @@ class LeagueEmailAdmin(admin.ModelAdmin):
 class SeasonRecordAdmin(admin.ModelAdmin):
     list_display = ['league', 'year', 'winner_username', 'created_at']
     list_filter = ['league']
+
+
+@admin.register(SentMail)
+class SentMailAdmin(admin.ModelAdmin):
+    list_display = ('sent_at', 'league', 'kind', 'subject', 'to_address', 'ok', 'transport')
+    list_filter = ('league', 'kind', 'ok', 'transport')
+    search_fields = ('subject', 'to_address', 'batch')
+    date_hierarchy = 'sent_at'

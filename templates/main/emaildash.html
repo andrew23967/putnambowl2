@@ -7,6 +7,10 @@
   .ed-section { padding: 20px 0; border-top: 1px solid var(--rule); }
   .ed-section:first-of-type { border-top: 0; }
   .ed-section > .eyebrow { margin-bottom: 12px; letter-spacing: .12em; }
+  .sent-batch > summary { cursor: pointer; list-style: none; }
+  .sent-batch > summary::-webkit-details-marker { display: none; }
+  .sent-batch[open] > summary { font-weight: 600; }
+  .sent-list { margin: 8px 0 4px; padding: 0; list-style: none; font-size: 11.5px; line-height: 1.8; }
   .addr { display: grid; grid-template-columns: 64px 1fr; gap: 6px 14px; align-items: baseline; font-size: 13px; }
   .addr dt { font: 400 11px var(--mono); color: var(--muted-3); }
   .addr dd { margin: 0; }
@@ -101,6 +105,34 @@
       <button name="save_prompts" class="btn btn-primary btn-sm">Save prompt</button>
     </div>
   </form>
+</div>
+
+<div class="ed-section">
+  <p class="eyebrow">Sent</p>
+  {% if sent_batches %}
+  <table class="table">
+    <thead><tr><th style="width:150px;">When</th><th>Subject</th><th style="width:110px;">Kind</th><th class="r" style="width:120px;">Delivered</th></tr></thead>
+    <tbody>
+    {% for b in sent_batches %}
+      <tr>
+        <td class="n muted" style="font-size:12px;"><span data-utc-full="{{ b.when|date:'c' }}">{{ b.when|date:"M j, g:i A" }}</span></td>
+        <td>
+          <details class="sent-batch">
+            <summary>{{ b.subject }}</summary>
+            <ul class="sent-list">
+              {% for r in b.rows %}<li class="n"><span class="{% if r.ok %}pos{% else %}neg{% endif %}">{% if r.ok %}✓{% else %}✗{% endif %}</span> {{ r.to_address }}{% if not r.ok and r.detail %} <span class="muted-3">· {{ r.detail }}</span>{% endif %}</li>{% endfor %}
+            </ul>
+          </details>
+        </td>
+        <td class="n muted-3" style="font-size:11.5px;">{{ b.kind|default:"—" }}</td>
+        <td class="n r {% if b.ok == b.total %}pos{% elif b.ok == 0 %}neg{% endif %}">{{ b.ok }}/{{ b.total }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty">Nothing sent yet.</p>
+  {% endif %}
 </div>
 
 <dialog id="intros-dialog" class="dialog">

@@ -208,7 +208,8 @@ def send_reply(to_email, subject, body, in_reply_to=None, settings=None):
     # Corrections come back to the tagged address, so a follow-up is read as
     # picks and never as something to publish.
     ok = deliver(to_email, subject, body, in_reply_to=in_reply_to,
-                 reply_to=picks_address() or None)
+                 reply_to=picks_address() or None, league=settings.league,
+                 kind='confirmation', batch=in_reply_to or '')
     if not ok:
         log.warning('[pick_email] reply to %s failed', to_email)
     return ok

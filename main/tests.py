@@ -4099,3 +4099,77 @@ class TransportChoiceTests(TestCase):
                            RESEND_API_KEY='re_x'):
             self.assertTrue(self.eu.deliver('a@x.com', 's', 'b'))
         self.assertEqual(calls, ['resend'])
+
+
+class DeliveryLogTests(TestCase):
+    """Every send is recorded as a SentMail row, and the Emails page lists
+    them by batch with who got what."""
+
+    def setUp(self):
+        from . import email_utils
+        self.eu = email_utils
+        self.league = default_league()
+        self.addCleanup(setattr, email_utils, 'send_via_mailbox', email_utils.send_via_mailbox)
+        email_utils.send_via_mailbox = lambda to, *a, **k: (True, 'sent') if 'bad' not in to else (False, 'bounced')
+
+    def test_deliver_records_success_and_failure(self):
+        from .models import SentMail
+        self.eu.deliver('ok@example.com', 'Hello', 'b', league=self.league, kind='weekly', batch='w1')
+        self.eu.deliver('bad@example.com', 'Hello', 'b', league=self.league, kind='weekly', batch='w1')
+        rows = list(SentMail.objects.filter(league=self.league).order_by('id'))
+        self.assertEqual([(r.to_address, r.ok, r.kind, r.batch) for r in rows],
+                         [('ok@example.com', True, 'weekly', 'w1'), ('bad@example.com', False, 'weekly', 'w1')])
+        self.assertEqual(rows[1].detail, 'bounced')
+
+    def test_the_emails_page_lists_sends_by_batch(self):
+        mgr = make_member('mgr', role='manager')
+        self.client.force_login(mgr)
+        for a in ('a@example.com', 'b@example.com', 'bad@example.com'):
+            self.eu.deliver(a, 'Week 3 picks are live', 'b', league=self.league, kind='weekly', batch='putnambowl-picks-live-w3')
+        self.eu.deliver('c@example.com', 'Reminder', 'b', league=self.league, kind='reminder', batch='putnambowl-reminder-w3')
+        resp = self.client.get('/dashboard/emails/')
+        batches = resp.context['sent_batches']
+        self.assertEqual([(b['subject'], b['ok'], b['total']) for b in batches],
+                         [('Reminder', 1, 1), ('Week 3 picks are live', 2, 3)])
+        html = resp.content.decode()
+        self.assertIn('bad@example.com', html)
+        self.assertIn('2/3', html)
+
+    def test_another_league_does_not_see_it(self):
+        other = make_league('b')
+        self.eu.deliver('a@example.com', 'Hello', 'b', league=other, kind='weekly', batch='x')
+        mgr = make_member('mgr', role='manager')
+        self.client.force_login(mgr)
+        self.assertEqual(self.client.get('/dashboard/emails/').context['sent_batches'], [])
+
+
+class AccountsPicksColumnTests(TestCase):
+    """The Accounts page shows who has picked this week: a check for a
+    complete ballot, a cross otherwise, a dash when there are no games."""
+
+    def setUp(self):
+        self.settings = LeagueSettings.for_league(default_league())
+        self.settings.week = 2
+        self.settings.publish = True
+        self.settings.save()
+        self.mgr = make_member('mgr', role='manager')
+        self.done = make_member('done')
+        self.half = make_member('half')
+        self.client.force_login(self.mgr)
+
+    def test_check_cross_and_dash(self):
+        resp = self.client.get('/dashboard/accounts/')
+        self.assertEqual(resp.context['games_total'], 0)
+        self.assertNotIn('pk-yes', resp.content.decode())
+        g1 = make_game(week=2)
+        g2 = make_game(week=2, team1='Dallas Cowboys', team2='New York Giants')
+        Pick.objects.create(user=self.done, game=g1, choice='team1')
+        Pick.objects.create(user=self.done, game=g2, choice='team1')
+        Pick.objects.create(user=self.half, game=g1, choice='team1')
+        resp = self.client.get('/dashboard/accounts/')
+        made = {p.username: p.picks_made for p in resp.context['players']}
+        self.assertEqual(made['done'], 2)
+        self.assertEqual(made['half'], 1)
+        html = resp.content.decode()
+        self.assertEqual(html.count('pk-yes'), 1)
+        self.assertGreaterEqual(html.count('pk-no'), 2)
